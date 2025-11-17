@@ -18,9 +18,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function EnhancedCreateProjectDialog() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [useAI, setUseAI] = useState(false);
@@ -122,6 +124,9 @@ export function EnhancedCreateProjectDialog() {
 
       setOpen(false);
       resetForm();
+      
+      // Invalidate projects query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       
       // Navigate to the new project
       navigate(`/project/${project.id}/requirements`);

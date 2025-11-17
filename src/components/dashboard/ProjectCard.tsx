@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { EditProjectDialog } from "./EditProjectDialog";
+import { DeleteProjectDialog } from "./DeleteProjectDialog";
+import { useAdmin } from "@/contexts/AdminContext";
 
 interface ProjectCardProps {
   projectId: string;
@@ -48,12 +50,13 @@ export function ProjectCard({
   onUpdate,
 }: ProjectCardProps) {
   const statusInfo = statusConfig[status];
+  const { isAdmin } = useAdmin();
 
   return (
     <Card
       className="card-hover group relative"
     >
-      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
         <EditProjectDialog
           projectId={projectId}
           currentName={projectName}
@@ -63,6 +66,13 @@ export function ProjectCard({
           currentScope={scope}
           onUpdate={onUpdate}
         />
+        {isAdmin && (
+          <DeleteProjectDialog
+            projectId={projectId}
+            projectName={projectName}
+            onDelete={onUpdate}
+          />
+        )}
       </div>
       <div 
         className="cursor-pointer"

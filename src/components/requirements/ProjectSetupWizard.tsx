@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface ProjectSetupWizardProps {
   open: boolean;
@@ -21,6 +21,7 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Form state
   const [projectName, setProjectName] = useState("");
@@ -127,25 +128,6 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
 
       if (projectError) throw projectError;
 
-      // Link selected standard categories to project
-      if (selectedStandards.length > 0) {
-        // Get all standards from selected categories
-        const { data: standardsData } = await supabase
-          .from('standards')
-          .select('id')
-          .in('category_id', selectedStandards);
-
-        if (standardsData && standardsData.length > 0) {
-          // Create requirement_standards links for each
-          const links = standardsData.map(std => ({
-            requirement_id: project.id,
-            standard_id: std.id
-          }));
-          
-          await supabase.from('requirement_standards').insert(links);
-        }
-      }
-
       // Link selected tech stacks to project
       if (selectedTechStacks.length > 0) {
         const links = selectedTechStacks.map(tsId => ({
@@ -187,6 +169,9 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
           ? "Your requirements have been decomposed into a structured hierarchy"
           : "You can now add requirements to your project"
       });
+
+      // Invalidate projects query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
 
       // Navigate to the new project's requirements page
       navigate(`/project/${project.id}/requirements`);

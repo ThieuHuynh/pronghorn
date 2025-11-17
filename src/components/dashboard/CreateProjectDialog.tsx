@@ -16,12 +16,17 @@ import { Plus, Upload, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function CreateProjectDialog() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [budget, setBudget] = useState("");
+  const [scope, setScope] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -56,6 +61,9 @@ export function CreateProjectDialog() {
         .insert({
           name: name.trim(),
           description: description.trim() || null,
+          organization: organization.trim() || null,
+          budget: budget ? parseFloat(budget) : null,
+          scope: scope.trim() || null,
           org_id: orgId,
           status: 'DESIGN'
         })
@@ -68,7 +76,13 @@ export function CreateProjectDialog() {
       setOpen(false);
       setName("");
       setDescription("");
+      setOrganization("");
+      setBudget("");
+      setScope("");
       setFile(null);
+      
+      // Invalidate projects query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       
       // Navigate to the new project
       navigate(`/project/${project.id}/canvas`);
@@ -123,6 +137,38 @@ export function CreateProjectDialog() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="organization">Organization</Label>
+            <Input
+              id="organization"
+              placeholder="Your organization name"
+              value={organization}
+              onChange={(e) => setOrganization(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="budget">Budget</Label>
+              <Input
+                id="budget"
+                type="number"
+                placeholder="Project budget"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scope">Scope</Label>
+              <Input
+                id="scope"
+                placeholder="Project scope"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+              />
+            </div>
           </div>
           
           <div className="space-y-2">
