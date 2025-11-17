@@ -39,6 +39,90 @@ export default function Specifications() {
     }
   };
 
+  const downloadRawJSON = async () => {
+    if (!projectId) return;
+
+    try {
+      // Fetch all raw data directly without AI
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (projectError) throw projectError;
+
+      const { data: requirements } = await supabase
+        .from('requirements')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('order_index');
+
+      const { data: canvasNodes } = await supabase
+        .from('canvas_nodes')
+        .select('*')
+        .eq('project_id', projectId);
+
+      const { data: canvasEdges } = await supabase
+        .from('canvas_edges')
+        .select('*')
+        .eq('project_id', projectId);
+
+      const { data: projectTechStacks } = await supabase
+        .from('project_tech_stacks')
+        .select(`
+          tech_stack_id,
+          tech_stacks (
+            id,
+            name,
+            description,
+            metadata
+          )
+        `)
+        .eq('project_id', projectId);
+
+      const { data: reqStandards } = await supabase
+        .from('requirement_standards')
+        .select(`
+          requirement_id,
+          standard_id,
+          standards (
+            id,
+            title,
+            code,
+            description,
+            content
+          )
+        `)
+        .in('requirement_id', requirements?.map(r => r.id) || []);
+
+      const exportData = {
+        project,
+        requirements: requirements || [],
+        canvas: {
+          nodes: canvasNodes || [],
+          edges: canvasEdges || []
+        },
+        techStacks: projectTechStacks?.map((pts: any) => pts.tech_stacks) || [],
+        linkedStandards: reqStandards || []
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project.name.replace(/\s+/g, '-')}-raw-data.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Raw JSON data downloaded!");
+    } catch (error) {
+      console.error("Error downloading raw JSON:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to download JSON");
+    }
+  };
+
   const downloadAsJSON = () => {
     if (!rawData) {
       toast.error("No data available. Generate specification first.");
@@ -163,12 +247,33 @@ export default function Specifications() {
               </Button>
             </div>
 
+            {/* Raw Data Export - Always Available */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Export Raw Data</CardTitle>
+                <CardDescription>
+                  Download complete project data as JSON without AI processing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Export all project information including requirements, canvas nodes/edges, linked standards, and tech stacks as structured JSON data.
+                  </p>
+                  <Button onClick={downloadRawJSON} variant="outline" size="lg">
+                    <FileJson className="h-4 w-4 mr-2" />
+                    Download Raw JSON
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {!generatedSpec && !isGenerating && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Getting Started</CardTitle>
+                  <CardTitle>AI-Generated Documentation</CardTitle>
                   <CardDescription>
-                    Click "Generate Specification" to create a comprehensive project documentation
+                    Click "Generate Specification" to create a comprehensive project documentation with AI
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -188,7 +293,7 @@ export default function Specifications() {
                     <h3 className="font-semibold mb-2">Export Formats:</h3>
                     <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                       <li><strong>HTML/Word:</strong> Formatted document (open in Word or convert to PDF)</li>
-                      <li><strong>JSON:</strong> Complete raw data export with all project information</li>
+                      <li><strong>JSON:</strong> AI-processed specification data</li>
                     </ul>
                   </div>
                 </CardContent>

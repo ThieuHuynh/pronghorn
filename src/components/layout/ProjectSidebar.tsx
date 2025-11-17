@@ -1,6 +1,7 @@
 import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -8,14 +9,17 @@ interface ProjectSidebarProps {
   projectId: string;
 }
 
-const navItems = [
+const activeNavItems = [
   { icon: ListTree, label: "Requirements", path: "requirements" },
   { icon: Layout, label: "Canvas", path: "canvas" },
-  { icon: ShieldCheck, label: "Audit", path: "audit" },
-  { icon: Hammer, label: "Build", path: "build" },
-  { icon: Code, label: "Repository", path: "repository" },
   { icon: FileText, label: "Specifications", path: "specifications" },
-  { icon: SettingsIcon, label: "Settings", path: "settings" },
+];
+
+const comingSoonItems = [
+  { icon: ShieldCheck, label: "Audit" },
+  { icon: Hammer, label: "Build" },
+  { icon: Code, label: "Repository" },
+  { icon: SettingsIcon, label: "Settings" },
 ];
 
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
@@ -45,18 +49,43 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={`/project/${projectId}/${item.path}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              activeClassName="bg-muted text-foreground"
-            >
-              <item.icon className="h-4 w-4 flex-shrink-0" />
-              {!isCollapsed && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+        <nav className="flex-1 p-2 space-y-1 flex flex-col">
+          <div className="space-y-1">
+            {activeNavItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={`/project/${projectId}/${item.path}`}
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                activeClassName="bg-muted text-foreground"
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                {!isCollapsed && <span>{item.label}</span>}
+              </NavLink>
+            ))}
+          </div>
+
+          {/* Coming Soon Section */}
+          <div className="mt-auto pt-4 border-t border-border space-y-1">
+            {!isCollapsed && (
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
+                Coming Soon
+              </div>
+            )}
+            {comingSoonItems.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground/50 cursor-not-allowed"
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between flex-1">
+                    <span>{item.label}</span>
+                    <Badge variant="secondary" className="text-xs">Soon</Badge>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </nav>
       </div>
     </aside>
