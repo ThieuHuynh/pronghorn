@@ -49,33 +49,16 @@ ${input}
 
 INSTRUCTIONS:
 1. Extract or create logical standards from this content
-2. Organize them hierarchically (parent standards with child standards)
+2. Organize them hierarchically (parent standards with child standards up to 2 levels deep)
 3. Create comprehensive descriptions for each standard
 4. Assign appropriate standard codes (e.g., SEC-001, SEC-001.1, SEC-001.2)
 5. Avoid duplicating these existing codes: ${existingCodes.join(', ')}
 6. Avoid duplicating these existing titles: ${existingTitles.join(', ')}
+7. Limit to maximum 10 top-level standards to ensure response fits within token limits
 
-IMPORTANT: Return a valid JSON array with this exact structure:
-[
-  {
-    "code": "STD-001",
-    "title": "Standard Title",
-    "description": "Brief description",
-    "content": "Detailed content explaining the standard",
-    "children": [
-      {
-        "code": "STD-001.1",
-        "title": "Sub-Standard Title",
-        "description": "Brief description",
-        "content": "Detailed content"
-      }
-    ]
-  }
-]
+Generate a well-structured hierarchy of standards based on this content.`;
 
-Return ONLY the JSON array, no other text.`;
-
-    // Call Lovable AI
+    // Call Lovable AI with tool calling for structured output
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -85,9 +68,66 @@ Return ONLY the JSON array, no other text.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "You are a standards architect that creates comprehensive, hierarchical standards. Always return valid JSON arrays." },
+          { role: "system", content: "You are a standards architect that creates comprehensive, hierarchical standards." },
           { role: "user", content: prompt }
         ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "create_standards",
+              description: "Generate a hierarchical structure of standards",
+              parameters: {
+                type: "object",
+                properties: {
+                  standards: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        code: { type: "string", description: "Unique standard code (e.g., SEC-001)" },
+                        title: { type: "string", description: "Standard title" },
+                        description: { type: "string", description: "Brief description" },
+                        content: { type: "string", description: "Detailed content explaining the standard" },
+                        children: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              code: { type: "string" },
+                              title: { type: "string" },
+                              description: { type: "string" },
+                              content: { type: "string" },
+                              children: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: {
+                                    code: { type: "string" },
+                                    title: { type: "string" },
+                                    description: { type: "string" },
+                                    content: { type: "string" }
+                                  },
+                                  required: ["code", "title", "description", "content"]
+                                }
+                              }
+                            },
+                            required: ["code", "title", "description", "content"]
+                          }
+                        }
+                      },
+                      required: ["code", "title", "description", "content"],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                required: ["standards"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "create_standards" } },
         max_completion_tokens: 8000,
       }),
     });
@@ -105,27 +145,30 @@ Return ONLY the JSON array, no other text.`;
     }
 
     const aiData = await aiResponse.json();
-    let generatedText = aiData.choices[0].message.content;
-
+    
     console.log('AI Response received, parsing...');
 
-    // Clean up the response to extract JSON
-    generatedText = generatedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
+    // Extract structured output from tool call
     let standardsData;
     try {
-      standardsData = JSON.parse(generatedText);
+      const toolCall = aiData.choices[0].message.tool_calls?.[0];
+      if (!toolCall || toolCall.function.name !== 'create_standards') {
+        throw new Error('AI did not use the create_standards tool');
+      }
+      
+      const functionArgs = JSON.parse(toolCall.function.arguments);
+      standardsData = functionArgs.standards;
+      
+      if (!Array.isArray(standardsData)) {
+        throw new Error('Standards output is not an array');
+      }
+      
+      console.log(`Parsed ${standardsData.length} top-level standards`);
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Generated text:', generatedText);
-      throw new Error('Failed to parse AI response as JSON');
+      console.error('Tool call parse error:', parseError);
+      console.error('AI response:', JSON.stringify(aiData, null, 2).substring(0, 1000));
+      throw new Error('Failed to parse AI tool call response');
     }
-
-    if (!Array.isArray(standardsData)) {
-      throw new Error('AI response is not an array');
-    }
-
-    console.log(`Parsed ${standardsData.length} top-level standards`);
 
     // Insert standards into database
     let createdCount = 0;
