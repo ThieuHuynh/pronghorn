@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.generate-specification]
 verify_jwt = false
+
+[functions.ai-create-standards]
+verify_jwt = false

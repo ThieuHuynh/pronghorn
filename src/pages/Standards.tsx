@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { Standard } from "@/components/standards/StandardsTree";
 import { CategoryCard } from "@/components/standards/CategoryCard";
+import { AICreateStandardsDialog } from "@/components/standards/AICreateStandardsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -206,11 +207,19 @@ export default function Standards() {
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
+                    className="flex-1"
                   />
-                  <Button onClick={handleAddCategory} size="sm">
+                  <Button onClick={handleAddCategory} size="lg">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Category
                   </Button>
+                  <AICreateStandardsDialog
+                    categories={categories}
+                    onSuccess={() => {
+                      loadStandards();
+                      loadCategories();
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
