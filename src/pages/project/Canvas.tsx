@@ -86,15 +86,15 @@ function CanvasFlow() {
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      saveNode(node, true); // Immediate save on drag stop
+      saveNode(node, true, true); // Immediate save on drag stop, is drag operation
     },
     [saveNode]
   );
 
   const onNodeDrag = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      // Throttled save during drag (every 200ms)
-      saveNode(node, false);
+      // Throttled save during drag (every 200ms), is drag operation
+      saveNode(node, false, true);
     },
     [saveNode]
   );
@@ -105,7 +105,7 @@ function CanvasFlow() {
         nds.map((node) => {
           if (node.id === nodeId) {
             const updatedNode = { ...node, ...updates };
-            saveNode(updatedNode);
+            saveNode(updatedNode, true, false); // Immediate save, NOT a drag operation
             return updatedNode;
           }
           return node;

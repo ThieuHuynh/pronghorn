@@ -145,9 +145,12 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     }
   };
 
-  const saveNode = useCallback(async (node: Node, immediate = false) => {
+  const saveNode = useCallback(async (node: Node, immediate = false, isDragOperation = false) => {
     try {
-      draggedNodeRef.current = node.id;
+      // Only set draggedNodeRef for actual drag operations
+      if (isDragOperation) {
+        draggedNodeRef.current = node.id;
+      }
       
       // Clear any pending save
       if (saveTimeoutRef.current) {
@@ -183,10 +186,12 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           if (error) throw error;
         }
         
-        // Clear dragged node reference after save
-        setTimeout(() => {
-          draggedNodeRef.current = null;
-        }, 100);
+        // Clear dragged node reference after save (only if it was set)
+        if (isDragOperation) {
+          setTimeout(() => {
+            draggedNodeRef.current = null;
+          }, 100);
+        }
       };
 
       if (immediate) {
