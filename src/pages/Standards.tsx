@@ -7,10 +7,14 @@ import { ManageTechStacksDialog } from "@/components/standards/ManageTechStacksD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, FolderCog, Plus, Layers } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Search, FolderCog, Plus, Layers, Shield, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdmin } from "@/contexts/AdminContext";
+import { toast } from "sonner";
 
 export default function Standards() {
+  const { isAdmin, requestAdminAccess, logout } = useAdmin();
   const [searchQuery, setSearchQuery] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
   const [standards, setStandards] = useState<Standard[]>([]);
@@ -62,9 +66,38 @@ export default function Standards() {
     setShowEditStandard(true);
   };
 
-  const handleCreateStandard = () => {
+  const handleCreateStandard = async () => {
+    if (!isAdmin) {
+      const granted = await requestAdminAccess();
+      if (!granted) {
+        toast.error("Admin access required to create standards");
+        return;
+      }
+    }
     setEditStandardId(undefined);
     setShowEditStandard(true);
+  };
+
+  const handleManageCategories = async () => {
+    if (!isAdmin) {
+      const granted = await requestAdminAccess();
+      if (!granted) {
+        toast.error("Admin access required to manage categories");
+        return;
+      }
+    }
+    setShowManageCategories(true);
+  };
+
+  const handleManageTechStacks = async () => {
+    if (!isAdmin) {
+      const granted = await requestAdminAccess();
+      if (!granted) {
+        toast.error("Admin access required to manage tech stacks");
+        return;
+      }
+    }
+    setShowManageTechStacks(true);
   };
 
   const filteredStandards = selectedCategory ? standards.filter((s) => s.id === selectedCategory) : standards;
@@ -76,13 +109,31 @@ export default function Standards() {
       <main className="container px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Standards Library</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold">Standards Library</h1>
+              {isAdmin ? (
+                <Badge variant="default" className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" />
+                  Admin Mode
+                </Badge>
+              ) : (
+                <Button variant="outline" size="sm" onClick={requestAdminAccess}>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin Mode
+                </Button>
+              )}
+            </div>
             <p className="text-muted-foreground">Manage your organization's standards and requirements</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowManageTechStacks(true)}><Layers className="h-4 w-4 mr-2" />Tech Stacks</Button>
-            <Button variant="outline" onClick={() => setShowManageCategories(true)}><FolderCog className="h-4 w-4 mr-2" />Categories</Button>
-            <Button onClick={handleCreateStandard}><Plus className="h-4 w-4 mr-2" />New Standard</Button>
+            {isAdmin && (
+              <>
+                <Button variant="outline" onClick={handleManageTechStacks}><Layers className="h-4 w-4 mr-2" />Tech Stacks</Button>
+                <Button variant="outline" onClick={handleManageCategories}><FolderCog className="h-4 w-4 mr-2" />Categories</Button>
+                <Button onClick={handleCreateStandard}><Plus className="h-4 w-4 mr-2" />New Standard</Button>
+                <Button variant="ghost" size="icon" onClick={logout} title="Exit Admin Mode"><LogOut className="h-4 w-4" /></Button>
+              </>
+            )}
           </div>
         </div>
 
