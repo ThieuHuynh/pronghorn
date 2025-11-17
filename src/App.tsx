@@ -10,6 +10,7 @@ import Audit from "./pages/project/Audit";
 import Build from "./pages/project/Build";
 import Repository from "./pages/project/Repository";
 import ProjectSettings from "./pages/project/ProjectSettings";
+import Specifications from "./pages/project/Specifications";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -27,6 +28,7 @@ const App = () => (
     <Route path="/project/:projectId/audit" element={<Audit />} />
     <Route path="/project/:projectId/build" element={<Build />} />
     <Route path="/project/:projectId/repository" element={<Repository />} />
+    <Route path="/project/:projectId/specifications" element={<Specifications />} />
     <Route path="/project/:projectId/settings" element={<ProjectSettings />} />
     
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
