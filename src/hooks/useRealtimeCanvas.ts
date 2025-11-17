@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Node, Edge, useNodesState, useEdgesState } from "reactflow";
 
 export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initialEdges: Edge[]) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const draggedNodeRef = useRef<string | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Load canvas data
@@ -23,7 +25,37 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         },
         (payload) => {
           console.log("Canvas nodes change:", payload);
-          loadCanvasData();
+          
+          // Handle different event types
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            // Don't update if we're currently dragging this node
+            if (draggedNodeRef.current === payload.new.id) {
+              return;
+            }
+            
+            // Update only the specific node that changed
+            setNodes((nds) => nds.map((node) => 
+              node.id === payload.new.id 
+                ? {
+                    ...node,
+                    position: payload.new.position as { x: number; y: number },
+                    data: payload.new.data,
+                  }
+                : node
+            ));
+          } else if (payload.eventType === 'INSERT' && payload.new) {
+            // Add new node
+            const newNode: Node = {
+              id: payload.new.id,
+              type: "custom",
+              position: payload.new.position as { x: number; y: number },
+              data: payload.new.data,
+            };
+            setNodes((nds) => [...nds, newNode]);
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            // Remove deleted node
+            setNodes((nds) => nds.filter((node) => node.id !== payload.old.id));
+          }
         }
       )
       .subscribe();
@@ -40,7 +72,29 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         },
         (payload) => {
           console.log("Canvas edges change:", payload);
-          loadCanvasData();
+          
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newEdge: Edge = {
+              id: payload.new.id,
+              source: payload.new.source_id,
+              target: payload.new.target_id,
+              label: payload.new.label,
+            };
+            setEdges((eds) => [...eds, newEdge]);
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            setEdges((eds) => eds.filter((edge) => edge.id !== payload.old.id));
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            setEdges((eds) => eds.map((edge) =>
+              edge.id === payload.new.id
+                ? {
+                    ...edge,
+                    source: payload.new.source_id,
+                    target: payload.new.target_id,
+                    label: payload.new.label,
+                  }
+                : edge
+            ));
+          }
         }
       )
       .subscribe();
@@ -48,6 +102,9 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     return () => {
       supabase.removeChannel(nodesChannel);
       supabase.removeChannel(edgesChannel);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
     };
   }, [projectId]);
 
@@ -88,37 +145,60 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     }
   };
 
-  const saveNode = async (node: Node) => {
+  const saveNode = useCallback(async (node: Node, immediate = false) => {
     try {
-      const { data: existing } = await supabase
-        .from("canvas_nodes")
-        .select("id")
-        .eq("id", node.id)
-        .maybeSingle();
+      draggedNodeRef.current = node.id;
+      
+      // Clear any pending save
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
 
-      if (existing) {
-        const { error } = await supabase
+      const performSave = async () => {
+        const { data: existing } = await supabase
           .from("canvas_nodes")
-          .update({
+          .select("id")
+          .eq("id", node.id)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from("canvas_nodes")
+            .update({
+              type: node.data.type,
+              position: node.position as any,
+              data: node.data as any,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", node.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("canvas_nodes").insert([{
+            project_id: projectId,
             type: node.data.type,
             position: node.position as any,
             data: node.data as any,
-          })
-          .eq("id", node.id);
-        if (error) throw error;
+          }]);
+          if (error) throw error;
+        }
+        
+        // Clear dragged node reference after save
+        setTimeout(() => {
+          draggedNodeRef.current = null;
+        }, 100);
+      };
+
+      if (immediate) {
+        await performSave();
       } else {
-        const { error } = await supabase.from("canvas_nodes").insert([{
-          project_id: projectId,
-          type: node.data.type,
-          position: node.position as any,
-          data: node.data as any,
-        }]);
-        if (error) throw error;
+        // Throttle saves during drag - save every 200ms
+        saveTimeoutRef.current = setTimeout(performSave, 200);
       }
     } catch (error) {
       console.error("Error saving node:", error);
+      draggedNodeRef.current = null;
     }
-  };
+  }, [projectId]);
 
   const saveEdge = async (edge: Edge) => {
     try {

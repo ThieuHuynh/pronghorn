@@ -86,7 +86,15 @@ function CanvasFlow() {
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      saveNode(node);
+      saveNode(node, true); // Immediate save on drag stop
+    },
+    [saveNode]
+  );
+
+  const onNodeDrag = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      // Throttled save during drag (every 200ms)
+      saveNode(node, false);
     },
     [saveNode]
   );
@@ -159,6 +167,7 @@ function CanvasFlow() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onInit={setReactFlowInstance}
               onDrop={onDrop}
