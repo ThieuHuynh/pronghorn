@@ -10,11 +10,13 @@ import {
   FileText, 
   ListChecks, 
   Code,
-  FolderKanban
+  FolderKanban,
+  FileCode
 } from "lucide-react";
 
 const nodeIcons = {
   PROJECT: FolderKanban,
+  PAGE: FileCode,
   COMPONENT: Box,
   API: Code,
   DATABASE: Database,
@@ -29,6 +31,7 @@ const nodeIcons = {
 
 const nodeColors = {
   PROJECT: "bg-cyan-500/10 border-cyan-500/50 text-cyan-700 dark:text-cyan-400",
+  PAGE: "bg-sky-500/10 border-sky-500/50 text-sky-700 dark:text-sky-400",
   COMPONENT: "bg-blue-500/10 border-blue-500/50 text-blue-700 dark:text-blue-400",
   API: "bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400",
   DATABASE: "bg-purple-500/10 border-purple-500/50 text-purple-700 dark:text-purple-400",
