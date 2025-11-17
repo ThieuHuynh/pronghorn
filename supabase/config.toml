@@ -1,1 +1,2 @@
-project_id = "obkzdksfayygnrzdqoam"
+[functions.decompose-requirements]
+verify_jwt = false

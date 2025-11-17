@@ -372,6 +372,45 @@ export type Database = {
           },
         ]
       }
+      requirement_standards: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          requirement_id: string
+          standard_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          requirement_id: string
+          standard_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          requirement_id?: string
+          standard_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requirement_standards_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "requirements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requirement_standards_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "standards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       requirements: {
         Row: {
           content: string | null
@@ -419,6 +458,131 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      standard_attachments: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          standard_id: string
+          type: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          standard_id: string
+          type: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          standard_id?: string
+          type?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standard_attachments_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "standards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      standard_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          order_index?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      standards: {
+        Row: {
+          category_id: string
+          code: string
+          content: string | null
+          created_at: string
+          description: string | null
+          id: string
+          order_index: number
+          parent_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          code: string
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order_index?: number
+          parent_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          code?: string
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order_index?: number
+          parent_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standards_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "standard_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "standards_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "standards"
             referencedColumns: ["id"]
           },
         ]

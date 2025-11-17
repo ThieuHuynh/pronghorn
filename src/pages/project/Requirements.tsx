@@ -1,138 +1,49 @@
-import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { RequirementsTree, Requirement, RequirementType } from "@/components/requirements/RequirementsTree";
+import { RequirementsTree, RequirementType } from "@/components/requirements/RequirementsTree";
+import { AIDecomposeDialog } from "@/components/requirements/AIDecomposeDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Upload, Sparkles } from "lucide-react";
+import { Search, Plus, Upload } from "lucide-react";
 import { useParams } from "react-router-dom";
-
-// Mock data - hierarchical requirements
-const mockRequirements: Requirement[] = [
-  {
-    id: "1",
-    type: "EPIC",
-    title: "User Authentication System",
-    children: [
-      {
-        id: "1.1",
-        type: "FEATURE",
-        title: "Email/Password Login",
-        children: [
-          {
-            id: "1.1.1",
-            type: "STORY",
-            title: "As a user, I want to log in with email and password",
-            children: [
-              {
-                id: "1.1.1.1",
-                type: "ACCEPTANCE_CRITERIA",
-                title: "Email validation must be performed",
-              },
-              {
-                id: "1.1.1.2",
-                type: "ACCEPTANCE_CRITERIA",
-                title: "Password must be hashed using bcrypt",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "1.2",
-        type: "FEATURE",
-        title: "OAuth Integration",
-        children: [
-          {
-            id: "1.2.1",
-            type: "STORY",
-            title: "As a user, I want to sign in with Google",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "2",
-    type: "EPIC",
-    title: "Dashboard & Analytics",
-    children: [
-      {
-        id: "2.1",
-        type: "FEATURE",
-        title: "Real-time Metrics Display",
-        children: [
-          {
-            id: "2.1.1",
-            type: "STORY",
-            title: "As an admin, I want to see live system metrics",
-          },
-        ],
-      },
-    ],
-  },
-];
+import { useRealtimeRequirements } from "@/hooks/useRealtimeRequirements";
+import { toast } from "sonner";
 
 export default function Requirements() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [requirements, setRequirements] = useState<Requirement[]>(mockRequirements);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const {
+    requirements,
+    isLoading,
+    addRequirement,
+    updateRequirement,
+    deleteRequirement,
+    refresh,
+  } = useRealtimeRequirements(projectId!);
 
-  const handleNodeUpdate = (id: string, updates: Partial<Requirement>) => {
-    const updateNode = (nodes: Requirement[]): Requirement[] => {
-      return nodes.map((node) => {
-        if (node.id === id) {
-          return { ...node, ...updates };
-        }
-        if (node.children) {
-          return { ...node, children: updateNode(node.children) };
-        }
-        return node;
-      });
-    };
-    setRequirements(updateNode(requirements));
+  const handleNodeUpdate = async (id: string, updates: { title?: string; content?: string }) => {
+    try {
+      await updateRequirement(id, updates);
+      toast.success("Requirement updated");
+    } catch (error) {
+      toast.error("Failed to update requirement");
+    }
   };
 
-  const handleNodeDelete = (id: string) => {
-    const deleteNode = (nodes: Requirement[]): Requirement[] => {
-      return nodes.filter((node) => {
-        if (node.id === id) return false;
-        if (node.children) {
-          node.children = deleteNode(node.children);
-        }
-        return true;
-      });
-    };
-    setRequirements(deleteNode(requirements));
+  const handleNodeDelete = async (id: string) => {
+    try {
+      await deleteRequirement(id);
+      toast.success("Requirement deleted");
+    } catch (error) {
+      toast.error("Failed to delete requirement");
+    }
   };
 
-  const handleNodeAdd = (parentId: string | null, type: RequirementType) => {
-    const newNode: Requirement = {
-      id: `new-${Date.now()}`,
-      type,
-      title: `New ${type}`,
-      children: [],
-    };
-
-    if (parentId === null) {
-      setRequirements([...requirements, newNode]);
-    } else {
-      const addToParent = (nodes: Requirement[]): Requirement[] => {
-        return nodes.map((node) => {
-          if (node.id === parentId) {
-            return {
-              ...node,
-              children: [...(node.children || []), newNode],
-            };
-          }
-          if (node.children) {
-            return { ...node, children: addToParent(node.children) };
-          }
-          return node;
-        });
-      };
-      setRequirements(addToParent(requirements));
+  const handleNodeAdd = async (parentId: string | null, type: RequirementType) => {
+    try {
+      await addRequirement(parentId, type, `New ${type}`);
+      toast.success("Requirement added");
+    } catch (error) {
+      toast.error("Failed to add requirement");
     }
   };
 
@@ -159,8 +70,6 @@ export default function Requirements() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search requirements..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
               </div>
@@ -170,10 +79,7 @@ export default function Requirements() {
                 Import
               </Button>
               
-              <Button variant="outline" className="gap-2">
-                <Sparkles className="h-4 w-4" />
-                AI Decompose
-              </Button>
+              <AIDecomposeDialog projectId={projectId!} onComplete={refresh} />
               
               <Button className="gap-2" onClick={() => handleNodeAdd(null, "EPIC")}>
                 <Plus className="h-4 w-4" />
@@ -182,26 +88,31 @@ export default function Requirements() {
             </div>
 
             {/* Requirements Tree */}
-            <div className="bg-card border border-border rounded-lg p-4">
-              <RequirementsTree
-                requirements={requirements}
-                onNodeSelect={setSelectedId}
-                onNodeUpdate={handleNodeUpdate}
-                onNodeDelete={handleNodeDelete}
-                onNodeAdd={handleNodeAdd}
-              />
-            </div>
-
-            {/* Empty State */}
-            {requirements.length === 0 && (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-muted-foreground">Loading requirements...</p>
+              </div>
+            ) : requirements.length > 0 ? (
+              <div className="bg-card border border-border rounded-lg p-4">
+                <RequirementsTree
+                  requirements={requirements}
+                  onNodeUpdate={handleNodeUpdate}
+                  onNodeDelete={handleNodeDelete}
+                  onNodeAdd={handleNodeAdd}
+                />
+              </div>
+            ) : (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">
-                  No requirements yet. Start by adding an Epic or import from a document.
+                  No requirements yet. Start by adding an Epic or use AI to decompose a document.
                 </p>
-                <Button className="gap-2" onClick={() => handleNodeAdd(null, "EPIC")}>
-                  <Plus className="h-4 w-4" />
-                  Add Your First Epic
-                </Button>
+                <div className="flex items-center justify-center gap-3">
+                  <Button className="gap-2" onClick={() => handleNodeAdd(null, "EPIC")}>
+                    <Plus className="h-4 w-4" />
+                    Add Your First Epic
+                  </Button>
+                  <AIDecomposeDialog projectId={projectId!} onComplete={refresh} />
+                </div>
               </div>
             )}
           </div>
