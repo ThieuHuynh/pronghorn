@@ -1,4 +1,4 @@
-import { ListTree, Layout, ShieldCheck, Hammer, Code, Settings as SettingsIcon } from "lucide-react";
+import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -14,6 +14,7 @@ const navItems = [
   { icon: ShieldCheck, label: "Audit", path: "audit" },
   { icon: Hammer, label: "Build", path: "build" },
   { icon: Code, label: "Repository", path: "repository" },
+  { icon: FileText, label: "Specifications", path: "specifications" },
   { icon: SettingsIcon, label: "Settings", path: "settings" },
 ];
 
