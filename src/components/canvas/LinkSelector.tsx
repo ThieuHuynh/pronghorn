@@ -29,10 +29,20 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [flatItems, setFlatItems] = useState<any[]>([]);
 
   useEffect(() => {
     loadItems();
   }, [type, projectId]);
+
+  useEffect(() => {
+    // Flatten items whenever hierarchical items change
+    if (type === "tech_stack") {
+      setFlatItems(items);
+    } else {
+      setFlatItems(flattenHierarchy(items));
+    }
+  }, [items, type]);
 
   const loadItems = async () => {
     setLoading(true);
@@ -120,19 +130,13 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
     return `${item.code} - ${item.title}`;
   };
 
-  const handleSelect = (searchValue: string) => {
-    // Find the item by matching the display label (case-insensitive)
-    const item = flattenHierarchy(items).find(
-      (i) => getDisplayLabel(i).toLowerCase() === searchValue.toLowerCase()
-    );
-    
-    if (item) {
-      if (selectedIds.includes(item.id)) {
-        onUnselect(item.id);
-      } else {
-        onSelect(item.id);
-      }
+  const handleSelect = (itemId: string) => {
+    if (selectedIds.includes(itemId)) {
+      onUnselect(itemId);
+    } else {
+      onSelect(itemId);
     }
+    setOpen(false);
   };
 
   const getTypeLabel = () => {
@@ -170,11 +174,11 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
               {loading ? (
                 <div className="p-4 text-sm text-muted-foreground">Loading...</div>
               ) : (
-                flattenHierarchy(items).map((item) => (
+                flatItems.map((item) => (
                   <CommandItem
                     key={item.id}
                     value={getDisplayLabel(item)}
-                    onSelect={handleSelect}
+                    onSelect={() => handleSelect(item.id)}
                     className="cursor-pointer"
                   >
                     <Check
@@ -183,7 +187,7 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
                         selectedIds.includes(item.id) ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <div className="flex flex-col" style={{ paddingLeft: `${item.level * 16}px` }}>
+                    <div className="flex flex-col" style={{ paddingLeft: `${(item.level || 0) * 16}px` }}>
                       <span className="text-sm font-medium">
                         {getDisplayLabel(item)}
                       </span>
