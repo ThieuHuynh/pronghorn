@@ -174,6 +174,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           if (error) throw error;
         } else {
           const { error } = await supabase.from("canvas_nodes").insert([{
+            id: node.id,
             project_id: projectId,
             type: node.data.type,
             position: node.position as any,
@@ -208,25 +209,26 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         .eq("id", edge.id)
         .maybeSingle();
 
-      if (existing) {
-        const { error } = await supabase
-          .from("canvas_edges")
-          .update({
+        if (existing) {
+          const { error } = await supabase
+            .from("canvas_edges")
+            .update({
+              source_id: edge.source,
+              target_id: edge.target,
+              label: edge.label as string,
+            })
+            .eq("id", edge.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("canvas_edges").insert([{
+            id: edge.id,
+            project_id: projectId,
             source_id: edge.source,
             target_id: edge.target,
             label: edge.label as string,
-          })
-          .eq("id", edge.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("canvas_edges").insert([{
-          project_id: projectId,
-          source_id: edge.source,
-          target_id: edge.target,
-          label: edge.label as string,
-        }]);
-        if (error) throw error;
-      }
+          }]);
+          if (error) throw error;
+        }
     } catch (error) {
       console.error("Error saving edge:", error);
     }

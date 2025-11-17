@@ -134,7 +134,7 @@ function CanvasFlow() {
       });
 
       const newNode: Node = {
-        id: `node-${Date.now()}`,
+        id: crypto.randomUUID(),
         type: "custom",
         position,
         data: {
