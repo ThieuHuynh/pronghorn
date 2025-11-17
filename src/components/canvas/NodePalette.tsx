@@ -10,7 +10,8 @@ import {
   FileText, 
   ListChecks, 
   Code,
-  FolderKanban
+  FolderKanban,
+  FileCode
 } from "lucide-react";
 
 export type NodeType = 
@@ -24,10 +25,12 @@ export type NodeType =
   | "SECURITY" 
   | "REQUIREMENT" 
   | "STANDARD" 
-  | "TECH_STACK";
+  | "TECH_STACK"
+  | "PAGE";
 
 const nodeTypes = [
   { type: "PROJECT" as const, icon: FolderKanban, label: "Project", color: "text-cyan-500" },
+  { type: "PAGE" as const, icon: FileCode, label: "Page", color: "text-sky-500" },
   { type: "COMPONENT" as const, icon: Box, label: "UI Component", color: "text-blue-500" },
   { type: "API" as const, icon: Code, label: "API Endpoint", color: "text-green-500" },
   { type: "DATABASE" as const, icon: Database, label: "Database", color: "text-purple-500" },
