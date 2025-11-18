@@ -33,9 +33,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // Set up real-time subscriptions with connection monitoring
-    // Each client needs a unique channel name to receive all broadcasts
     const nodesChannel = supabase
-      .channel(`canvas-nodes-${projectId}-${clientId.current}`)
+      .channel(`canvas-nodes-${projectId}`)
       .on(
         "postgres_changes",
         {
@@ -93,7 +92,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       });
 
     const edgesChannel = supabase
-      .channel(`canvas-edges-${projectId}-${clientId.current}`)
+      .channel(`canvas-edges-${projectId}`)
       .on(
         "postgres_changes",
         {
