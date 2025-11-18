@@ -78,6 +78,9 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="container mx-auto px-6 py-20 text-center">
         <div className="max-w-4xl mx-auto">
+          <div className="flex justify-center mb-8">
+            <PronghornLogo className="h-32 w-32" />
+          </div>
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Standards-First Development Platform
           </h1>
