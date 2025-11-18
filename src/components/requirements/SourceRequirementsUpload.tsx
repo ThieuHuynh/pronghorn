@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, X } from "lucide-react";
+import { Upload, FileText, X, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAdmin } from "@/contexts/AdminContext";
@@ -15,11 +15,13 @@ import {
 interface SourceRequirementsUploadProps {
   requirementId: string;
   requirementTitle: string;
+  onUploadComplete?: () => void;
 }
 
 export function SourceRequirementsUpload({
   requirementId,
   requirementTitle,
+  onUploadComplete,
 }: SourceRequirementsUploadProps) {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +62,7 @@ export function SourceRequirementsUpload({
       // Store file reference in metadata (we'd need a table for this)
       toast.success("File uploaded successfully");
       loadFiles();
+      onUploadComplete?.();
     } catch (error: any) {
       console.error("Upload error:", error);
       toast.error(error.message || "Failed to upload file");
@@ -82,6 +85,50 @@ export function SourceRequirementsUpload({
     }
   };
 
+  const handleDownload = async (fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("requirement-sources")
+        .download(`${requirementId}/${fileName}`);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error("Download error:", error);
+      toast.error(error.message || "Failed to download file");
+    }
+  };
+
+  const handleDelete = async (fileName: string) => {
+    if (!isAdmin) {
+      toast.error("Admin access required to delete files");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.storage
+        .from("requirement-sources")
+        .remove([`${requirementId}/${fileName}`]);
+
+      if (error) throw error;
+      toast.success("File deleted");
+      loadFiles();
+      onUploadComplete?.();
+    } catch (error: any) {
+      console.error("Delete error:", error);
+      toast.error(error.message || "Failed to delete file");
+    }
+  };
+
   return (
     <>
       <Button
@@ -92,7 +139,7 @@ export function SourceRequirementsUpload({
           e.stopPropagation();
           setOpen(true);
         }}
-        title="Upload source requirements"
+        title={files.length > 0 ? `View ${files.length} attached ${files.length === 1 ? 'file' : 'files'}` : "Upload source requirements"}
       >
         <Upload className="h-3 w-3" />
       </Button>
@@ -140,10 +187,32 @@ export function SourceRequirementsUpload({
                 {files.map((file) => (
                   <div
                     key={file.name}
-                    className="flex items-center gap-2 p-2 border rounded-lg"
+                    className="flex items-center gap-2 p-2 border rounded-lg hover:bg-muted/50"
                   >
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm flex-1">{file.name}</span>
+                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm flex-1 truncate">{file.name}</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleDownload(file.name)}
+                        title="Download file"
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDelete(file.name)}
+                          title="Delete file"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
