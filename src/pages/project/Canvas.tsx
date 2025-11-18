@@ -82,13 +82,19 @@ function CanvasFlow() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      const newEdge = addEdge(params, edges)[edges.length];
-      setEdges((eds) => addEdge(params, eds));
-      if (newEdge) {
-        saveEdge(newEdge as Edge);
-      }
+      // Create edge with proper UUID
+      const newEdge: Edge = {
+        id: crypto.randomUUID(),
+        source: params.source!,
+        target: params.target!,
+        sourceHandle: params.sourceHandle,
+        targetHandle: params.targetHandle,
+      };
+      
+      setEdges((eds) => [...eds, newEdge]);
+      saveEdge(newEdge);
     },
-    [setEdges, edges, saveEdge]
+    [setEdges, saveEdge]
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
