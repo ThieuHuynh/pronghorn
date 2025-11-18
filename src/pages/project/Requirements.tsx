@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 export default function Requirements() {
   const { projectId } = useParams<{ projectId: string }>();
-  const shareToken = useShareToken(projectId);
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const { requirements, isLoading, addRequirement, updateRequirement, deleteRequirement, refresh } = useRealtimeRequirements(projectId!);
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [linkReq, setLinkReq] = useState<{ id: string; title: string } | null>(null);
@@ -26,6 +26,21 @@ export default function Requirements() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-destructive">Invalid project ID</p>
+      </div>
+    );
+  }
+
+  // Wait for token to be set before loading data
+  if (shareToken && !isTokenSet) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex relative">
+          <ProjectSidebar projectId={projectId} />
+          <main className="flex-1 w-full flex items-center justify-center">
+            <p>Loading...</p>
+          </main>
+        </div>
       </div>
     );
   }

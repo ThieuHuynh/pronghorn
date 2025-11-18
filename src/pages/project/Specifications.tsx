@@ -14,10 +14,25 @@ import { useShareToken } from "@/hooks/useShareToken";
 
 export default function Specifications() {
   const { projectId } = useParams();
-  const shareToken = useShareToken(projectId);
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedSpec, setGeneratedSpec] = useState<string>("");
   const [rawData, setRawData] = useState<any>(null);
+
+  // Wait for token to be set before allowing generation
+  if (shareToken && !isTokenSet) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex relative">
+          <ProjectSidebar projectId={projectId!} />
+          <main className="flex-1 w-full flex items-center justify-center">
+            <p>Loading...</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   const generateSpecification = async () => {
     if (!projectId) return;

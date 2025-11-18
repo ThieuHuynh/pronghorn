@@ -14,7 +14,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
-  const shareToken = useShareToken(projectId);
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const queryClient = useQueryClient();
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -32,7 +32,7 @@ export default function ProjectSettings() {
       if (error) throw error;
       return data;
     },
-    enabled: !!projectId,
+    enabled: !!projectId && isTokenSet,
   });
 
   useEffect(() => {
