@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Requirement } from "@/components/requirements/RequirementsTree";
+import { useSearchParams } from "react-router-dom";
 
 export function useRealtimeRequirements(projectId: string) {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -35,11 +38,10 @@ export function useRealtimeRequirements(projectId: string) {
 
   const loadRequirements = async () => {
     try {
-      const { data, error } = await supabase
-        .from("requirements")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("order_index", { ascending: true });
+      const { data, error } = await supabase.rpc("get_requirements_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
 
       if (error) throw error;
 
@@ -99,12 +101,12 @@ export function useRealtimeRequirements(projectId: string) {
     title: string
   ) => {
     try {
-      const { error } = await supabase.from("requirements").insert({
-        project_id: projectId,
-        parent_id: parentId,
-        type,
-        title,
-        order_index: 0,
+      const { error } = await supabase.rpc("insert_requirement_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_parent_id: parentId,
+        p_type: type,
+        p_title: title
       });
 
       if (error) throw error;
@@ -116,13 +118,12 @@ export function useRealtimeRequirements(projectId: string) {
 
   const updateRequirement = async (id: string, updates: Partial<Requirement>) => {
     try {
-      const { error } = await supabase
-        .from("requirements")
-        .update({
-          title: updates.title,
-          content: updates.content,
-        })
-        .eq("id", id);
+      const { error } = await supabase.rpc("update_requirement_with_token", {
+        p_id: id,
+        p_token: shareToken || null,
+        p_title: updates.title || "",
+        p_content: updates.content || ""
+      });
 
       if (error) throw error;
     } catch (error) {
@@ -133,9 +134,10 @@ export function useRealtimeRequirements(projectId: string) {
 
   const deleteRequirement = async (id: string) => {
     try {
-      const { error } = await supabase.from("requirements").delete().eq("id", id);
-
-      if (error) throw error;
+      await supabase.rpc("delete_requirement_with_token", {
+        p_id: id,
+        p_token: shareToken || null
+      });
     } catch (error) {
       console.error("Error deleting requirement:", error);
       throw error;

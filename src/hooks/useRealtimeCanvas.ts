@@ -1,8 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Node, Edge, useNodesState, useEdgesState } from "reactflow";
+import { useSearchParams } from "react-router-dom";
 
 export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initialEdges: Edge[]) {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const draggedNodeRef = useRef<string | null>(null);
@@ -111,14 +114,14 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   const loadCanvasData = async () => {
     try {
       const [nodesResult, edgesResult] = await Promise.all([
-        supabase
-          .from("canvas_nodes")
-          .select("*")
-          .eq("project_id", projectId),
-        supabase
-          .from("canvas_edges")
-          .select("*")
-          .eq("project_id", projectId),
+        supabase.rpc("get_canvas_nodes_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null
+        }),
+        supabase.rpc("get_canvas_edges_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null
+        }),
       ]);
 
       if (nodesResult.error) throw nodesResult.error;
@@ -164,27 +167,15 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           .eq("id", node.id)
           .maybeSingle();
 
-        if (existing) {
-          const { error } = await supabase
-            .from("canvas_nodes")
-            .update({
-              type: node.data.type,
-              position: node.position as any,
-              data: node.data as any,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", node.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("canvas_nodes").insert([{
-            id: node.id,
-            project_id: projectId,
-            type: node.data.type,
-            position: node.position as any,
-            data: node.data as any,
-          }]);
-          if (error) throw error;
-        }
+        const { error } = await supabase.rpc("upsert_canvas_node_with_token", {
+          p_id: node.id,
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_type: node.data.type,
+          p_position: node.position as any,
+          p_data: node.data as any
+        });
+        if (error) throw error;
         
         // Clear dragged node reference after save (only if it was set)
         if (isDragOperation) {
@@ -218,10 +209,14 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         label: (edge.label as string) || null,
       };
 
-      const { data, error } = await supabase
-        .from("canvas_edges")
-        .upsert([edgeData])
-        .select();
+      const { data, error } = await supabase.rpc("upsert_canvas_edge_with_token", {
+        p_id: edge.id,
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_source_id: edge.source,
+        p_target_id: edge.target,
+        p_label: (edge.label as string) || null
+      });
 
       if (error) {
         console.error("Error saving edge:", error);

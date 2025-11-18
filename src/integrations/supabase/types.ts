@@ -831,9 +831,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_requirement_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
       generate_requirement_code: {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
+      }
+      get_canvas_edges_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          label: string | null
+          project_id: string
+          source_id: string
+          target_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "canvas_edges"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_canvas_nodes_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          data: Json
+          id: string
+          position: Json
+          project_id: string
+          type: Database["public"]["Enums"]["node_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "canvas_nodes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_project_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -864,12 +903,60 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_requirements_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          code: string | null
+          content: string | null
+          created_at: string
+          id: string
+          order_index: number
+          parent_id: string | null
+          project_id: string
+          title: string
+          type: Database["public"]["Enums"]["requirement_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "requirements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      insert_requirement_with_token: {
+        Args: {
+          p_parent_id: string
+          p_project_id: string
+          p_title: string
+          p_token: string
+          p_type: Database["public"]["Enums"]["requirement_type"]
+        }
+        Returns: {
+          code: string | null
+          content: string | null
+          created_at: string
+          id: string
+          order_index: number
+          parent_id: string | null
+          project_id: string
+          title: string
+          type: Database["public"]["Enums"]["requirement_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "requirements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
       update_project_with_token: {
@@ -903,6 +990,81 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_requirement_with_token: {
+        Args: {
+          p_content: string
+          p_id: string
+          p_title: string
+          p_token: string
+        }
+        Returns: {
+          code: string | null
+          content: string | null
+          created_at: string
+          id: string
+          order_index: number
+          parent_id: string | null
+          project_id: string
+          title: string
+          type: Database["public"]["Enums"]["requirement_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "requirements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_canvas_edge_with_token: {
+        Args: {
+          p_id: string
+          p_label: string
+          p_project_id: string
+          p_source_id: string
+          p_target_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          label: string | null
+          project_id: string
+          source_id: string
+          target_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "canvas_edges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_canvas_node_with_token: {
+        Args: {
+          p_data: Json
+          p_id: string
+          p_position: Json
+          p_project_id: string
+          p_token: string
+          p_type: Database["public"]["Enums"]["node_type"]
+        }
+        Returns: {
+          created_at: string
+          data: Json
+          id: string
+          position: Json
+          project_id: string
+          type: Database["public"]["Enums"]["node_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "canvas_nodes"
           isOneToOne: true
           isSetofReturn: false
         }
