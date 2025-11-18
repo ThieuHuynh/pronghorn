@@ -54,14 +54,14 @@ function StandardNode({
   return (
     <div className="select-none">
       <div
-        className="group flex items-center gap-2 py-2 px-2 rounded-md hover:bg-muted/50 transition-colors"
-        style={{ paddingLeft: `${level * 20 + 8}px` }}
+        className="group flex items-center gap-1 md:gap-2 py-2 px-1 md:px-2 rounded-md hover:bg-muted/50 transition-colors"
+        style={{ paddingLeft: `${level * 10 + 4}px` }}
       >
         {hasChildren ? (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 p-0"
+            className="h-5 w-5 p-0 flex-shrink-0"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? (
@@ -71,33 +71,33 @@ function StandardNode({
             )}
           </Button>
         ) : (
-          <div className="h-5 w-5" />
+          <div className="h-5 w-5 flex-shrink-0" />
         )}
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-1 md:gap-2 cursor-pointer flex-wrap"
             onClick={() => onSelect?.(standard)}
           >
-            <Badge variant="outline" className="font-mono text-xs">
+            <Badge variant="outline" className="font-mono text-[10px] md:text-xs flex-shrink-0">
               {standard.code}
             </Badge>
-            <span className="text-sm font-medium truncate">{standard.title}</span>
+            <span className="text-xs md:text-sm font-medium truncate">{standard.title}</span>
           </div>
           {standard.description && (
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 line-clamp-2">
               {standard.description}
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 md:gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
           {hasAttachments && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                    <FileText className="h-3 w-3" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 md:h-6 md:w-6">
+                    <FileText className="h-2.5 w-2.5 md:h-3 md:w-3" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -125,11 +125,11 @@ function StandardNode({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs"
+              className="h-5 px-1 text-[10px] md:h-6 md:px-2 md:text-xs"
               onClick={() => onLink?.(standard)}
             >
-              <LinkIcon className="h-3 w-3 mr-1" />
-              Link
+              <LinkIcon className="h-2.5 w-2.5 md:h-3 md:w-3 md:mr-1" />
+              <span className="hidden md:inline">Link</span>
             </Button>
           )}
         </div>

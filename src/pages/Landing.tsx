@@ -76,23 +76,23 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-6 py-20 text-center">
+      <section className="container mx-auto px-4 md:px-6 py-12 md:py-20 text-center">
         <div className="max-w-4xl mx-auto">
-          <div className="flex justify-center mb-8">
-            <PronghornLogo className="h-32 w-32" />
+          <div className="flex justify-center mb-6 md:mb-8">
+            <PronghornLogo className="h-24 w-24 md:h-32 md:w-32" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Standards-First Development Platform
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-2xl mx-auto px-4">
             Transform specifications into compliant systems with AI-powered requirements management, 
             visual architecture design, and autonomous code generation.
           </p>
-          <div className="flex gap-4 justify-center">
-            <Button size="lg" onClick={() => navigate('/dashboard')} className="gap-2">
+          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4">
+            <Button size="lg" onClick={() => navigate('/dashboard')} className="gap-2 w-full sm:w-auto">
               Start Building <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/standards')}>
+            <Button size="lg" variant="outline" onClick={() => navigate('/standards')} className="w-full sm:w-auto">
               View Standards
             </Button>
           </div>

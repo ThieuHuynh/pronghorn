@@ -50,12 +50,25 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-      <main className="container px-6 py-8">
-        <div className="flex justify-between mb-8">
-          <div><h1 className="text-3xl font-bold mb-2">Projects</h1><p className="text-muted-foreground">Manage projects</p></div>
-          <EnhancedCreateProjectDialog />
+      <main className="container px-4 md:px-6 py-6 md:py-8">
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 md:mb-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2">Projects</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Manage projects</p>
+          </div>
+          <div className="w-full md:w-auto">
+            <EnhancedCreateProjectDialog />
+          </div>
         </div>
-        <div className="mb-6"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 max-w-md" /></div>
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            className="pl-9 w-full md:max-w-md text-sm md:text-base" 
+          />
+        </div>
         {!user ? (
           <div className="text-center py-12 space-y-4">
             <p className="text-muted-foreground">Sign in to see your projects</p>

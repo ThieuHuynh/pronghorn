@@ -106,15 +106,15 @@ export default function TechStacks() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
 
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-bold">Tech Stacks</h1>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
+              <h1 className="text-2xl md:text-3xl font-bold">Tech Stacks</h1>
               {isAdmin && <Badge variant="secondary">Admin Mode</Badge>}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {isAdmin && (
                 <Button onClick={logout} variant="outline" size="sm">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -132,7 +132,7 @@ export default function TechStacks() {
                 placeholder="Search tech stacks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 text-sm md:text-base"
               />
             </div>
           </div>
@@ -140,15 +140,16 @@ export default function TechStacks() {
           {/* Add New Tech Stack (inline) */}
           {isAdmin && (
             <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2">
+              <CardContent className="pt-4 md:pt-6 p-4 md:p-6">
+                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
                   <Input
                     placeholder="New tech stack name..."
                     value={newTechStackName}
                     onChange={(e) => setNewTechStackName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddTechStack()}
+                    className="flex-1 text-sm md:text-base"
                   />
-                  <Button onClick={handleAddTechStack} size="sm">
+                  <Button onClick={handleAddTechStack} size="lg" className="w-full md:w-auto">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Tech Stack
                   </Button>

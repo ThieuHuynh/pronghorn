@@ -32,53 +32,54 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden">
+      <CardHeader className="p-4 md:p-6">
         {isEditing ? (
           <div className="space-y-2">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Tech stack name"
-              className="text-xl font-semibold"
+              className="text-lg md:text-xl font-semibold"
             />
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Tech stack description"
               rows={2}
+              className="text-sm"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button size="sm" onClick={handleSave}>
-                <Check className="h-4 w-4 mr-2" />
+                <Check className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                 Save
               </Button>
               <Button size="sm" variant="outline" onClick={handleCancel}>
-                <X className="h-4 w-4 mr-2" />
+                <X className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                 Cancel
               </Button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <CardTitle>{techStack.name}</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-lg md:text-xl truncate">{techStack.name}</CardTitle>
               {isAdmin && (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)}>
-                    <Edit className="h-4 w-4" />
+                <div className="flex gap-1 md:gap-2 flex-shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                    <Edit className="h-3 w-3 md:h-4 md:w-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDelete(techStack.id)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button size="sm" variant="ghost" onClick={() => onDelete(techStack.id)} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                    <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
                   </Button>
                 </div>
               )}
             </div>
-            {techStack.description && <CardDescription>{techStack.description}</CardDescription>}
+            {techStack.description && <CardDescription className="text-xs md:text-sm">{techStack.description}</CardDescription>}
           </>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 md:p-6 pt-0">
         <TechStackTreeManager
           techStackId={techStack.id}
           onRefresh={onRefresh}

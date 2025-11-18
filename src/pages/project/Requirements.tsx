@@ -36,12 +36,22 @@ export default function Requirements() {
       <div className="flex">
         <ProjectSidebar projectId={projectId!} />
         <main className="flex-1 overflow-auto">
-          <div className="container px-6 py-8 max-w-6xl">
-            <h1 className="text-3xl font-bold mb-2">Requirements</h1>
-            <div className="flex gap-3 mb-6">
-              <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." className="pl-9" /></div>
-              <Button variant="outline" onClick={() => setShowAIDialog(true)}>AI Decompose</Button>
-              <Button onClick={() => addRequirement(null, "EPIC", "New Epic")}><Plus className="h-4 w-4 mr-2" />Add Epic</Button>
+          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-2">Requirements</h1>
+            <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-6">
+              <div className="relative flex-1 md:max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search..." className="pl-9 text-sm md:text-base" />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowAIDialog(true)} className="flex-1 md:flex-none text-sm">
+                  AI Decompose
+                </Button>
+                <Button onClick={() => addRequirement(null, "EPIC", "New Epic")} className="flex-1 md:flex-none text-sm">
+                  <Plus className="h-3 w-3 md:h-4 md:w-4 mr-2" />
+                  Add Epic
+                </Button>
+              </div>
             </div>
             {isLoading ? <p className="text-center py-12 text-muted-foreground">Loading...</p> : requirements.length > 0 ? (
               <div className="bg-card border rounded-lg p-4">

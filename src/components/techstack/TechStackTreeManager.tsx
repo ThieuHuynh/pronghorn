@@ -195,12 +195,12 @@ function AddItemInline({ onAdd, onCancel }: { onAdd: (type: string, name: string
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
       <Select value={type} onValueChange={setType}>
-        <SelectTrigger className="w-32">
+        <SelectTrigger className="w-full md:w-32">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-background z-50">
           {ITEM_TYPES.map(t => (
             <SelectItem key={t} value={t}>{t}</SelectItem>
           ))}
@@ -215,10 +215,12 @@ function AddItemInline({ onAdd, onCancel }: { onAdd: (type: string, name: string
           if (e.key === "Escape") handleCancel();
         }}
         autoFocus
-        className="flex-1"
+        className="flex-1 text-sm"
       />
-      <Button size="sm" onClick={handleSubmit}>Add</Button>
-      <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={handleSubmit} className="flex-1 md:flex-none">Add</Button>
+        <Button size="sm" variant="outline" onClick={handleCancel} className="flex-1 md:flex-none">Cancel</Button>
+      </div>
     </div>
   );
 }
@@ -248,44 +250,48 @@ function TechStackItemNode({
   };
 
   return (
-    <div className="border border-border rounded-lg p-3 space-y-2">
-      <div className="flex items-start gap-2">
+    <div className="border border-border rounded-lg p-2 md:p-3 space-y-2">
+      <div className="flex items-start gap-1 md:gap-2">
         {item.children && item.children.length > 0 && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 flex-shrink-0"
+            className="h-5 w-5 md:h-6 md:w-6 flex-shrink-0"
             onClick={() => setIsExpanded(!isExpanded)}
           >
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {isExpanded ? <ChevronDown className="h-2.5 w-2.5 md:h-3 md:w-3" /> : <ChevronRight className="h-2.5 w-2.5 md:h-3 md:w-3" />}
           </Button>
         )}
 
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 min-w-0 space-y-2 overflow-hidden">
           {isEditing ? (
             <div className="space-y-2">
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Name"
+                className="text-sm"
               />
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Description"
                 rows={2}
+                className="text-sm"
               />
               <Input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="URL (optional)"
+                className="text-sm"
               />
               <Input
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
                 placeholder="Version (optional)"
+                className="text-sm"
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button size="sm" onClick={handleSave}>Save</Button>
                 <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
                   Cancel
@@ -294,33 +300,33 @@ function TechStackItemNode({
             </div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">{item.type}</Badge>
-                    <span className="font-medium">{item.name}</span>
-                    {item.version && <Badge variant="secondary" className="text-xs">v{item.version}</Badge>}
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+                    <Badge variant="outline" className="text-[10px] md:text-xs flex-shrink-0">{item.type}</Badge>
+                    <span className="font-medium text-sm md:text-base truncate">{item.name}</span>
+                    {item.version && <Badge variant="secondary" className="text-[10px] md:text-xs flex-shrink-0">v{item.version}</Badge>}
                   </div>
                   {item.description && (
-                    <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                    <p className="text-xs md:text-sm text-muted-foreground mt-1 break-words">{item.description}</p>
                   )}
                   {item.url && (
-                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
-                      <LinkIcon className="h-3 w-3" />
-                      {item.url}
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[10px] md:text-xs text-primary hover:underline flex items-center gap-1 mt-1 break-all">
+                      <LinkIcon className="h-2.5 w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                      <span className="truncate">{item.url}</span>
                     </a>
                   )}
                 </div>
 
-                <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item">
-                    <Plus className="h-3 w-3" />
+                <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                    <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
-                    <Edit className="h-3 w-3" />
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                    <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete">
-                    <Trash2 className="h-3 w-3" />
+                  <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                    <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
                   </Button>
                 </div>
               </div>
@@ -331,7 +337,7 @@ function TechStackItemNode({
 
       {/* Children */}
       {(isExpanded || isAddingChild) && (
-        <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
+        <div className="ml-3 md:ml-6 mt-2 space-y-2 border-l-2 border-border pl-2 md:pl-4">
           {item.children && item.children.length > 0 && item.children.map((child) => (
             <TechStackItemNode key={child.id} item={child} onAdd={onAdd} onDelete={onDelete} onUpdate={onUpdate} />
           ))}
