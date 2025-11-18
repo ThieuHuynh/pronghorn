@@ -15,3 +15,6 @@ verify_jwt = false
 
 [functions.ai-create-standards]
 verify_jwt = false
+
+[functions.create-project]
+verify_jwt = false

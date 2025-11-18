@@ -23,11 +23,13 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnonymousProjectWarning } from "./AnonymousProjectWarning";
+import { useAnonymousProjects } from "@/hooks/useAnonymousProjects";
 
 export function EnhancedCreateProjectDialog() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { addProject: addAnonymousProject } = useAnonymousProjects();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
@@ -113,6 +115,12 @@ export function EnhancedCreateProjectDialog() {
   };
 
   const handleSubmit = async () => {
+    console.log("[EnhancedCreateProjectDialog] Submit started", { 
+      isAnonymous: !user,
+      hasAuth: !!user,
+      projectName: name 
+    });
+    
     if (!name.trim()) {
       toast.error("Project name is required");
       return;
@@ -121,78 +129,81 @@ export function EnhancedCreateProjectDialog() {
     setIsCreating(true);
 
     try {
+      console.log("[EnhancedCreateProjectDialog] Getting organization");
+      
       // Get or create default organization
       let { data: orgs } = await supabase.from('organizations').select('id').limit(1);
       
       let orgId: string;
       if (!orgs || orgs.length === 0) {
+        console.log("[EnhancedCreateProjectDialog] Creating new organization");
         const { data: newOrg, error: orgError } = await supabase
           .from('organizations')
           .insert({ name: 'Default Organization' })
           .select('id')
           .single();
         
-        if (orgError) throw orgError;
+        if (orgError) {
+          console.error("[EnhancedCreateProjectDialog] Org creation error:", orgError);
+          throw orgError;
+        }
         orgId = newOrg.id;
       } else {
         orgId = orgs[0].id;
       }
 
-      const { data: project, error } = await supabase
-        .from('projects')
-        .insert({
-          name: name.trim(),
-          description: description.trim() || null,
-          organization: organization.trim() || null,
-          budget: budget ? parseFloat(budget) : null,
-          scope: scope.trim() || null,
-          timeline_start: timelineStart || null,
-          timeline_end: timelineEnd || null,
-          priority: priority,
-          tags: tags ? tags.split(',').map(t => t.trim()) : null,
-          org_id: orgId,
-          status: 'DESIGN',
-          created_by: user?.id || null
-        })
-        .select('id, share_token')
-        .single();
+      console.log("[EnhancedCreateProjectDialog] Calling create-project edge function");
 
-      if (error) throw error;
-
-      // Link selected tech stacks
-      if (selectedTechStacks.length > 0) {
-        const techStackLinks = selectedTechStacks.map(techStackId => ({
-          project_id: project.id,
-          tech_stack_id: techStackId
-        }));
-        
-        const { error: techStackError } = await supabase
-          .from('project_tech_stacks')
-          .insert(techStackLinks);
-        
-        if (techStackError) {
-          console.error("Error linking tech stacks:", techStackError);
-        }
-      }
-
-      if (requirements.trim()) {
-        const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
-          body: { 
-            text: requirements.trim(), 
-            projectId: project.id,
-            shareToken: project.share_token 
+      // Use edge function to create project
+      const { data: result, error: functionError } = await supabase.functions.invoke("create-project", {
+        body: {
+          projectData: {
+            name: name.trim(),
+            description: description.trim() || null,
+            organization: organization.trim() || null,
+            budget: budget ? parseFloat(budget) : null,
+            scope: scope.trim() || null,
+            timeline_start: timelineStart || null,
+            timeline_end: timelineEnd || null,
+            priority: priority,
+            tags: tags ? tags.split(',').map(t => t.trim()) : null,
+            org_id: orgId,
+            status: 'DESIGN',
           },
-        });
-
-        if (aiError) {
-          console.error("AI decomposition error:", aiError);
-          toast.warning("Project created but AI decomposition failed. You can try again later.");
-        } else {
-          toast.success("Project created with AI-generated requirements!");
+          techStackIds: selectedTechStacks,
+          requirementsText: requirements.trim() || null,
         }
-      } else {
-        toast.success("Project created successfully!");
+      });
+
+      if (functionError) {
+        console.error("[EnhancedCreateProjectDialog] Edge function error:", functionError);
+        throw functionError;
       }
+
+      if (!result?.success) {
+        console.error("[EnhancedCreateProjectDialog] Edge function returned error:", result?.error);
+        throw new Error(result?.error || "Unknown error");
+      }
+
+      console.log("[EnhancedCreateProjectDialog] Project created:", result.project);
+
+      const project = result.project;
+
+      // For anonymous users, store in session storage
+      if (!user && project.shareToken) {
+        console.log("[EnhancedCreateProjectDialog] Storing anonymous project in session");
+        addAnonymousProject({
+          id: project.id,
+          shareToken: project.shareToken,
+          name: name.trim(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      toast.success(requirements.trim() 
+        ? "Project created with AI-generated requirements!" 
+        : "Project created successfully!"
+      );
 
       setOpen(false);
       resetForm();
@@ -202,14 +213,16 @@ export function EnhancedCreateProjectDialog() {
       
       // If anonymous user, show warning modal with share link
       if (!user) {
-        setCreatedProject({ id: project.id, shareToken: project.share_token });
+        console.log("[EnhancedCreateProjectDialog] Showing anonymous warning with token:", project.shareToken);
+        setCreatedProject({ id: project.id, shareToken: project.shareToken });
         setShowWarning(true);
       } else {
         // Navigate to the new project (authenticated users don't need token in URL)
+        console.log("[EnhancedCreateProjectDialog] Navigating authenticated user to project");
         navigate(`/project/${project.id}/requirements`);
       }
     } catch (error) {
-      console.error("Error creating project:", error);
+      console.error("[EnhancedCreateProjectDialog] Fatal error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create project");
     } finally {
       setIsCreating(false);
