@@ -104,10 +104,10 @@ export default function Build() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       
-      <div className="flex">
+      <div className="flex relative">
         <ProjectSidebar projectId={projectId!} />
         
-        <main className="flex-1">
+        <main className="flex-1 w-full">
           <div className="container px-6 py-8 max-w-7xl">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">

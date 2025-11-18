@@ -295,9 +295,9 @@ export default function Specifications() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-      <div className="flex">
+      <div className="flex relative">
         <ProjectSidebar projectId={projectId || ""} />
-        <main className="flex-1 p-8">
+        <main className="flex-1 w-full p-8">
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
               <div>

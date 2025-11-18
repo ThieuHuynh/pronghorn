@@ -33,9 +33,9 @@ export default function Requirements() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-      <div className="flex">
+      <div className="flex relative">
         <ProjectSidebar projectId={projectId!} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto w-full">
           <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-2">Requirements</h1>
             <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-6">

@@ -247,9 +247,9 @@ export default function Standards() {
     return (
       <div className="min-h-screen bg-background">
         <PrimaryNav />
-        <div className="flex">
+        <div className="flex relative">
           <ProjectSidebar projectId={projectId!} />
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 w-full flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         </div>
@@ -260,9 +260,9 @@ export default function Standards() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-      <div className="flex">
+      <div className="flex relative">
         <ProjectSidebar projectId={projectId!} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 w-full overflow-auto">
           <div className="container px-6 py-8 max-w-6xl">
             <h1 className="text-3xl font-bold mb-2">Project Standards</h1>
             <p className="text-sm text-muted-foreground mb-6">

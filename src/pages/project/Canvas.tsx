@@ -173,10 +173,10 @@ function CanvasFlow() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       
-      <div className="flex">
+      <div className="flex relative">
         <ProjectSidebar projectId={projectId!} />
         
-        <div className="flex flex-1">
+        <div className="flex flex-1 w-full">
           <NodePalette 
             visibleNodeTypes={visibleNodeTypes}
             onToggleVisibility={handleToggleVisibility}
