@@ -12,8 +12,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const draggedNodeRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const syncChannelRef = useRef<any>(null);
   
-
   useEffect(() => {
     if (!projectId || !isTokenSet) {
       return;
@@ -78,6 +78,14 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           }
         }
       )
+      .on(
+        "broadcast",
+        { event: "canvas_refresh" },
+        (payload) => {
+          console.log("Received canvas refresh broadcast:", payload);
+          loadCanvasData();
+        }
+      )
       .subscribe((status) => {
         console.log("Nodes channel status:", status);
         if (status === 'SUBSCRIBED') {
@@ -90,6 +98,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           console.warn("⚠️ Nodes realtime connection closed");
         }
       });
+
+    syncChannelRef.current = nodesChannel;
 
     const edgesChannel = supabase
       .channel(`canvas-edges-${projectId}`)
@@ -148,6 +158,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+      syncChannelRef.current = null;
     };
   }, [projectId, isTokenSet]);
 
@@ -223,6 +234,14 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
             draggedNodeRef.current = null;
           }, 100);
         }
+
+        if (syncChannelRef.current) {
+          syncChannelRef.current.send({
+            type: "broadcast",
+            event: "canvas_refresh",
+            payload: { type: "node", id: node.id },
+          });
+        }
       };
 
       if (immediate) {
@@ -262,6 +281,13 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         console.error("Error saving edge:", error);
       } else {
         console.log("Edge saved successfully:", data);
+        if (syncChannelRef.current) {
+          syncChannelRef.current.send({
+            type: "broadcast",
+            event: "canvas_refresh",
+            payload: { type: "edge", id: edge.id },
+          });
+        }
       }
     } catch (error) {
       console.error("Error saving edge:", error);
