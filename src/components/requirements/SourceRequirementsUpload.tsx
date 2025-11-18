@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, X, Download } from "lucide-react";
+import { Upload, FileText, X, Download, Eye, Edit2, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAdmin } from "@/contexts/AdminContext";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SourceRequirementsUploadProps {
   requirementId: string;
@@ -26,13 +29,32 @@ export function SourceRequirementsUpload({
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<any[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
+  const [activeTab, setActiveTab] = useState("files");
   const { isAdmin } = useAdmin();
 
   useEffect(() => {
     if (open) {
       loadFiles();
+    } else {
+      // Reset state when closing
+      setSelectedFile(null);
+      setFileContent("");
+      setIsEditing(false);
+      setEditedContent("");
+      setActiveTab("files");
     }
   }, [open, requirementId]);
+
+  useEffect(() => {
+    if (selectedFile) {
+      loadFileContent(selectedFile);
+      setActiveTab("preview");
+    }
+  }, [selectedFile]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -129,6 +151,46 @@ export function SourceRequirementsUpload({
     }
   };
 
+  const loadFileContent = async (fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("requirement-sources")
+        .download(`${requirementId}/${fileName}`);
+
+      if (error) throw error;
+
+      // Check if it's a text file
+      const text = await data.text();
+      setFileContent(text);
+      setEditedContent(text);
+    } catch (error: any) {
+      console.error("Error loading file content:", error);
+      setFileContent("Unable to preview this file type. Click download to view it.");
+    }
+  };
+
+  const handleSaveContent = async () => {
+    if (!selectedFile || !isAdmin) return;
+
+    try {
+      const blob = new Blob([editedContent], { type: "text/plain" });
+      const file = new File([blob], selectedFile, { type: "text/plain" });
+
+      const { error } = await supabase.storage
+        .from("requirement-sources")
+        .update(`${requirementId}/${selectedFile}`, file);
+
+      if (error) throw error;
+
+      setFileContent(editedContent);
+      setIsEditing(false);
+      toast.success("File updated successfully");
+    } catch (error: any) {
+      console.error("Save error:", error);
+      toast.error(error.message || "Failed to save file");
+    }
+  };
+
   return (
     <>
       <Button
@@ -145,79 +207,165 @@ export function SourceRequirementsUpload({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Source Requirements</DialogTitle>
             <DialogDescription>{requirementTitle}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <input
-                type="file"
-                onChange={handleUpload}
-                disabled={uploading || !isAdmin}
-                className="hidden"
-                id={`file-upload-${requirementId}`}
-                accept=".pdf,.doc,.docx,.txt"
-              />
-              <label htmlFor={`file-upload-${requirementId}`}>
-                <Button
-                  variant="outline"
-                  disabled={uploading || !isAdmin}
-                  className="w-full"
-                  asChild
-                >
-                  <span>
-                    <Upload className="h-4 w-4 mr-2" />
-                    {uploading ? "Uploading..." : "Upload Document"}
-                  </span>
-                </Button>
-              </label>
-              {!isAdmin && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Admin access required to upload files
-                </p>
-              )}
-            </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="files">Files</TabsTrigger>
+              <TabsTrigger value="preview" disabled={!selectedFile}>
+                Preview {selectedFile && `- ${selectedFile}`}
+              </TabsTrigger>
+            </TabsList>
 
-            {files.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Uploaded Files</p>
-                {files.map((file) => (
-                  <div
-                    key={file.name}
-                    className="flex items-center gap-2 p-2 border rounded-lg hover:bg-muted/50"
+            <TabsContent value="files" className="space-y-4">
+              <div>
+                <input
+                  type="file"
+                  onChange={handleUpload}
+                  disabled={uploading || !isAdmin}
+                  className="hidden"
+                  id={`file-upload-${requirementId}`}
+                  accept=".pdf,.doc,.docx,.txt,.md"
+                />
+                <label htmlFor={`file-upload-${requirementId}`}>
+                  <Button
+                    variant="outline"
+                    disabled={uploading || !isAdmin}
+                    className="w-full"
+                    asChild
                   >
-                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm flex-1 truncate">{file.name}</span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleDownload(file.name)}
-                        title="Download file"
+                    <span>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {uploading ? "Uploading..." : "Upload Document"}
+                    </span>
+                  </Button>
+                </label>
+                {!isAdmin && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Admin access required to upload files
+                  </p>
+                )}
+              </div>
+
+              {files.length > 0 && (
+                <ScrollArea className="h-[400px] pr-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Uploaded Files</p>
+                    {files.map((file) => (
+                      <div
+                        key={file.name}
+                        className={`flex items-center gap-2 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors ${
+                          selectedFile === file.name ? "bg-muted border-primary" : ""
+                        }`}
+                        onClick={() => setSelectedFile(file.name)}
                       >
-                        <Download className="h-3 w-3" />
-                      </Button>
-                      {isAdmin && (
+                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm flex-1 truncate">{file.name}</span>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFile(file.name);
+                            }}
+                            title="Preview file"
+                          >
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(file.name);
+                            }}
+                            title="Download file"
+                          >
+                            <Download className="h-3 w-3" />
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(file.name);
+                              }}
+                              title="Delete file"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </TabsContent>
+
+            <TabsContent value="preview" className="space-y-4">
+              {selectedFile && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">{selectedFile}</h3>
+                    <div className="flex gap-2">
+                      {!isEditing && isAdmin && (
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDelete(file.name)}
-                          title="Delete file"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsEditing(true)}
                         >
-                          <X className="h-3 w-3" />
+                          <Edit2 className="h-3 w-3 mr-2" />
+                          Edit
                         </Button>
+                      )}
+                      {isEditing && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setIsEditing(false);
+                              setEditedContent(fileContent);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleSaveContent}>
+                            <Save className="h-3 w-3 mr-2" />
+                            Save
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+
+                  {isEditing ? (
+                    <Textarea
+                      value={editedContent}
+                      onChange={(e) => setEditedContent(e.target.value)}
+                      className="min-h-[400px] font-mono text-sm"
+                    />
+                  ) : (
+                    <ScrollArea className="h-[400px] w-full border rounded-lg p-4">
+                      <pre className="text-sm whitespace-pre-wrap font-mono">
+                        {fileContent}
+                      </pre>
+                    </ScrollArea>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </>
