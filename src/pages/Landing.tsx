@@ -66,7 +66,7 @@ export default function Landing() {
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <ListChecks className="h-5 w-5 text-primary" />
             </div>
-            <span className="text-xl font-bold">Embly</span>
+            <span className="text-xl font-bold">Pronghorn</span>
           </div>
           <Button onClick={() => navigate('/dashboard')}>
             Get Started <ArrowRight className="ml-2 h-4 w-4" />
@@ -187,7 +187,12 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30">
         <div className="container mx-auto px-6 py-8 text-center text-muted-foreground">
-          <p>© 2024 Embly. Standards-first agentic AI development platform.</p>
+          <p>© 2024 Pronghorn. Standards-first agentic AI development platform.</p>
+          <p className="text-sm mt-2">
+            <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+              pronghorn.red
+            </a>
+          </p>
         </div>
       </footer>
     </div>
