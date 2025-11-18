@@ -36,9 +36,9 @@ export function PrimaryNav() {
         {/* Logo */}
         <div className="flex items-center gap-2 mr-4 md:mr-8">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <span className="text-white font-bold text-lg">E</span>
+            <span className="text-white font-bold text-lg">P</span>
           </div>
-          <span className="font-bold text-xl">Embly</span>
+          <span className="font-bold text-xl">Pronghorn</span>
         </div>
 
         {/* Desktop Navigation */}
