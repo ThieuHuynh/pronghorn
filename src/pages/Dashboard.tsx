@@ -12,11 +12,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAnonymousProjects } from "@/hooks/useAnonymousProjects";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projects: anonymousProjects } = useAnonymousProjects();
+  const { projects: anonymousProjects, removeProject } = useAnonymousProjects();
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: projects = [], isLoading, refetch } = useQuery({
@@ -66,6 +67,33 @@ export default function Dashboard() {
     shareToken: p.shareToken
   }));
 
+  const handleSaveProject = async (projectId: string, shareToken: string) => {
+    if (!user) {
+      toast.error("Please sign in to save this project");
+      return;
+    }
+
+    try {
+      // Update project to link to user account
+      const { error } = await supabase
+        .from('projects')
+        .update({ created_by: user.id })
+        .eq('id', projectId)
+        .eq('share_token', shareToken);
+
+      if (error) throw error;
+
+      // Remove from anonymous projects in sessionStorage
+      removeProject(projectId);
+
+      toast.success("Project saved to your account!");
+      refetch();
+    } catch (error) {
+      console.error("Error saving project:", error);
+      toast.error("Failed to save project to account");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -95,6 +123,14 @@ export default function Dashboard() {
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               <strong>Temporary Projects:</strong> These projects are stored in your browser session only. They will be lost when you close this tab. Sign in to save them permanently.
+            </AlertDescription>
+          </Alert>
+        )}
+        {user && anonymousProjectCards.length > 0 && (
+          <Alert className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Temporary Projects Found:</strong> Click "Save to Account" on any temporary project to add it to your account permanently.
             </AlertDescription>
           </Alert>
         )}
@@ -130,7 +166,10 @@ export default function Dashboard() {
                       <ProjectCard 
                         {...p} 
                         onClick={(id) => navigate(`/project/${id}/canvas?token=${p.shareToken}`)} 
-                        onUpdate={refetch} 
+                        onUpdate={refetch}
+                        isAnonymous={true}
+                        shareToken={p.shareToken}
+                        onSaveToAccount={user ? handleSaveProject : undefined}
                       />
                     </div>
                   ))}

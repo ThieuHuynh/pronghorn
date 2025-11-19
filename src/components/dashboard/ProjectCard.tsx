@@ -19,6 +19,9 @@ interface ProjectCardProps {
   scope?: string | null;
   onClick?: (projectId: string) => void;
   onUpdate?: () => void;
+  isAnonymous?: boolean;
+  shareToken?: string;
+  onSaveToAccount?: (projectId: string, shareToken: string) => void;
 }
 
 const statusConfig = {
@@ -48,6 +51,9 @@ export function ProjectCard({
   scope,
   onClick,
   onUpdate,
+  isAnonymous,
+  shareToken,
+  onSaveToAccount,
 }: ProjectCardProps) {
   const statusInfo = statusConfig[status];
   const { isAdmin } = useAdmin();
@@ -57,16 +63,18 @@ export function ProjectCard({
       className="card-hover group relative"
     >
       <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
-        <EditProjectDialog
-          projectId={projectId}
-          currentName={projectName}
-          currentDescription={description}
-          currentOrganization={organization}
-          currentBudget={budget}
-          currentScope={scope}
-          onUpdate={onUpdate}
-        />
-        {isAdmin && (
+        {!isAnonymous && (
+          <EditProjectDialog
+            projectId={projectId}
+            currentName={projectName}
+            currentDescription={description}
+            currentOrganization={organization}
+            currentBudget={budget}
+            currentScope={scope}
+            onUpdate={onUpdate}
+          />
+        )}
+        {isAdmin && !isAnonymous && (
           <DeleteProjectDialog
             projectId={projectId}
             projectName={projectName}
@@ -109,6 +117,19 @@ export function ProjectCard({
               />
             </div>
           </div>
+        )}
+        {isAnonymous && onSaveToAccount && shareToken && (
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="w-full mt-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSaveToAccount(projectId, shareToken);
+            }}
+          >
+            Save to Account
+          </Button>
         )}
       </CardContent>
       </div>
