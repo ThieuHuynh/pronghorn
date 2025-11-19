@@ -19,43 +19,43 @@ export default function Landing() {
   const features = [
     {
       icon: FileText,
-      title: "Requirements Management",
-      description: "Transform unstructured text into hierarchical requirements with AI-powered decomposition."
+      title: "Standards-First Traceability",
+      description: "Standards embedded by design—every requirement traces back to organizational standards, ensuring compliance from day one."
     },
     {
       icon: ListChecks,
-      title: "Standards Library",
-      description: "Build and maintain organizational standards for security, accessibility, and compliance."
+      title: "Validate While Building",
+      description: "Continuous validation catches compliance gaps instantly, eliminating costly late-stage rework and technical debt."
     },
     {
       icon: GitBranch,
       title: "Visual Architecture",
-      description: "Design system architecture with an interactive canvas linking requirements to components."
+      description: "Design robust architectures with an interactive canvas that links standards, requirements, and components in real-time."
     },
     {
       icon: Shield,
-      title: "Compliance Auditing",
-      description: "Continuous validation against standards with automated gap analysis and reporting."
+      title: "Proof of Compliance",
+      description: "Automated auditing provides traceable evidence that your application meets every standard and requirement."
     },
     {
       icon: Zap,
-      title: "Autonomous Builds",
-      description: "AI agents generate code through build-audit-fix loops with real-time monitoring."
+      title: "Autonomous Build-Audit-Fix",
+      description: "AI agents work together to build, audit, and automatically remediate gaps—all changes remain fully traceable."
     },
     {
       icon: Users,
-      title: "Real-time Collaboration",
-      description: "Multi-user support with instant synchronization across all specifications and designs."
+      title: "Developer Support System",
+      description: "Guides your team like an architect, accelerates work like a contractor, ensures quality like an inspector."
     }
   ];
 
   const benefits = [
-    "Standards-first development approach",
-    "Complete requirements traceability",
-    "AI-powered specification decomposition",
-    "Visual architecture design canvas",
-    "Continuous compliance validation",
-    "GitHub integration for code management"
+    "Eliminate compliance debt before it starts",
+    "Reduce 12-month projects to weeks",
+    "Proof of compliance built into every line of code",
+    "Complete traceability from standards to code",
+    "Build trust and confidence with stakeholders",
+    "Accelerate delivery without sacrificing quality"
   ];
 
   return (
@@ -81,11 +81,11 @@ export default function Landing() {
           {/* Left Column - Text Content */}
           <div className="text-center md:text-left order-2 md:order-1">
             <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Standards-First Development Platform
+              Autonomous Compliance-Driven Development
             </h1>
             <p className="text-base md:text-xl text-muted-foreground mb-6 md:mb-8">
-              Transform specifications into compliant systems with AI-powered requirements management, 
-              visual architecture design, and autonomous code generation.
+              The alternative to unclear "vibe" coding. Build enterprise applications that are provably compliant 
+              with standards and fully traceable to requirements—from clear architectural foundations to production-ready code.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center md:justify-start">
               <Button size="lg" onClick={() => navigate('/dashboard')} className="gap-2 w-full sm:w-auto">
@@ -118,9 +118,10 @@ export default function Landing() {
       {/* Features Grid */}
       <section className="container mx-auto px-6 py-20">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Powerful Features</h2>
+          <h2 className="text-3xl font-bold mb-4">Built for Speed, Quality, Compliance, Traceability & Trust</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Everything you need to build compliant, well-architected systems from specifications
+            Purpose-built for one mission: generating enterprise applications that are provably compliant 
+            with standards and fully traceable to requirements
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -139,8 +140,8 @@ export default function Landing() {
       {/* How It Works */}
       <section className="container mx-auto px-6 py-20 bg-muted/30 rounded-3xl">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">How Embly Works</h2>
-          <p className="text-muted-foreground">Three operational modes for complete development lifecycle</p>
+          <h2 className="text-3xl font-bold mb-4">How Pronghorn Works</h2>
+          <p className="text-muted-foreground">Three operational modes: Design, Audit, and Build</p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           <div className="text-center">
@@ -149,7 +150,8 @@ export default function Landing() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Design Mode</h3>
             <p className="text-muted-foreground">
-              Build visual specifications with requirements hierarchy, standards library, and architecture canvas
+              Lay down clear architectural, cyber security, and tech stack standards. Build robust architectures 
+              as the foundation for compliant enterprise applications
             </p>
           </div>
           <div className="text-center">
@@ -158,7 +160,8 @@ export default function Landing() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Audit Mode</h3>
             <p className="text-muted-foreground">
-              Continuous validation with compliance auditing, gap analysis, and automated reporting
+              Continuously validate while building. Automated compliance auditing identifies gaps instantly, 
+              providing proof of compliance with traceable evidence
             </p>
           </div>
           <div className="text-center">
@@ -167,7 +170,8 @@ export default function Landing() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Build Mode</h3>
             <p className="text-muted-foreground">
-              Autonomous code generation with build-audit-fix loops and real-time monitoring
+              AI agents build, audit, and automatically fix compliance gaps—all remediation remains fully traceable. 
+              Real-time monitoring ensures system-wide consistency
             </p>
           </div>
         </div>
@@ -177,8 +181,10 @@ export default function Landing() {
       <section className="container mx-auto px-6 py-20">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Why Choose Embly</h2>
-            <p className="text-muted-foreground">Built for teams that need compliance, traceability, and quality</p>
+            <h2 className="text-3xl font-bold mb-4">Why Choose Pronghorn</h2>
+            <p className="text-muted-foreground">
+              Support your development teams with standards-first, AI-powered, continuously validated development
+            </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             {benefits.map((benefit, index) => (
@@ -194,9 +200,10 @@ export default function Landing() {
       {/* CTA */}
       <section className="container mx-auto px-6 py-20">
         <Card className="p-12 text-center bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20">
-          <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
+          <h2 className="text-3xl font-bold mb-4">Ready to Build with Confidence?</h2>
           <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Transform your development process with standards-first, AI-powered specification management
+            Join the new category of Autonomous Compliance-Driven Development. Deliver enterprise applications 
+            that are provably compliant, fully traceable, and built in a fraction of the time
           </p>
           <Button size="lg" onClick={() => navigate('/dashboard')} className="gap-2">
             Create Your First Project <ArrowRight className="h-4 w-4" />
@@ -207,7 +214,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30">
         <div className="container mx-auto px-6 py-8 text-center text-muted-foreground">
-          <p>© 2024 Pronghorn. Standards-first agentic AI development platform.</p>
+          <p>© 2024 Pronghorn. Autonomous Compliance-Driven Development Platform.</p>
           <p className="text-sm mt-2">
             <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
               pronghorn.red
