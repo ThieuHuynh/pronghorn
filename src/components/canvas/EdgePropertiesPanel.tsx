@@ -11,6 +11,7 @@ interface EdgePropertiesPanelProps {
   edge: Edge | null;
   onClose: () => void;
   onUpdate: (edgeId: string, updates: Partial<Edge>) => void;
+  onVisualUpdate: (edgeId: string, updates: Partial<Edge>) => void;
   onDelete: (edgeId: string) => void;
 }
 
@@ -18,6 +19,7 @@ export function EdgePropertiesPanel({
   edge,
   onClose,
   onUpdate,
+  onVisualUpdate,
   onDelete,
 }: EdgePropertiesPanelProps) {
   const [label, setLabel] = useState("");
@@ -35,6 +37,38 @@ export function EdgePropertiesPanel({
   }, [edge]);
 
   if (!edge) return null;
+
+  const handleLabelChange = (newLabel: string) => {
+    setLabel(newLabel);
+    onVisualUpdate(edge.id, { label: newLabel });
+  };
+
+  const handleLineTypeChange = (newType: string) => {
+    setLineType(newType);
+    onVisualUpdate(edge.id, { type: newType });
+  };
+
+  const handleColorChange = (newColor: string) => {
+    setColor(newColor);
+    onVisualUpdate(edge.id, {
+      style: {
+        ...edge.style,
+        stroke: newColor,
+        strokeWidth: thickness,
+      },
+    });
+  };
+
+  const handleThicknessChange = (newThickness: number) => {
+    setThickness(newThickness);
+    onVisualUpdate(edge.id, {
+      style: {
+        ...edge.style,
+        stroke: color,
+        strokeWidth: newThickness,
+      },
+    });
+  };
 
   const handleSave = () => {
     onUpdate(edge.id, {
@@ -68,7 +102,7 @@ export function EdgePropertiesPanel({
           <Input
             id="edge-label"
             value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            onChange={(e) => handleLabelChange(e.target.value)}
             placeholder="Enter edge label"
           />
         </div>
@@ -77,7 +111,7 @@ export function EdgePropertiesPanel({
           <Label htmlFor="line-type">Line Type</Label>
           <Select
             value={lineType}
-            onValueChange={(value) => setLineType(value)}
+            onValueChange={handleLineTypeChange}
           >
             <SelectTrigger id="line-type">
               <SelectValue placeholder="Select line type" />
@@ -98,12 +132,12 @@ export function EdgePropertiesPanel({
               id="edge-color"
               type="color"
               value={color}
-              onChange={(e) => setColor(e.target.value)}
+              onChange={(e) => handleColorChange(e.target.value)}
               className="w-20 h-10"
             />
             <Input
               value={color}
-              onChange={(e) => setColor(e.target.value)}
+              onChange={(e) => handleColorChange(e.target.value)}
               placeholder="#000000"
               className="flex-1"
             />
@@ -115,7 +149,7 @@ export function EdgePropertiesPanel({
           <Slider
             id="edge-thickness"
             value={[thickness]}
-            onValueChange={([value]) => setThickness(value)}
+            onValueChange={([value]) => handleThicknessChange(value)}
             min={1}
             max={10}
             step={1}

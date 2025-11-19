@@ -164,6 +164,21 @@ function CanvasFlow() {
     [setEdges, saveEdge]
   );
 
+  // Visual-only update (no database save)
+  const handleEdgeVisualUpdate = useCallback(
+    (edgeId: string, updates: Partial<Edge>) => {
+      setEdges((eds) =>
+        eds.map((edge) => {
+          if (edge.id === edgeId) {
+            return { ...edge, ...updates };
+          }
+          return edge;
+        })
+      );
+    },
+    [setEdges]
+  );
+
   const handleEdgeDelete = useCallback(
     (edgeId: string) => {
       setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
@@ -366,6 +381,7 @@ function CanvasFlow() {
               edge={selectedEdge}
               onClose={() => setShowProperties(false)}
               onUpdate={handleEdgeUpdate}
+              onVisualUpdate={handleEdgeVisualUpdate}
               onDelete={handleEdgeDelete}
             />
           )}
