@@ -272,7 +272,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
           AI Architect
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[80vw] max-h-[80vh] w-full h-full">
+      <DialogContent className="max-w-[80vw] h-[80vh] w-full flex flex-col">
         <DialogHeader>
           <DialogTitle>AI Application Architect</DialogTitle>
           <DialogDescription>
@@ -280,15 +280,15 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="generate" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue="generate" className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="generate">Generate</TabsTrigger>
             <TabsTrigger value="critic">Critic</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="generate" className="flex-1 flex gap-4 overflow-hidden h-full">
-            <div className="w-64 flex flex-col border-r pr-4">
-              <div className="flex-1 overflow-y-auto space-y-4">
+          <TabsContent value="generate" className="flex-1 flex gap-4 min-h-0">
+            <div className="w-64 flex flex-col border-r pr-4 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
                 <div className="space-y-2">
                   <h3 className="font-medium text-sm">Context Options</h3>
                   
@@ -376,8 +376,8 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col h-full">
-              <div className="flex-1 overflow-y-auto space-y-4">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
                 <div className="space-y-2">
                   <label htmlFor="description" className="text-sm font-medium">
                     Application Description
@@ -398,7 +398,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+              <div className="flex justify-end gap-2 pt-4 border-t shrink-0">
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
@@ -419,8 +419,8 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
           </TabsContent>
 
-          <TabsContent value="critic" className="flex-1 flex flex-col h-full overflow-hidden">
-            <div className="flex-1 flex flex-col overflow-hidden">
+          <TabsContent value="critic" className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <label className="text-sm font-medium">Architecture Critique</label>
                 <Button 
@@ -450,7 +450,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+            <div className="flex justify-end gap-2 pt-4 border-t shrink-0">
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Close
               </Button>
