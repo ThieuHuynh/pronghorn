@@ -36,7 +36,7 @@ export function EdgePropertiesPanel({
 
   if (!edge) return null;
 
-  const handleUpdate = () => {
+  const handleSave = () => {
     onUpdate(edge.id, {
       label,
       type: lineType,
@@ -68,10 +68,7 @@ export function EdgePropertiesPanel({
           <Input
             id="edge-label"
             value={label}
-            onChange={(e) => {
-              setLabel(e.target.value);
-              handleUpdate();
-            }}
+            onChange={(e) => setLabel(e.target.value)}
             placeholder="Enter edge label"
           />
         </div>
@@ -80,10 +77,7 @@ export function EdgePropertiesPanel({
           <Label htmlFor="line-type">Line Type</Label>
           <Select
             value={lineType}
-            onValueChange={(value) => {
-              setLineType(value);
-              handleUpdate();
-            }}
+            onValueChange={(value) => setLineType(value)}
           >
             <SelectTrigger id="line-type">
               <SelectValue placeholder="Select line type" />
@@ -104,18 +98,12 @@ export function EdgePropertiesPanel({
               id="edge-color"
               type="color"
               value={color}
-              onChange={(e) => {
-                setColor(e.target.value);
-                handleUpdate();
-              }}
+              onChange={(e) => setColor(e.target.value)}
               className="w-20 h-10"
             />
             <Input
               value={color}
-              onChange={(e) => {
-                setColor(e.target.value);
-                handleUpdate();
-              }}
+              onChange={(e) => setColor(e.target.value)}
               placeholder="#000000"
               className="flex-1"
             />
@@ -127,10 +115,7 @@ export function EdgePropertiesPanel({
           <Slider
             id="edge-thickness"
             value={[thickness]}
-            onValueChange={([value]) => {
-              setThickness(value);
-              handleUpdate();
-            }}
+            onValueChange={([value]) => setThickness(value)}
             min={1}
             max={10}
             step={1}
@@ -138,7 +123,13 @@ export function EdgePropertiesPanel({
           />
         </div>
 
-        <div className="pt-4 border-t border-border">
+        <div className="pt-4 border-t border-border space-y-2">
+          <Button
+            onClick={handleSave}
+            className="w-full"
+          >
+            Save Edge
+          </Button>
           <Button
             variant="destructive"
             onClick={handleDelete}
