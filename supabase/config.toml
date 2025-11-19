@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.ai-architect]
 verify_jwt = false
+
+[functions.ai-architect-critic]
+verify_jwt = false
