@@ -38,22 +38,18 @@ serve(async (req) => {
       },
     });
 
-    // Set share token if provided (for anonymous users)
-    if (shareToken) {
-      const { error: tokenError } = await supabase.rpc('set_share_token', { token: shareToken });
-      if (tokenError) {
-        console.error('Error setting share token:', tokenError);
-        throw new Error('Invalid share token');
-      }
+    if (!shareToken) {
+      throw new Error('Share token is required');
     }
 
-    // Fetch all project data
-    console.log('Fetching project data...');
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', projectId)
-      .maybeSingle();
+    // Fetch all project data using token-based RPC functions
+    console.log('Fetching project data with token...');
+    
+    // Fetch project
+    const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
 
     if (projectError) {
       console.error('Project fetch error:', projectError);
@@ -65,84 +61,118 @@ serve(async (req) => {
     }
 
     // Fetch requirements
-    const { data: requirements, error: reqError } = await supabase
-      .from('requirements')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('order_index');
+    const { data: requirements, error: reqError } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
 
     if (reqError) {
       console.error('Requirements fetch error:', reqError);
-      throw reqError;
     }
 
     // Fetch canvas nodes
-    const { data: canvasNodes, error: nodesError } = await supabase
-      .from('canvas_nodes')
-      .select('*')
-      .eq('project_id', projectId);
+    const { data: canvasNodes, error: nodesError } = await supabase.rpc('get_canvas_nodes_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
 
     if (nodesError) {
       console.error('Canvas nodes fetch error:', nodesError);
-      throw nodesError;
     }
 
     // Fetch canvas edges
-    const { data: canvasEdges, error: edgesError } = await supabase
-      .from('canvas_edges')
-      .select('*')
-      .eq('project_id', projectId);
+    const { data: canvasEdges, error: edgesError } = await supabase.rpc('get_canvas_edges_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
 
     if (edgesError) {
       console.error('Canvas edges fetch error:', edgesError);
-      throw edgesError;
     }
 
-    // Fetch linked tech stacks
-    const { data: projectTechStacks, error: techError } = await supabase
-      .from('project_tech_stacks')
-      .select(`
-        tech_stack_id,
-        tech_stacks (
-          id,
-          name,
-          description,
-          metadata
-        )
-      `)
-      .eq('project_id', projectId);
+    // Fetch project tech stacks
+    const { data: projectTechStacksRaw, error: techError } = await supabase.rpc('get_project_tech_stacks_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
 
     if (techError) {
       console.error('Project tech stacks fetch error:', techError);
-      throw techError;
+    }
+
+    // Now fetch the full tech stack details for each linked tech stack
+    let projectTechStacks: any[] = [];
+    if (projectTechStacksRaw && projectTechStacksRaw.length > 0) {
+      const techStackIds = projectTechStacksRaw.map((pts: any) => pts.tech_stack_id);
+      const { data: techStacks } = await supabase
+        .from('tech_stacks')
+        .select('*')
+        .in('id', techStackIds);
+      
+      if (techStacks) {
+        projectTechStacks = projectTechStacksRaw.map((pts: any) => ({
+          tech_stack_id: pts.tech_stack_id,
+          tech_stacks: techStacks.find((ts: any) => ts.id === pts.tech_stack_id)
+        }));
+      }
+    }
+
+    // Fetch project standards
+    const { data: projectStandardsRaw, error: standardsError } = await supabase.rpc('get_project_standards_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
+
+    if (standardsError) {
+      console.error('Project standards fetch error:', standardsError);
+    }
+
+    // Fetch full standard details for each linked standard
+    let projectStandards: any[] = [];
+    if (projectStandardsRaw && projectStandardsRaw.length > 0) {
+      const standardIds = projectStandardsRaw.map((ps: any) => ps.standard_id);
+      const { data: standards } = await supabase
+        .from('standards')
+        .select('*')
+        .in('id', standardIds);
+      
+      if (standards) {
+        projectStandards = projectStandardsRaw.map((ps: any) => ({
+          id: ps.id,
+          standards: standards.find((s: any) => s.id === ps.standard_id)
+        }));
+      }
     }
 
     // Fetch requirement standards (linked standards) - only if we have requirements
     let reqStandards: any[] = [];
     if (requirements && requirements.length > 0) {
-      const requirementIds = requirements.map(r => r.id).filter(id => id && id !== '');
-      
-      if (requirementIds.length > 0) {
-        const { data: standards, error: stdError } = await supabase
-          .from('requirement_standards')
-          .select(`
-            requirement_id,
-            standard_id,
-            standards (
-              id,
-              title,
-              code,
-              description,
-              content
-            )
-          `)
-          .in('requirement_id', requirementIds);
+      for (const req of requirements) {
+        const { data: stdData, error: stdError } = await supabase.rpc('get_requirement_standards_with_token', {
+          p_requirement_id: req.id,
+          p_token: shareToken
+        });
 
         if (stdError) {
-          console.error('Error fetching requirement standards:', stdError);
-          // Don't throw, just log and continue with empty standards
-        } else {
-          reqStandards = standards || [];
+          console.error(`Requirement standards fetch error for ${req.id}:`, stdError);
+        } else if (stdData && stdData.length > 0) {
+          // Fetch the full standard details
+          const standardIds = stdData.map((rs: any) => rs.standard_id);
+          const { data: standards } = await supabase
+            .from('standards')
+            .select('*')
+            .in('id', standardIds);
+          
+          if (standards) {
+            const enrichedStandards = stdData.map((rs: any) => ({
+              id: rs.id,
+              requirement_id: rs.requirement_id,
+              standard_id: rs.standard_id,
+              notes: rs.notes,
+              standards: standards.find((s: any) => s.id === rs.standard_id)
+            }));
+            reqStandards.push(...enrichedStandards);
+          }
         }
       }
     }
@@ -182,7 +212,8 @@ serve(async (req) => {
         }
       },
       techStacks: projectTechStacks?.map((pts: any) => pts.tech_stacks) || [],
-      standards: reqStandards || []
+      projectStandards: projectStandards || [],
+      requirementStandards: reqStandards || []
     };
 
     console.log('Context prepared, calling AI...');
@@ -207,8 +238,11 @@ ${context.canvas.nodes.map((n: any) => `- ${n.type}: ${n.data?.label || 'Unlabel
 TECHNOLOGY STACKS:
 ${context.techStacks.map((ts: any) => `- ${ts.name}: ${ts.description || 'No description'}`).join('\n')}
 
-LINKED STANDARDS (${context.standards.length} total):
-${context.standards.map((rs: any) => `- [${rs.standards?.code}] ${rs.standards?.title}: ${rs.standards?.description || 'No description'}`).join('\n')}
+PROJECT-LEVEL STANDARDS (${context.projectStandards.length} total):
+${context.projectStandards.map((ps: any) => `- [${ps.standards?.code}] ${ps.standards?.title}: ${ps.standards?.description || 'No description'}`).join('\n')}
+
+REQUIREMENT-LINKED STANDARDS (${context.requirementStandards.length} total):
+${context.requirementStandards.map((rs: any) => `- [${rs.standards?.code}] ${rs.standards?.title} (linked to requirement: ${rs.requirement_id}): ${rs.standards?.description || 'No description'}`).join('\n')}
 
 Please generate a comprehensive specification document that includes:
 1. Executive Summary
