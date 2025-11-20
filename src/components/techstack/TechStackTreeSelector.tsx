@@ -90,93 +90,22 @@ export function TechStackTreeSelector({
     return roots;
   };
 
-  // Helper to get all descendant IDs
-  const getAllDescendants = (item: TechStackItem): string[] => {
-    const descendants: string[] = [item.id];
-    if (item.children) {
-      item.children.forEach((child) => {
-        descendants.push(...getAllDescendants(child));
-      });
-    }
-    return descendants;
-  };
-
-  // Helper to get all item IDs in a tech stack
-  const getAllTechStackItems = (items: TechStackItem[]): string[] => {
-    const ids: string[] = [];
-    items.forEach((item) => {
-      ids.push(...getAllDescendants(item));
-    });
-    return ids;
-  };
-
-  // Check if all descendants are selected
-  const areAllDescendantsSelected = (item: TechStackItem): boolean => {
-    const descendants = getAllDescendants(item);
-    return descendants.every((id) => selectedItems.has(id));
-  };
-
-  // Check if some (but not all) descendants are selected
-  const areSomeDescendantsSelected = (item: TechStackItem): boolean => {
-    const descendants = getAllDescendants(item);
-    const selectedCount = descendants.filter((id) => selectedItems.has(id)).length;
-    return selectedCount > 0 && selectedCount < descendants.length;
-  };
-
-  // Check if all items in tech stack are selected
-  const areAllTechStackItemsSelected = (items: TechStackItem[]): boolean => {
-    const allIds = getAllTechStackItems(items);
-    return allIds.length > 0 && allIds.every((id) => selectedItems.has(id));
-  };
-
-  // Check if some items in tech stack are selected
-  const areSomeTechStackItemsSelected = (items: TechStackItem[]): boolean => {
-    const allIds = getAllTechStackItems(items);
-    const selectedCount = allIds.filter((id) => selectedItems.has(id)).length;
-    return selectedCount > 0 && selectedCount < allIds.length;
-  };
-
-  const toggleItem = (item: TechStackItem) => {
+  // Toggle selection of an entire tech stack by its ID
+  const toggleTechStack = (stackId: string) => {
     const newSelected = new Set(selectedItems);
-    const descendants = getAllDescendants(item);
-    const allSelected = areAllDescendantsSelected(item);
 
-    if (allSelected) {
-      // Unselect all descendants
-      descendants.forEach((id) => newSelected.delete(id));
+    if (newSelected.has(stackId)) {
+      newSelected.delete(stackId);
     } else {
-      // Select all descendants
-      descendants.forEach((id) => newSelected.add(id));
+      newSelected.add(stackId);
     }
 
     onSelectionChange(newSelected);
   };
 
-  const toggleTechStack = (stackId: string, items: TechStackItem[]) => {
-    const newSelected = new Set(selectedItems);
-    
-    if (items.length === 0) {
-      // If no items, toggle the tech stack ID itself
-      if (newSelected.has(stackId)) {
-        newSelected.delete(stackId);
-      } else {
-        newSelected.add(stackId);
-      }
-    } else {
-      // If has items, toggle all item IDs
-      const allIds = getAllTechStackItems(items);
-      const allSelected = areAllTechStackItemsSelected(items);
-
-      if (allSelected) {
-        // Unselect all
-        allIds.forEach((id) => newSelected.delete(id));
-      } else {
-        // Select all
-        allIds.forEach((id) => newSelected.add(id));
-      }
-    }
-
-    onSelectionChange(newSelected);
+  // When clicking an item, toggle its parent tech stack selection
+  const toggleItemForStack = (stackId: string) => {
+    toggleTechStack(stackId);
   };
 
   const toggleExpandTechStack = (techStackId: string) => {
@@ -199,11 +128,10 @@ export function TechStackTreeSelector({
     setExpandedItems(newExpanded);
   };
 
-  const renderItem = (item: TechStackItem, level: number = 0) => {
+  const renderItem = (item: TechStackItem, stackId: string, level: number = 0) => {
     const isExpanded = expandedItems.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
-    const isChecked = areAllDescendantsSelected(item);
-    const isIndeterminate = !isChecked && areSomeDescendantsSelected(item);
+    const isChecked = selectedItems.has(stackId);
 
     return (
       <div key={item.id} className="space-y-1">
@@ -228,8 +156,8 @@ export function TechStackTreeSelector({
           {!hasChildren && <div className="w-5" />}
           <Checkbox
             id={`item-${item.id}`}
-            checked={isIndeterminate ? "indeterminate" : isChecked}
-            onCheckedChange={() => toggleItem(item)}
+            checked={isChecked}
+            onCheckedChange={() => toggleItemForStack(stackId)}
           />
           <Label
             htmlFor={`item-${item.id}`}
@@ -240,7 +168,7 @@ export function TechStackTreeSelector({
         </div>
         {hasChildren && isExpanded && (
           <div className="space-y-1">
-            {item.children!.map((child) => renderItem(child, level + 1))}
+            {item.children!.map((child) => renderItem(child, stackId, level + 1))}
           </div>
         )}
       </div>
@@ -256,10 +184,7 @@ export function TechStackTreeSelector({
       {techStacksWithItems.map((stack) => {
         const isExpanded = expandedTechStacks.has(stack.id);
         const hasItems = stack.items.length > 0;
-        const allSelected = hasItems 
-          ? areAllTechStackItemsSelected(stack.items)
-          : selectedItems.has(stack.id);
-        const someSelected = hasItems && areSomeTechStackItemsSelected(stack.items);
+        const isSelected = selectedItems.has(stack.id);
 
         return (
           <div key={stack.id} className="border rounded-lg p-3 space-y-2">
@@ -281,8 +206,8 @@ export function TechStackTreeSelector({
               {!hasItems && <div className="w-6" />}
               <Checkbox
                 id={`stack-${stack.id}`}
-                checked={someSelected && !allSelected ? "indeterminate" : allSelected}
-                onCheckedChange={() => toggleTechStack(stack.id, stack.items)}
+                checked={isSelected}
+                onCheckedChange={() => toggleTechStack(stack.id)}
               />
               <Label
                 htmlFor={`stack-${stack.id}`}
@@ -296,7 +221,7 @@ export function TechStackTreeSelector({
             )}
             {isExpanded && hasItems && (
               <div className="space-y-1 pt-2">
-                {stack.items.map((item) => renderItem(item, 0))}
+                {stack.items.map((item) => renderItem(item, stack.id, 0))}
               </div>
             )}
           </div>
