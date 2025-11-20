@@ -158,84 +158,115 @@ Return format:
       throw new Error("Failed to parse requirements structure from AI response");
     }
 
-    // Insert requirements into database
+    // Insert requirements into database using token-based RPC
     console.log("Inserting requirements into database...");
 
-    let orderIndex = 0;
     for (const epic of requirements.epics) {
-      const { data: epicData, error: epicError } = await supabase
-        .from("requirements")
-        .insert({
-          project_id: projectId,
-          type: "EPIC",
-          title: epic.title,
-          content: epic.description,
-          order_index: orderIndex++,
-        })
-        .select()
-        .single();
+      const { data: epicData, error: epicError } = await supabase.rpc('insert_requirement_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken,
+        p_parent_id: null,
+        p_type: "EPIC",
+        p_title: epic.title,
+      });
 
       if (epicError) {
         console.error("Error inserting epic:", epicError);
         throw epicError;
       }
 
-      let featureOrder = 0;
+      // Update with content if present
+      if (epic.description) {
+        const { error: updateError } = await supabase.rpc('update_requirement_with_token', {
+          p_id: epicData.id,
+          p_token: shareToken,
+          p_title: epic.title,
+          p_content: epic.description,
+        });
+        if (updateError) {
+          console.error("Error updating epic content:", updateError);
+        }
+      }
+
       for (const feature of epic.features || []) {
-        const { data: featureData, error: featureError } = await supabase
-          .from("requirements")
-          .insert({
-            project_id: projectId,
-            parent_id: epicData.id,
-            type: "FEATURE",
-            title: feature.title,
-            content: feature.description,
-            order_index: featureOrder++,
-          })
-          .select()
-          .single();
+        const { data: featureData, error: featureError } = await supabase.rpc('insert_requirement_with_token', {
+          p_project_id: projectId,
+          p_token: shareToken,
+          p_parent_id: epicData.id,
+          p_type: "FEATURE",
+          p_title: feature.title,
+        });
 
         if (featureError) {
           console.error("Error inserting feature:", featureError);
           throw featureError;
         }
 
-        let storyOrder = 0;
+        // Update with content if present
+        if (feature.description) {
+          const { error: updateError } = await supabase.rpc('update_requirement_with_token', {
+            p_id: featureData.id,
+            p_token: shareToken,
+            p_title: feature.title,
+            p_content: feature.description,
+          });
+          if (updateError) {
+            console.error("Error updating feature content:", updateError);
+          }
+        }
+
         for (const story of feature.stories || []) {
-          const { data: storyData, error: storyError } = await supabase
-            .from("requirements")
-            .insert({
-              project_id: projectId,
-              parent_id: featureData.id,
-              type: "STORY",
-              title: story.title,
-              content: story.description,
-              order_index: storyOrder++,
-            })
-            .select()
-            .single();
+          const { data: storyData, error: storyError } = await supabase.rpc('insert_requirement_with_token', {
+            p_project_id: projectId,
+            p_token: shareToken,
+            p_parent_id: featureData.id,
+            p_type: "STORY",
+            p_title: story.title,
+          });
 
           if (storyError) {
             console.error("Error inserting story:", storyError);
             throw storyError;
           }
 
-          let criteriaOrder = 0;
+          // Update with content if present
+          if (story.description) {
+            const { error: updateError } = await supabase.rpc('update_requirement_with_token', {
+              p_id: storyData.id,
+              p_token: shareToken,
+              p_title: story.title,
+              p_content: story.description,
+            });
+            if (updateError) {
+              console.error("Error updating story content:", updateError);
+            }
+          }
+
           for (const criteria of story.acceptanceCriteria || []) {
-            const { error: criteriaError } = await supabase
-              .from("requirements")
-              .insert({
-                project_id: projectId,
-                parent_id: storyData.id,
-                type: "ACCEPTANCE_CRITERIA",
-                title: criteria.title,
-                content: criteria.description,
-                order_index: criteriaOrder++,
-              });
+            const { data: criteriaData, error: criteriaError } = await supabase.rpc('insert_requirement_with_token', {
+              p_project_id: projectId,
+              p_token: shareToken,
+              p_parent_id: storyData.id,
+              p_type: "ACCEPTANCE_CRITERIA",
+              p_title: criteria.title,
+            });
 
             if (criteriaError) {
               console.error("Error inserting criteria:", criteriaError);
               throw criteriaError;
+            }
+
+            // Update with content if present
+            if (criteria.description) {
+              const { error: updateError } = await supabase.rpc('update_requirement_with_token', {
+                p_id: criteriaData.id,
+                p_token: shareToken,
+                p_title: criteria.title,
+                p_content: criteria.description,
+              });
+              if (updateError) {
+                console.error("Error updating criteria content:", updateError);
+              }
             }
           }
         }
