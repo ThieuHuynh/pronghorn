@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { Plus, Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnonymousProjectWarning } from "./AnonymousProjectWarning";
 import { useAnonymousProjects } from "@/hooks/useAnonymousProjects";
+import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
+import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
 
 export function EnhancedCreateProjectDialog() {
   const navigate = useNavigate();
@@ -49,22 +51,52 @@ export function EnhancedCreateProjectDialog() {
   const [tags, setTags] = useState("");
 
   // Standards & Tech Stacks
-  const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
-  const [selectedTechStacks, setSelectedTechStacks] = useState<string[]>([]);
+  const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
+  const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(new Set());
 
   // AI fields
   const [requirements, setRequirements] = useState("");
 
-  // Load real standards from database
+  // Load standards with hierarchy
   const { data: standardCategories = [] } = useQuery({
-    queryKey: ['standard-categories-wizard'],
+    queryKey: ['standard-categories-with-hierarchy'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: categoriesData } = await supabase
         .from('standard_categories')
-        .select('id, name, description')
+        .select('*')
         .order('order_index');
-      if (error) throw error;
-      return data;
+
+      const { data: standardsData } = await supabase
+        .from('standards')
+        .select('*')
+        .order('order_index');
+
+      const buildHierarchy = (flatStandards: any[]) => {
+        const map = new Map();
+        const roots: any[] = [];
+
+        flatStandards.forEach((std) => {
+          map.set(std.id, { ...std, children: [] });
+        });
+
+        flatStandards.forEach((std) => {
+          const node = map.get(std.id);
+          if (std.parent_id && map.has(std.parent_id)) {
+            map.get(std.parent_id).children.push(node);
+          } else {
+            roots.push(node);
+          }
+        });
+
+        return roots;
+      };
+
+      return (categoriesData || []).map((cat) => ({
+        ...cat,
+        standards: buildHierarchy(
+          (standardsData || []).filter((s) => s.category_id === cat.id)
+        ),
+      }));
     },
     enabled: open
   });
@@ -94,25 +126,10 @@ export function EnhancedCreateProjectDialog() {
     setPriority("medium");
     setTags("");
     setRequirements("");
-    setSelectedStandards([]);
-    setSelectedTechStacks([]);
+    setSelectedStandards(new Set());
+    setSelectedTechStacks(new Set());
   };
 
-  const toggleStandard = (standardId: string) => {
-    setSelectedStandards(prev =>
-      prev.includes(standardId)
-        ? prev.filter(id => id !== standardId)
-        : [...prev, standardId]
-    );
-  };
-
-  const toggleTechStack = (techStackId: string) => {
-    setSelectedTechStacks(prev =>
-      prev.includes(techStackId)
-        ? prev.filter(id => id !== techStackId)
-        : [...prev, techStackId]
-    );
-  };
 
   const handleSubmit = async () => {
     console.log("[EnhancedCreateProjectDialog] Submit started", { 
@@ -368,58 +385,26 @@ export function EnhancedCreateProjectDialog() {
               <div className="space-y-4">
                 <div>
                   <h3 className="font-semibold mb-3">Select Standards</h3>
-                  <div className="space-y-2">
-                    {standardCategories.map((category) => (
-                      <div key={category.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50">
-                        <Checkbox
-                          id={`standard-${category.id}`}
-                          checked={selectedStandards.includes(category.id)}
-                          onCheckedChange={() => toggleStandard(category.id)}
-                        />
-                        <div className="flex-1">
-                          <label
-                            htmlFor={`standard-${category.id}`}
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            {category.name}
-                          </label>
-                          {category.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {category.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[300px] border rounded-lg p-4">
+                    <StandardsTreeSelector
+                      categories={standardCategories}
+                      selectedStandards={selectedStandards}
+                      onSelectionChange={setSelectedStandards}
+                    />
+                  </ScrollArea>
                 </div>
+
+                <Separator />
 
                 <div>
                   <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
-                  <div className="space-y-2">
-                    {techStacks.map((techStack) => (
-                      <div key={techStack.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50">
-                        <Checkbox
-                          id={`tech-${techStack.id}`}
-                          checked={selectedTechStacks.includes(techStack.id)}
-                          onCheckedChange={() => toggleTechStack(techStack.id)}
-                        />
-                        <div className="flex-1">
-                          <label
-                            htmlFor={`tech-${techStack.id}`}
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            {techStack.name}
-                          </label>
-                          {techStack.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {techStack.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[300px] border rounded-lg p-4">
+                    <TechStackTreeSelector
+                      techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
+                      selectedItems={selectedTechStacks}
+                      onSelectionChange={setSelectedTechStacks}
+                    />
+                  </ScrollArea>
                 </div>
               </div>
             </TabsContent>
