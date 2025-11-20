@@ -412,6 +412,7 @@ function CanvasFlow() {
               onDrop={onDrop}
               onDragOver={onDragOver}
               nodeTypes={nodeTypes}
+              deleteKeyCode={null}
               fitView
               className="bg-background"
             >
