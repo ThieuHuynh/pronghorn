@@ -331,6 +331,41 @@ export type Database = {
           },
         ]
       }
+      project_specifications: {
+        Row: {
+          created_at: string
+          generated_spec: string
+          id: string
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          generated_spec: string
+          id?: string
+          project_id: string
+          raw_data?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          generated_spec?: string
+          id?: string
+          project_id?: string
+          raw_data?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_specifications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_standards: {
         Row: {
           created_at: string
@@ -894,6 +929,23 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_project_specification_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          generated_spec: string
+          id: string
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_project_standards_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -1071,6 +1123,28 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_project_specification_with_token: {
+        Args: {
+          p_generated_spec: string
+          p_project_id: string
+          p_raw_data: Json
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          generated_spec: string
+          id: string
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
           isOneToOne: true
           isSetofReturn: false
         }

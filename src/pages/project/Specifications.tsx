@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
@@ -6,18 +6,56 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, FileText, FileJson, Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, FileText, FileJson } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { useShareToken } from "@/hooks/useShareToken";
+import { DownloadOptions } from "@/components/specifications/DownloadOptions";
 
 export default function Specifications() {
   const { projectId } = useParams();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [generatedSpec, setGeneratedSpec] = useState<string>("");
   const [rawData, setRawData] = useState<any>(null);
+  const [projectName, setProjectName] = useState<string>("project");
+  const [hasGeneratedSpec, setHasGeneratedSpec] = useState(false);
+
+  // Load saved specification and project name
+  useEffect(() => {
+    const loadData = async () => {
+      if (!projectId || !isTokenSet) return;
+
+      // Load project name
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', projectId)
+        .single();
+      
+      if (project) {
+        setProjectName(project.name);
+      }
+
+      // Load saved specification
+      if (shareToken) {
+        const { data: spec } = await supabase.rpc('get_project_specification_with_token', {
+          p_project_id: projectId,
+          p_token: shareToken
+        });
+
+        if (spec) {
+          setGeneratedSpec(spec.generated_spec);
+          setRawData(spec.raw_data);
+          setHasGeneratedSpec(true);
+        }
+      }
+    };
+
+    loadData();
+  }, [projectId, shareToken, isTokenSet]);
 
   // Wait for token to be set before allowing generation
   if (shareToken && !isTokenSet) {
@@ -50,7 +88,8 @@ export default function Specifications() {
 
       setGeneratedSpec(data.generatedSpecification);
       setRawData(data.rawData);
-      toast.success("Specification generated successfully!");
+      setHasGeneratedSpec(true);
+      toast.success("Specification generated and saved successfully!");
     } catch (error) {
       console.error("Error generating specification:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate specification");

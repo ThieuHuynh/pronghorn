@@ -253,14 +253,35 @@ Format the output in clear, professional markdown with proper headings, bullet p
     }
 
     const aiData = await aiResponse.json();
-    const generatedSpec = aiData.choices[0].message.content;
+    const aiGeneratedText = aiData.choices[0].message.content;
 
     console.log('Specification generated successfully');
+
+    // Save specification to database
+    console.log('Saving specification to database...');
+    try {
+      const { error: saveError } = await supabase.rpc('save_project_specification_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_generated_spec: aiGeneratedText,
+        p_raw_data: context
+      });
+
+      if (saveError) {
+        console.error('Error saving specification:', saveError);
+        // Don't throw, just log - we still want to return the spec to the user
+      } else {
+        console.log('Specification saved successfully');
+      }
+    } catch (saveErr) {
+      console.error('Exception saving specification:', saveErr);
+      // Continue anyway
+    }
 
     // Return both generated spec and raw data
     return new Response(
       JSON.stringify({
-        generatedSpecification: generatedSpec,
+        generatedSpecification: aiGeneratedText,
         rawData: context
       }),
       {
