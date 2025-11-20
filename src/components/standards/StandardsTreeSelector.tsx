@@ -173,8 +173,7 @@ export function StandardsTreeSelector({
           {!hasChildren && <div className="w-5" />}
           <Checkbox
             id={`standard-${standard.id}`}
-            checked={isChecked}
-            className={isIndeterminate ? "data-[state=checked]:bg-primary/50" : ""}
+            checked={isIndeterminate ? "indeterminate" : isChecked}
             onCheckedChange={() => toggleStandard(standard)}
           />
           <Label
@@ -221,8 +220,7 @@ export function StandardsTreeSelector({
               {!hasStandards && <div className="w-6" />}
               <Checkbox
                 id={`category-${category.id}`}
-                checked={allSelected}
-                className={someSelected && !allSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                checked={someSelected && !allSelected ? "indeterminate" : allSelected}
                 onCheckedChange={() => toggleCategory(category.standards)}
                 disabled={!hasStandards}
               />

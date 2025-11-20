@@ -228,8 +228,7 @@ export function TechStackTreeSelector({
           {!hasChildren && <div className="w-5" />}
           <Checkbox
             id={`item-${item.id}`}
-            checked={isChecked}
-            className={isIndeterminate ? "data-[state=checked]:bg-primary/50" : ""}
+            checked={isIndeterminate ? "indeterminate" : isChecked}
             onCheckedChange={() => toggleItem(item)}
           />
           <Label
@@ -282,8 +281,7 @@ export function TechStackTreeSelector({
               {!hasItems && <div className="w-6" />}
               <Checkbox
                 id={`stack-${stack.id}`}
-                checked={allSelected}
-                className={someSelected && !allSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                checked={someSelected && !allSelected ? "indeterminate" : allSelected}
                 onCheckedChange={() => toggleTechStack(stack.id, stack.items)}
               />
               <Label
