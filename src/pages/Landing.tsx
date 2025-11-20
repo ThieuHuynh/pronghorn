@@ -176,7 +176,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30">
         <div className="container mx-auto px-6 py-8 text-center text-muted-foreground">
-          <p>© 2024 Pronghorn. Autonomous Compliance-Driven Development Platform.</p>
+          <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
           <p className="text-sm mt-2">
             <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
               pronghorn.red
