@@ -53,9 +53,16 @@ serve(async (req) => {
       .from('projects')
       .select('*')
       .eq('id', projectId)
-      .single();
+      .maybeSingle();
 
-    if (projectError) throw projectError;
+    if (projectError) {
+      console.error('Project fetch error:', projectError);
+      throw projectError;
+    }
+
+    if (!project) {
+      throw new Error('Project not found or access denied');
+    }
 
     // Fetch requirements
     const { data: requirements, error: reqError } = await supabase
@@ -64,7 +71,10 @@ serve(async (req) => {
       .eq('project_id', projectId)
       .order('order_index');
 
-    if (reqError) throw reqError;
+    if (reqError) {
+      console.error('Requirements fetch error:', reqError);
+      throw reqError;
+    }
 
     // Fetch canvas nodes
     const { data: canvasNodes, error: nodesError } = await supabase
@@ -72,7 +82,10 @@ serve(async (req) => {
       .select('*')
       .eq('project_id', projectId);
 
-    if (nodesError) throw nodesError;
+    if (nodesError) {
+      console.error('Canvas nodes fetch error:', nodesError);
+      throw nodesError;
+    }
 
     // Fetch canvas edges
     const { data: canvasEdges, error: edgesError } = await supabase
@@ -80,7 +93,10 @@ serve(async (req) => {
       .select('*')
       .eq('project_id', projectId);
 
-    if (edgesError) throw edgesError;
+    if (edgesError) {
+      console.error('Canvas edges fetch error:', edgesError);
+      throw edgesError;
+    }
 
     // Fetch linked tech stacks
     const { data: projectTechStacks, error: techError } = await supabase
@@ -96,7 +112,10 @@ serve(async (req) => {
       `)
       .eq('project_id', projectId);
 
-    if (techError) throw techError;
+    if (techError) {
+      console.error('Project tech stacks fetch error:', techError);
+      throw techError;
+    }
 
     // Fetch requirement standards (linked standards) - only if we have requirements
     let reqStandards: any[] = [];
