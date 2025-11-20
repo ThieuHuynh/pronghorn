@@ -96,6 +96,7 @@ export default function Standards() {
       });
 
       setSelectedStandards(new Set(projectStandards?.map((ps) => ps.standard_id) || []));
+      // Map project tech stack IDs to the parent tech stack IDs for the tree selector
       setSelectedTechStacks(new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []));
     } catch (error: any) {
       toast.error("Failed to load standards: " + error.message);
@@ -169,9 +170,18 @@ export default function Standards() {
         }
       }
 
-      // Insert new selections for tech stacks
+      // Insert new selections for tech stacks (parent tech stack IDs only)
       if (selectedTechStacks.size > 0) {
-        for (const techStackId of Array.from(selectedTechStacks)) {
+        // Convert selected item IDs back to parent tech stack IDs
+        const parentTechStackIds = new Set<string>();
+        techStacks.forEach(stack => {
+          // If any item from this tech stack is selected, include the tech stack
+          if (selectedTechStacks.has(stack.id)) {
+            parentTechStackIds.add(stack.id);
+          }
+        });
+
+        for (const techStackId of Array.from(parentTechStackIds)) {
           await supabase.rpc("insert_project_tech_stack_with_token", {
             p_project_id: projectId!,
             p_token: shareToken || null,
