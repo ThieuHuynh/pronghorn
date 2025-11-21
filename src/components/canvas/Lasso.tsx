@@ -26,13 +26,7 @@ export function Lasso({
   function handlePointerDown(e: PointerEvent) {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const nextPoints = [[x, y]] satisfies [number, number][];
+    const nextPoints = [[e.pageX, e.pageY]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
     nodePoints.current = {};
@@ -60,14 +54,8 @@ export function Lasso({
   function handlePointerMove(e: PointerEvent) {
     if (e.buttons !== 1) return;
     
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
     const points = pointRef.current;
-    const nextPoints = [...points, [x, y]] satisfies [number, number][];
+    const nextPoints = [...points, [e.pageX, e.pageY]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
     const path = new Path2D(pointsToPath(nextPoints));
@@ -77,44 +65,27 @@ export function Lasso({
     ctx.current.fill(path);
     ctx.current.stroke(path);
 
-    if (nextPoints.length < 2) return;
-
-    const xs = nextPoints.map(([px]) => px);
-    const ys = nextPoints.map(([, py]) => py);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
     const nodesToSelect = new Set<string>();
-    const canvasRect = canvas.current?.getBoundingClientRect();
-    if (!canvasRect) return;
 
     for (const [nodeId, points] of Object.entries(nodePoints.current)) {
       if (partial) {
-        // Partial selection: any corner inside lasso bounding box
         for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - canvasRect.left;
-          const localY = screenPos.y - canvasRect.top;
-          if (localX >= minX && localX <= maxX && localY >= minY && localY <= maxY) {
+          const { x, y } = flowToScreenPosition({ x: point[0], y: point[1] });
+          if (ctx.current.isPointInPath(path, x, y)) {
             nodesToSelect.add(nodeId);
             break;
           }
         }
       } else {
-        // Full selection: all corners inside lasso bounding box
-        let allPointsInBox = true;
+        let allPointsInPath = true;
         for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - canvasRect.left;
-          const localY = screenPos.y - canvasRect.top;
-          if (localX < minX || localX > maxX || localY < minY || localY > maxY) {
-            allPointsInBox = false;
+          const { x, y } = flowToScreenPosition({ x: point[0], y: point[1] });
+          if (!ctx.current.isPointInPath(path, x, y)) {
+            allPointsInPath = false;
             break;
           }
         }
-        if (allPointsInBox) {
+        if (allPointsInPath) {
           nodesToSelect.add(nodeId);
         }
       }
