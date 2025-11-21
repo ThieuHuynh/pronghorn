@@ -1,6 +1,6 @@
 import { useRef, type PointerEvent } from 'react';
 import { useReactFlow, useStore, type Node } from 'reactflow';
-import { getSvgPathFromStroke } from '@/lib/lassoUtils';
+import { pointsToPath } from '@/lib/lassoUtils';
 
 type NodePoints = ([number, number] | [number, number, number])[];
 type NodePointObject = Record<string, NodePoints>;
@@ -12,7 +12,7 @@ export function Lasso({
   partial: boolean;
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
 }) {
-  const { getNodes, flowToScreenPosition } = useReactFlow();
+  const { flowToScreenPosition, getNodes } = useReactFlow();
   const { width, height } = useStore((state) => ({
     width: state.width,
     height: state.height,
@@ -26,14 +26,7 @@ export function Lasso({
   function handlePointerDown(e: PointerEvent) {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     
-    // Get canvas bounding rect to account for offset
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const nextPoints = [[x, y]] satisfies [number, number][];
+    const nextPoints = [[e.pageX, e.pageY]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
     nodePoints.current = {};
@@ -61,18 +54,11 @@ export function Lasso({
   function handlePointerMove(e: PointerEvent) {
     if (e.buttons !== 1) return;
     
-    // Get canvas bounding rect to account for offset
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
     const points = pointRef.current;
-    const nextPoints = [...points, [x, y]] satisfies [number, number][];
+    const nextPoints = [...points, [e.pageX, e.pageY]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
-    const path = new Path2D(getSvgPathFromStroke(nextPoints));
+    const path = new Path2D(pointsToPath(nextPoints));
 
     if (!ctx.current) return;
     ctx.current.clearRect(0, 0, width, height);
@@ -82,15 +68,10 @@ export function Lasso({
     const nodesToSelect = new Set<string>();
 
     for (const [nodeId, points] of Object.entries(nodePoints.current)) {
-      const rect = canvas.current?.getBoundingClientRect();
-      if (!rect) continue;
-
       if (partial) {
         for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - rect.left;
-          const localY = screenPos.y - rect.top;
-          if (ctx.current.isPointInPath(path, localX, localY)) {
+          const { x, y } = flowToScreenPosition({ x: point[0], y: point[1] });
+          if (ctx.current.isPointInPath(path, x, y)) {
             nodesToSelect.add(nodeId);
             break;
           }
@@ -98,10 +79,8 @@ export function Lasso({
       } else {
         let allPointsInPath = true;
         for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - rect.left;
-          const localY = screenPos.y - rect.top;
-          if (!ctx.current.isPointInPath(path, localX, localY)) {
+          const { x, y } = flowToScreenPosition({ x: point[0], y: point[1] });
+          if (!ctx.current.isPointInPath(path, x, y)) {
             allPointsInPath = false;
             break;
           }
