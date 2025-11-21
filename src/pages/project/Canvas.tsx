@@ -562,7 +562,7 @@ function CanvasFlow() {
             onSelectLayer={handleSelectLayer}
           />
           
-          <div className="flex-1 relative" ref={reactFlowWrapper}>
+          <div className="flex-1 relative h-full" ref={reactFlowWrapper}>
             <TooltipProvider>
               <div className="absolute top-4 left-4 z-10 flex gap-2">
                 <AIArchitectDialog
@@ -666,27 +666,31 @@ function CanvasFlow() {
           </div>
 
           {showProperties && selectedNode && (
-            <NodePropertiesPanel
-              node={selectedNode}
-              onClose={handleClosePanel}
-              onUpdate={handleNodeUpdate}
-              onDelete={handleNodeDelete}
-              projectId={projectId!}
-              isOpen={isPanelOpen}
-              onToggle={handleTogglePanel}
-            />
+            <div className="absolute right-0 top-0 bottom-0 z-20">
+              <NodePropertiesPanel
+                node={selectedNode}
+                onClose={handleClosePanel}
+                onUpdate={handleNodeUpdate}
+                onDelete={handleNodeDelete}
+                projectId={projectId!}
+                isOpen={isPanelOpen}
+                onToggle={handleTogglePanel}
+              />
+            </div>
           )}
 
           {showProperties && selectedEdge && (
-            <EdgePropertiesPanel
-              edge={selectedEdge}
-              onClose={handleClosePanel}
-              onUpdate={handleEdgeUpdate}
-              onVisualUpdate={handleEdgeVisualUpdate}
-              onDelete={handleEdgeDelete}
-              isOpen={isPanelOpen}
-              onToggle={handleTogglePanel}
-            />
+            <div className="absolute right-0 top-0 bottom-0 z-20">
+              <EdgePropertiesPanel
+                edge={selectedEdge}
+                onClose={handleClosePanel}
+                onUpdate={handleEdgeUpdate}
+                onVisualUpdate={handleEdgeVisualUpdate}
+                onDelete={handleEdgeDelete}
+                isOpen={isPanelOpen}
+                onToggle={handleTogglePanel}
+              />
+            </div>
           )}
         </div>
       </div>

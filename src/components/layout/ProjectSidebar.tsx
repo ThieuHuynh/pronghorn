@@ -44,7 +44,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
         variant="ghost"
         size="icon"
         onClick={() => setIsMobileOpen(true)}
-        className="fixed bottom-4 left-4 z-50 h-10 w-10 bg-card border border-border shadow-lg md:hidden"
+        className="fixed bottom-[10px] left-[10px] z-50 h-10 w-10 bg-card border border-border shadow-lg md:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
