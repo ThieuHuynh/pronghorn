@@ -92,21 +92,34 @@ export function Lasso({
     const nextPoints = [...points, [x, y]] as [number, number][];
     pointRef.current = nextPoints;
 
-    const path = new Path2D(pointsToPath(nextPoints));
+    // Visual stroke path (smooth freehand line)
+    const strokePath = new Path2D(pointsToPath(nextPoints));
+
+    // Hit-test polygon path (interior of the lasso loop)
+    const hitPath = new Path2D();
+    if (nextPoints.length > 0) {
+      hitPath.moveTo(nextPoints[0][0], nextPoints[0][1]);
+      for (let i = 1; i < nextPoints.length; i++) {
+        hitPath.lineTo(nextPoints[i][0], nextPoints[i][1]);
+      }
+      hitPath.closePath();
+    }
 
     ctx.current.clearRect(0, 0, width, height);
-    ctx.current.fill(path);
-    ctx.current.stroke(path);
+    ctx.current.fill(strokePath);
+    ctx.current.stroke(strokePath);
 
     const nodesToSelect = new Set<string>();
 
     for (const [nodeId, pts] of Object.entries(nodePoints.current)) {
       if (partial) {
-        if (pts.some(([px, py]) => ctx.current!.isPointInPath(path, px, py))) {
+        // Any sampled point of the node inside the lasso interior
+        if (pts.some(([px, py]) => ctx.current!.isPointInPath(hitPath, px, py))) {
           nodesToSelect.add(nodeId);
         }
       } else {
-        if (pts.every(([px, py]) => ctx.current!.isPointInPath(path, px, py))) {
+        // All sampled points must be inside the lasso interior
+        if (pts.every(([px, py]) => ctx.current!.isPointInPath(hitPath, px, py))) {
           nodesToSelect.add(nodeId);
         }
       }
