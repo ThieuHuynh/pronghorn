@@ -100,6 +100,42 @@ export function useRealtimeRequirements(projectId: string) {
     type: Requirement["type"],
     title: string
   ) => {
+    // Generate temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}`;
+    
+    // Create optimistic requirement
+    const optimisticReq: Requirement = {
+      id: tempId,
+      code: null,
+      type,
+      title,
+      content: null,
+      parentId,
+      children: [],
+    };
+
+    // Optimistic update: Add to local state immediately
+    setRequirements((prev) => {
+      if (parentId) {
+        // Add as child to parent
+        const addToParent = (items: Requirement[]): Requirement[] => {
+          return items.map((item) => {
+            if (item.id === parentId) {
+              return { ...item, children: [...(item.children || []), optimisticReq] };
+            }
+            if (item.children && item.children.length > 0) {
+              return { ...item, children: addToParent(item.children) };
+            }
+            return item;
+          });
+        };
+        return addToParent(prev);
+      } else {
+        // Add as root item
+        return [...prev, optimisticReq];
+      }
+    });
+
     try {
       const { error } = await supabase.rpc("insert_requirement_with_token", {
         p_project_id: projectId,
@@ -110,8 +146,24 @@ export function useRealtimeRequirements(projectId: string) {
       });
 
       if (error) throw error;
+      
+      // Real-time subscription will update with actual data
     } catch (error) {
       console.error("Error adding requirement:", error);
+      
+      // Rollback optimistic update on error
+      setRequirements((prev) => {
+        const removeTemp = (items: Requirement[]): Requirement[] => {
+          return items
+            .filter((item) => item.id !== tempId)
+            .map((item) => ({
+              ...item,
+              children: item.children ? removeTemp(item.children) : [],
+            }));
+        };
+        return removeTemp(prev);
+      });
+      
       throw error;
     }
   };
