@@ -512,10 +512,8 @@ function CanvasFlow() {
   );
 
   const selectedNodesList = useMemo(() => {
-    const selected = nodes.filter((n) => (n as any).selected);
-    console.log("Canvas.selectedNodesList", selected.map((n) => ({ id: n.id, selected: (n as any).selected })));
-    return selected;
-  }, [nodes]);
+    return visibleNodes.filter((n) => n.selected);
+  }, [visibleNodes]);
 
   return (
     <div className="min-h-screen bg-background">
