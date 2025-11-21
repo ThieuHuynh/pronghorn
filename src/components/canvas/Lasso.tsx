@@ -37,16 +37,22 @@ export function Lasso({
 
     nodePoints.current = {};
     const nodes = getNodes();
+
     for (const node of nodes) {
-      const { x, y } = node.position;
-      const width = (node.width as number) || 150;
-      const height = (node.height as number) || 40;
+      const nodeElement = document.querySelector(
+        `[data-id="${node.id}"]`,
+      ) as HTMLDivElement | null;
+      if (!nodeElement) continue;
+
+      const nodeRect = nodeElement.getBoundingClientRect();
+
       const points = [
-        [x, y],
-        [x + width, y],
-        [x + width, y + height],
-        [x, y + height],
+        [nodeRect.left - rect.left, nodeRect.top - rect.top],
+        [nodeRect.right - rect.left, nodeRect.top - rect.top],
+        [nodeRect.right - rect.left, nodeRect.bottom - rect.top],
+        [nodeRect.left - rect.left, nodeRect.bottom - rect.top],
       ] satisfies NodePoints;
+
       nodePoints.current[node.id] = points;
     }
 
@@ -82,12 +88,8 @@ export function Lasso({
     for (const [nodeId, points] of Object.entries(nodePoints.current)) {
       if (partial) {
         // Partial selection: any corner inside lasso path
-        for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - rect.left;
-          const localY = screenPos.y - rect.top;
-
-          if (ctx.current.isPointInPath(path, localX, localY)) {
+        for (const [px, py] of points) {
+          if (ctx.current.isPointInPath(path, px, py)) {
             nodesToSelect.add(nodeId);
             break;
           }
@@ -95,12 +97,8 @@ export function Lasso({
       } else {
         // Full selection: all corners inside lasso path
         let allPointsInPath = true;
-        for (const point of points) {
-          const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          const localX = screenPos.x - rect.left;
-          const localY = screenPos.y - rect.top;
-
-          if (!ctx.current.isPointInPath(path, localX, localY)) {
+        for (const [px, py] of points) {
+          if (!ctx.current.isPointInPath(path, px, py)) {
             allPointsInPath = false;
             break;
           }
