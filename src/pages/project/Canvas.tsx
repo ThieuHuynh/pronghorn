@@ -628,7 +628,6 @@ function CanvasFlow() {
               onDragOver={onDragOver}
               nodeTypes={nodeTypes}
               deleteKeyCode={null}
-              fitView
               minZoom={0.05}
               maxZoom={4}
               className="bg-background"
