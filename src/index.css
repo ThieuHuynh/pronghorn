@@ -143,3 +143,13 @@ All colors MUST be HSL.
     @apply transition-all duration-200 hover:shadow-lg hover:scale-[1.01];
   }
 }
+
+/* React Flow custom styles for selected nodes */
+.react-flow__node.selected {
+  outline: 3px solid hsl(var(--primary)) !important;
+  outline-offset: 2px;
+}
+
+.react-flow__node.selected .react-flow__handle {
+  background: hsl(var(--primary));
+}

@@ -1,13 +1,15 @@
 import { useCallback, useRef, useState, useMemo, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { NodePalette, NodeType } from "@/components/canvas/NodePalette";
+import { NodeType } from "@/components/canvas/NodePalette";
+import { CanvasPalette } from "@/components/canvas/CanvasPalette";
 import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
+import { useRealtimeLayers } from "@/hooks/useRealtimeLayers";
 import ReactFlow, {
 
   Background,
@@ -57,6 +59,9 @@ function CanvasFlow() {
   const [isLassoActive, setIsLassoActive] = useState(false);
   const { toast } = useToast();
 
+  // Layers management
+  const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
+
   const {
     nodes,
     edges,
@@ -71,8 +76,19 @@ function CanvasFlow() {
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
     if (!nodes || !Array.isArray(nodes)) return [];
-    return nodes.filter((node) => node?.data?.type && visibleNodeTypes.has(node.data.type));
-  }, [nodes, visibleNodeTypes]);
+    
+    // Filter by node type visibility
+    const typeFiltered = nodes.filter((node) => node?.data?.type && visibleNodeTypes.has(node.data.type));
+    
+    // Filter by layer visibility
+    const layerFiltered = typeFiltered.filter((node) => {
+      const nodeInLayers = layers.filter((layer) => layer.node_ids.includes(node.id));
+      if (nodeInLayers.length === 0) return true; // Node not in any layer, show it
+      return nodeInLayers.some((layer) => layer.visible); // Show if in at least one visible layer
+    });
+    
+    return layerFiltered;
+  }, [nodes, visibleNodeTypes, layers]);
 
   const visibleEdges = useMemo(() => {
     if (!edges || !Array.isArray(edges)) return [];
@@ -111,11 +127,20 @@ function CanvasFlow() {
     [setEdges, saveEdge]
   );
 
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
-    setSelectedEdge(null);
-    setShowProperties(true);
-  }, []);
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // Shift+Click for multi-select
+    if (event.shiftKey) {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === node.id ? { ...n, selected: !n.selected } : n
+        )
+      );
+    } else {
+      setSelectedNode(node);
+      setSelectedEdge(null);
+      setShowProperties(true);
+    }
+  }, [setNodes]);
 
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     setSelectedEdge(edge);
@@ -235,6 +260,33 @@ function CanvasFlow() {
     [setNodes, token, toast]
   );
 
+  const handleMultiNodeDelete = useCallback(
+    async (nodeIds: string[]) => {
+      // Delete nodes from UI
+      setNodes((nds) => nds.filter((node) => !nodeIds.includes(node.id)));
+      
+      // Delete edges connected to these nodes
+      setEdges((eds) => eds.filter((edge) => 
+        !nodeIds.includes(edge.source) && !nodeIds.includes(edge.target)
+      ));
+      
+      // Delete from database
+      const { supabase } = await import("@/integrations/supabase/client");
+      
+      for (const nodeId of nodeIds) {
+        await supabase.rpc("delete_canvas_node_with_token", {
+          p_id: nodeId,
+          p_token: token,
+        });
+      }
+      
+      toast({
+        title: `${nodeIds.length} nodes deleted`,
+      });
+    },
+    [setNodes, setEdges, token, toast]
+  );
+
   // Handle keyboard shortcuts for copy/paste/delete
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -244,20 +296,32 @@ function CanvasFlow() {
                        target.tagName === 'TEXTAREA' || 
                        target.isContentEditable;
       
-      // Delete key for edges (only if not typing)
-      if (event.key === "Delete" && selectedEdge && !isTyping) {
+      if (isTyping) return;
+      
+      // Delete key for edges
+      if (event.key === "Delete" && selectedEdge) {
         event.preventDefault();
         handleEdgeDelete(selectedEdge.id);
         setSelectedEdge(null);
         setShowProperties(false);
+        return;
       }
       
-      // Delete key for nodes (only if not typing)
-      if (event.key === "Delete" && selectedNode && !isTyping) {
+      // Delete key for single or multiple selected nodes
+      if (event.key === "Delete") {
         event.preventDefault();
-        handleNodeDelete(selectedNode.id);
-        setSelectedNode(null);
-        setShowProperties(false);
+        const selectedNodesList = nodes.filter((n) => n.selected);
+        
+        if (selectedNodesList.length > 0) {
+          handleMultiNodeDelete(selectedNodesList.map((n) => n.id));
+          setSelectedNode(null);
+          setShowProperties(false);
+        } else if (selectedNode) {
+          handleNodeDelete(selectedNode.id);
+          setSelectedNode(null);
+          setShowProperties(false);
+        }
+        return;
       }
       
       // Copy node (Ctrl+C or Cmd+C)
@@ -297,7 +361,7 @@ function CanvasFlow() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEdge, selectedNode, copiedNode, handleEdgeDelete, handleNodeDelete, setNodes, saveNode, toast]);
+  }, [selectedEdge, selectedNode, copiedNode, nodes, handleEdgeDelete, handleNodeDelete, handleMultiNodeDelete, setNodes, saveNode, toast]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -440,6 +504,22 @@ function CanvasFlow() {
     [toast]
   );
 
+  const handleSelectLayer = useCallback(
+    (nodeIds: string[]) => {
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          selected: nodeIds.includes(node.id),
+        }))
+      );
+    },
+    [setNodes]
+  );
+
+  const selectedNodesList = useMemo(() => {
+    return nodes.filter((n) => n.selected);
+  }, [nodes]);
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -448,9 +528,14 @@ function CanvasFlow() {
         <ProjectSidebar projectId={projectId!} />
         
         <div className="flex flex-1 w-full">
-          <NodePalette 
+          <CanvasPalette
             visibleNodeTypes={visibleNodeTypes}
             onToggleVisibility={handleToggleVisibility}
+            layers={layers}
+            selectedNodes={selectedNodesList}
+            onSaveLayer={saveLayer}
+            onDeleteLayer={deleteLayer}
+            onSelectLayer={handleSelectLayer}
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
@@ -509,6 +594,9 @@ function CanvasFlow() {
               minZoom={0.05}
               maxZoom={4}
               className="bg-background"
+              defaultEdgeOptions={{
+                style: { strokeWidth: 2 },
+              }}
             >
               <Background />
               <Controls />

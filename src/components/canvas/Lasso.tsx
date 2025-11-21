@@ -19,9 +19,15 @@ export function Lasso({ partial }: { partial: boolean }) {
 
   function handlePointerDown(e: PointerEvent) {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    const points = pointRef.current;
-
-    const nextPoints = [...points, [e.pageX, e.pageY]] satisfies [number, number][];
+    
+    // Get canvas bounding rect to account for offset
+    const rect = canvas.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const nextPoints = [[x, y]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
     nodePoints.current = {};
@@ -48,8 +54,16 @@ export function Lasso({ partial }: { partial: boolean }) {
 
   function handlePointerMove(e: PointerEvent) {
     if (e.buttons !== 1) return;
+    
+    // Get canvas bounding rect to account for offset
+    const rect = canvas.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
     const points = pointRef.current;
-    const nextPoints = [...points, [e.pageX, e.pageY]] satisfies [number, number][];
+    const nextPoints = [...points, [x, y]] satisfies [number, number][];
     pointRef.current = nextPoints;
 
     const path = new Path2D(getSvgPathFromStroke(nextPoints));
