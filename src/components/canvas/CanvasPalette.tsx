@@ -11,6 +11,7 @@ import { LayersManager } from "./LayersManager";
 import { Layer } from "@/hooks/useRealtimeLayers";
 import { Node } from "reactflow";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const nodeIcons: Record<NodeType, string> = {
   PROJECT: "🎯",
@@ -112,8 +113,9 @@ export function CanvasPalette({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
+      <ScrollArea className="flex-1">
+        <div className="p-4">
+          <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
           <AccordionItem value="nodes" className="border rounded-lg px-3">
             <AccordionTrigger className="text-sm py-2 hover:no-underline">
               Node Types
@@ -171,7 +173,8 @@ export function CanvasPalette({
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-      </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

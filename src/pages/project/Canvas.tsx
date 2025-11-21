@@ -53,6 +53,7 @@ function CanvasFlow() {
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [showProperties, setShowProperties] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
   const [copiedNode, setCopiedNode] = useState<Node | null>(null);
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
@@ -134,17 +135,21 @@ function CanvasFlow() {
       setSelectedNode(node);
       setSelectedEdge(null);
       setShowProperties(true);
-      setIsPanelOpen(true); // Auto-open panel when selecting node
+      if (!userCollapsedPanel) {
+        setIsPanelOpen(true); // Auto-open panel when selecting node, unless user manually collapsed
+      }
     },
-    [],
+    [userCollapsedPanel],
   );
 
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     setSelectedEdge(edge);
     setSelectedNode(null);
     setShowProperties(true);
-    setIsPanelOpen(true); // Auto-open panel when selecting edge
-  }, []);
+    if (!userCollapsedPanel) {
+      setIsPanelOpen(true); // Auto-open panel when selecting edge, unless user manually collapsed
+    }
+  }, [userCollapsedPanel]);
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -514,6 +519,26 @@ function CanvasFlow() {
     [setNodes]
   );
 
+  const handleClosePanel = () => {
+    setShowProperties(false);
+    setIsPanelOpen(false);
+    setSelectedNode(null);
+    setSelectedEdge(null);
+    setUserCollapsedPanel(false);
+  };
+
+  const handleTogglePanel = () => {
+    const newState = !isPanelOpen;
+    setIsPanelOpen(newState);
+    if (!newState) {
+      // User manually collapsed it
+      setUserCollapsedPanel(true);
+    } else {
+      // User manually expanded it
+      setUserCollapsedPanel(false);
+    }
+  };
+
   const selectedNodesList = useMemo(() => {
     return visibleNodes.filter((n) => n.selected);
   }, [visibleNodes]);
@@ -623,24 +648,24 @@ function CanvasFlow() {
           {showProperties && selectedNode && (
             <NodePropertiesPanel
               node={selectedNode}
-              onClose={() => setShowProperties(false)}
+              onClose={handleClosePanel}
               onUpdate={handleNodeUpdate}
               onDelete={handleNodeDelete}
               projectId={projectId!}
               isOpen={isPanelOpen}
-              onToggle={() => setIsPanelOpen(!isPanelOpen)}
+              onToggle={handleTogglePanel}
             />
           )}
 
           {showProperties && selectedEdge && (
             <EdgePropertiesPanel
               edge={selectedEdge}
-              onClose={() => setShowProperties(false)}
+              onClose={handleClosePanel}
               onUpdate={handleEdgeUpdate}
               onVisualUpdate={handleEdgeVisualUpdate}
               onDelete={handleEdgeDelete}
               isOpen={isPanelOpen}
-              onToggle={() => setIsPanelOpen(!isPanelOpen)}
+              onToggle={handleTogglePanel}
             />
           )}
         </div>
