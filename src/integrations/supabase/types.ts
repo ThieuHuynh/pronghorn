@@ -234,6 +234,44 @@ export type Database = {
           },
         ]
       }
+      canvas_layers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          node_ids: string[]
+          project_id: string
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          node_ids?: string[]
+          project_id: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          node_ids?: string[]
+          project_id?: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_layers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       canvas_nodes: {
         Row: {
           created_at: string
@@ -876,6 +914,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_canvas_layer_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_canvas_node_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -915,6 +957,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "canvas_edges"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_canvas_layers_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          node_ids: string[]
+          project_id: string
+          updated_at: string
+          visible: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "canvas_layers"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1333,6 +1393,31 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      upsert_canvas_layer_with_token: {
+        Args: {
+          p_id: string
+          p_name: string
+          p_node_ids: string[]
+          p_project_id: string
+          p_token: string
+          p_visible: boolean
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          node_ids: string[]
+          project_id: string
+          updated_at: string
+          visible: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "canvas_layers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_canvas_node_with_token: {
         Args: {
           p_data: Json
