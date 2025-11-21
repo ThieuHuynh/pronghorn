@@ -544,13 +544,13 @@ function CanvasFlow() {
   }, [visibleNodes]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <PrimaryNav />
       
       <div className="flex flex-1 overflow-hidden">
         <ProjectSidebar projectId={projectId!} />
         
-        <div className="flex flex-1 h-full">
+        <div className="flex flex-1 overflow-hidden">
           <CanvasPalette
             visibleNodeTypes={visibleNodeTypes}
             onToggleVisibility={handleToggleVisibility}

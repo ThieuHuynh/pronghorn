@@ -69,10 +69,10 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             ? "fixed top-14 left-0 bottom-0 z-50 w-64 shadow-lg md:hidden" 
             : `relative border-r border-border transition-all duration-300 ${isCollapsed ? "w-16" : "w-56"}`
           }
-          bg-card
+          bg-card h-full
         `}
       >
-        <div className={`${isMobile ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"} flex flex-col`}>
+        <div className="h-full flex flex-col">
           {/* Header with close/collapse button */}
           <div className="flex items-center justify-between p-2 border-b border-border">
             {isMobile && (

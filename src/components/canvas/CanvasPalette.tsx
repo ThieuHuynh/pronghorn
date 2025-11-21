@@ -100,7 +100,7 @@ export function CanvasPalette({
   }
 
   return (
-    <div className="w-64 border-r border-border bg-card flex flex-col h-full">
+    <div className="w-64 border-r border-border bg-card flex flex-col h-full overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <h3 className="text-sm font-semibold">Canvas Palette</h3>
         <Button
@@ -113,7 +113,7 @@ export function CanvasPalette({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 overflow-y-auto">
         <div className="p-4">
           <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
           <AccordionItem value="nodes" className="border rounded-lg px-3">
