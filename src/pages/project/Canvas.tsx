@@ -562,15 +562,16 @@ function CanvasFlow() {
           cacheBust: true,
           pixelRatio: 2,
           filter: (node: HTMLElement) => {
-            // Exclude minimap, controls, and other UI elements from export
+            // Exclude minimap, controls, edge label backgrounds, and other UI elements from export
             const excludeClasses = [
               'react-flow__minimap',
               'react-flow__controls',
               'react-flow__panel',
-              'react-flow__attribution'
+              'react-flow__attribution',
+              'react-flow__edge-textbg',
             ];
             return !excludeClasses.some(className => node.classList?.contains(className));
-          }
+          },
         };
 
         const dataUrl = format === 'png' 

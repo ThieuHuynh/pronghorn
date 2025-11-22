@@ -156,7 +156,8 @@ All colors MUST be HSL.
 
 /* React Flow edge label styles for proper export rendering */
 .react-flow__edge-textbg {
-  fill: transparent !important;
+  fill: none !important;
+  stroke: none !important;
 }
 
 .react-flow__edge-text {
