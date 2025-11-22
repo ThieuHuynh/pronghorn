@@ -104,6 +104,10 @@ function CanvasFlow() {
       .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
       .map((edge) => ({
         ...edge,
+        style: edge.style || {
+          stroke: 'hsl(var(--primary))',
+          strokeWidth: 2,
+        },
         labelStyle: edge.labelStyle || { 
           fill: '#000000',
           fontSize: 12,
@@ -139,6 +143,10 @@ function CanvasFlow() {
         target: params.target!,
         sourceHandle: params.sourceHandle,
         targetHandle: params.targetHandle,
+        style: {
+          stroke: 'hsl(var(--primary))',
+          strokeWidth: 2,
+        },
         labelStyle: { 
           fill: '#000000',
           fontSize: 12,
@@ -530,6 +538,10 @@ function CanvasFlow() {
               source: sourceId,
               target: targetId,
               label: genEdge.relationship,
+              style: {
+                stroke: 'hsl(var(--primary))',
+                strokeWidth: 2,
+              },
               labelStyle: { 
                 fill: '#000000',
                 fontSize: 12,
