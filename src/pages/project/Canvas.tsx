@@ -534,8 +534,17 @@ function CanvasFlow() {
 
   const handleDownloadSnapshot = useCallback(
     async (format: 'png' | 'svg') => {
-      const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
-      if (!viewport) {
+      if (!reactFlowInstance) {
+        toast({
+          title: "Error",
+          description: "Canvas not ready",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const flowWrapper = document.querySelector('.react-flow') as HTMLElement;
+      if (!flowWrapper) {
         toast({
           title: "Error",
           description: "Canvas not found",
@@ -545,9 +554,28 @@ function CanvasFlow() {
       }
 
       try {
+        // Get the viewport to ensure we're capturing at the correct scale
+        const viewport = reactFlowInstance.getViewport();
+        
+        const options = {
+          backgroundColor: '#ffffff',
+          cacheBust: true,
+          pixelRatio: 2,
+          filter: (node: HTMLElement) => {
+            // Exclude minimap, controls, and other UI elements from export
+            const excludeClasses = [
+              'react-flow__minimap',
+              'react-flow__controls',
+              'react-flow__panel',
+              'react-flow__attribution'
+            ];
+            return !excludeClasses.some(className => node.classList?.contains(className));
+          }
+        };
+
         const dataUrl = format === 'png' 
-          ? await toPng(viewport, { backgroundColor: '#ffffff' })
-          : await toSvg(viewport, { backgroundColor: '#ffffff' });
+          ? await toPng(flowWrapper, options)
+          : await toSvg(flowWrapper, options);
         
         const link = document.createElement('a');
         link.download = `canvas-snapshot.${format}`;
@@ -567,7 +595,7 @@ function CanvasFlow() {
         });
       }
     },
-    [toast]
+    [reactFlowInstance, toast]
   );
 
   const handleSelectLayer = useCallback(
