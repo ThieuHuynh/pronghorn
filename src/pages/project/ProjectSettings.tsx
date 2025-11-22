@@ -89,15 +89,14 @@ export default function ProjectSettings() {
 
   const generateTokenMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .update({ share_token: crypto.randomUUID() })
-        .eq('id', projectId)
-        .select('share_token')
-        .single();
+      // CRITICAL: Use token-based RPC for token regeneration
+      const { data: newToken, error } = await supabase.rpc('regenerate_share_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
       
       if (error) throw error;
-      return data;
+      return { share_token: newToken };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });

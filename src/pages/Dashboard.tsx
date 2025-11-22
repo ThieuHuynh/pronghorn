@@ -78,12 +78,11 @@ export default function Dashboard() {
     }
 
     try {
-      // Update project to link to user account
-      const { error } = await supabase
-        .from('projects')
-        .update({ created_by: user.id })
-        .eq('id', projectId)
-        .eq('share_token', shareToken);
+      // CRITICAL: Use token-based RPC to link anonymous project to user
+      const { error } = await supabase.rpc('save_anonymous_project_to_user', {
+        p_project_id: projectId,
+        p_share_token: shareToken
+      });
 
       if (error) {
         console.error("Error saving project:", error);

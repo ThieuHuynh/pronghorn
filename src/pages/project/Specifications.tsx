@@ -28,12 +28,11 @@ export default function Specifications() {
     const loadData = async () => {
       if (!projectId || !isTokenSet) return;
 
-      // Load project name
-      const { data: project } = await supabase
-        .from('projects')
-        .select('name')
-        .eq('id', projectId)
-        .single();
+      // Load project name via RPC (token-based)
+      const { data: project } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
       
       if (project) {
         setProjectName(project.name);

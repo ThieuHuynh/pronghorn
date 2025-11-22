@@ -930,6 +930,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_project_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_requirement_standard_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -1147,6 +1151,43 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_project_with_token: {
+        Args: {
+          p_budget?: number
+          p_description?: string
+          p_name: string
+          p_org_id: string
+          p_organization?: string
+          p_scope?: string
+          p_status?: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_requirement_standard_with_token: {
         Args: {
           p_notes?: string
@@ -1191,6 +1232,39 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      regenerate_share_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: string
+      }
+      save_anonymous_project_to_user: {
+        Args: { p_project_id: string; p_share_token: string }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
           isOneToOne: true
           isSetofReturn: false
         }

@@ -56,19 +56,16 @@ export function CreateProjectDialog() {
         orgId = orgs[0].id;
       }
 
-      const { data: project, error } = await supabase
-        .from('projects')
-        .insert({
-          name: name.trim(),
-          description: description.trim() || null,
-          organization: organization.trim() || null,
-          budget: budget ? parseFloat(budget) : null,
-          scope: scope.trim() || null,
-          org_id: orgId,
-          status: 'DESIGN'
-        })
-        .select()
-        .single();
+      // CRITICAL: Use token-based RPC for project creation
+      const { data: project, error } = await supabase.rpc('insert_project_with_token', {
+        p_name: name.trim(),
+        p_org_id: orgId,
+        p_description: description.trim() || null,
+        p_organization: organization.trim() || null,
+        p_budget: budget ? parseFloat(budget) : null,
+        p_scope: scope.trim() || null,
+        p_status: 'DESIGN'
+      });
 
       if (error) throw error;
 

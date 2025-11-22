@@ -33,10 +33,12 @@ export function DeleteProjectDialog({
     setIsDeleting(true);
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId);
+      // CRITICAL: Use token-based RPC for project deletion
+      // For authenticated users deleting their own projects, token can be null
+      const { error } = await supabase.rpc('delete_project_with_token', {
+        p_project_id: projectId,
+        p_token: null // Authenticated user doesn't need token for own projects
+      });
 
       if (error) throw error;
 

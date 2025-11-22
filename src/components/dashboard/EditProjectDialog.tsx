@@ -62,17 +62,17 @@ export function EditProjectDialog({
     setIsUpdating(true);
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          name: name.trim(),
-          description: description.trim() || null,
-          organization: organization.trim() || null,
-          budget: budget ? parseFloat(budget) : null,
-          scope: scope.trim() || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
+      // CRITICAL: Use token-based RPC for project updates
+      // For authenticated users editing their own projects, token can be null
+      const { error } = await supabase.rpc('update_project_with_token', {
+        p_project_id: projectId,
+        p_token: null, // Authenticated user doesn't need token for own projects
+        p_name: name.trim(),
+        p_description: description.trim() || null,
+        p_organization: organization.trim() || null,
+        p_budget: budget ? parseFloat(budget) : null,
+        p_scope: scope.trim() || null
+      });
 
       if (error) throw error;
 
