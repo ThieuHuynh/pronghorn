@@ -237,6 +237,22 @@ IMPORTANT: Return ONLY the JSON array, no additional text or explanation.`;
       }
     }
 
+    // Step 6: Broadcast refresh to all connected clients
+    if (inserted.length > 0) {
+      const channel = supabase.channel(`requirements-${projectId}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'requirements_refresh',
+        payload: { 
+          projectId, 
+          action: 'bulk_insert', 
+          parentId: requirementId,
+          count: inserted.length 
+        }
+      });
+      console.log(`Broadcast sent for ${inserted.length} new requirements`);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
