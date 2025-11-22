@@ -180,9 +180,6 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                     {requirement.code}
                   </Badge>
                 )}
-                <Badge variant="outline" className={`text-xs flex-shrink-0 ${typeColors[requirement.type]}`}>
-                  {requirement.type.replace("_", " ")}
-                </Badge>
                 
                 <RequirementStandardsBadges requirementId={requirement.id} />
                 
