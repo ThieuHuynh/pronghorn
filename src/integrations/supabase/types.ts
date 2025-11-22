@@ -1295,10 +1295,17 @@ export type Database = {
       update_project_with_token:
         | {
             Args: {
-              p_description: string
-              p_github_repo: string
+              p_budget?: number
+              p_description?: string
+              p_github_repo?: string
               p_name: string
+              p_organization?: string
+              p_priority?: string
               p_project_id: string
+              p_scope?: string
+              p_tags?: string[]
+              p_timeline_end?: string
+              p_timeline_start?: string
               p_token: string
             }
             Returns: {
@@ -1330,17 +1337,10 @@ export type Database = {
           }
         | {
             Args: {
-              p_budget?: number
-              p_description?: string
-              p_github_repo?: string
+              p_description: string
+              p_github_repo: string
               p_name: string
-              p_organization?: string
-              p_priority?: string
               p_project_id: string
-              p_scope?: string
-              p_tags?: string[]
-              p_timeline_end?: string
-              p_timeline_start?: string
               p_token: string
             }
             Returns: {
@@ -1516,6 +1516,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      validate_project_access: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: boolean
       }
     }
     Enums: {
