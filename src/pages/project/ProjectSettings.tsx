@@ -13,10 +13,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -178,22 +180,24 @@ export default function ProjectSettings() {
                       </div>
                     </div>
                     
-                    <div className="flex items-start gap-3 p-3 rounded-md bg-muted">
-                      <RefreshCw className="h-5 w-5 text-muted-foreground mt-0.5" />
-                      <div className="flex-1 space-y-2">
-                        <p className="text-sm text-muted-foreground">
-                          Regenerating the token will invalidate all previous share links. Anyone using old links will lose access.
-                        </p>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => generateTokenMutation.mutate()}
-                          disabled={generateTokenMutation.isPending}
-                        >
-                          {generateTokenMutation.isPending ? 'Generating...' : 'Regenerate Token'}
-                        </Button>
+                    {user && project?.created_by === user.id && (
+                      <div className="flex items-start gap-3 p-3 rounded-md bg-muted">
+                        <RefreshCw className="h-5 w-5 text-muted-foreground mt-0.5" />
+                        <div className="flex-1 space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Regenerating the token will invalidate all previous share links. Anyone using old links will lose access.
+                          </p>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => generateTokenMutation.mutate()}
+                            disabled={generateTokenMutation.isPending}
+                          >
+                            {generateTokenMutation.isPending ? 'Generating...' : 'Regenerate Token'}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
 
