@@ -143,7 +143,8 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
         </div>
       ) : (
         <div className="group py-2 px-2 rounded-md hover:bg-muted/50" style={{ paddingLeft: `${level * 20 + 8}px` }}>
-          <div className="flex flex-col md:flex-row items-start gap-2">
+          <div className="flex items-start gap-2">
+            {/* Expand button and icon */}
             <div className="flex items-center gap-2 flex-shrink-0">
               {hasChildren ? (
                 <Button 
@@ -162,8 +163,18 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
               </div>
             </div>
             
+            {/* Content area */}
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              {/* Title - most prominent */}
+              <div className="text-sm font-semibold break-words mb-1">{requirement.title}</div>
+              
+              {/* Content - subtitle */}
+              {requirement.content && (
+                <p className="text-xs text-muted-foreground mb-2 break-words">{requirement.content}</p>
+              )}
+              
+              {/* Badges, file count, and action buttons in one row */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 {requirement.code && (
                   <Badge variant="outline" className="font-mono text-xs font-semibold flex-shrink-0">
                     {requirement.code}
@@ -172,13 +183,9 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                 <Badge variant="outline" className={`text-xs flex-shrink-0 ${typeColors[requirement.type]}`}>
                   {requirement.type.replace("_", " ")}
                 </Badge>
-              </div>
-              <div className="text-sm font-medium break-words">{requirement.title}</div>
-              {requirement.content && (
-                <p className="text-xs text-muted-foreground mt-1 break-words">{requirement.content}</p>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+                
                 <RequirementStandardsBadges requirementId={requirement.id} />
+                
                 {fileCount > 0 && (
                   <Badge 
                     variant="secondary" 
@@ -192,12 +199,10 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                     {fileCount} {fileCount === 1 ? "file" : "files"}
                   </Badge>
                 )}
-              </div>
-            </div>
-            
-            {/* Action buttons - on mobile below, on desktop to the right with always visible */}
-            <TooltipProvider>
-              <div className="flex md:flex-row flex-wrap gap-1 md:ml-2 md:items-start md:flex-shrink-0 w-full md:w-auto pl-14 md:pl-0">
+                
+                {/* Action buttons inline */}
+                <TooltipProvider>
+                  <div className="flex items-center gap-1 ml-auto">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button 
@@ -265,23 +270,25 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                   </Tooltip>
                 )}
                 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 flex-shrink-0 text-destructive hover:bg-destructive/10" 
-                      onClick={() => onDelete?.(requirement.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete requirement</TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
-          </div>
-        </div>
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     <Button 
+                       variant="ghost" 
+                       size="icon" 
+                       className="h-7 w-7 flex-shrink-0 text-destructive hover:bg-destructive/10" 
+                       onClick={() => onDelete?.(requirement.id)}
+                     >
+                       <Trash2 className="h-3.5 w-3.5" />
+                     </Button>
+                   </TooltipTrigger>
+                   <TooltipContent>Delete requirement</TooltipContent>
+                 </Tooltip>
+                   </div>
+                 </TooltipProvider>
+               </div>
+             </div>
+           </div>
+         </div>
       )}
       {isExpanded && hasChildren && <div>{requirement.children!.map((child: any) => <RequirementNode key={child.id} requirement={child} level={level + 1} projectId={projectId} shareToken={shareToken} onUpdate={onUpdate} onDelete={onDelete} onAdd={onAdd} onExpand={onExpand} onLinkStandard={onLinkStandard} />)}</div>}
     </div>
