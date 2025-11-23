@@ -21,6 +21,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Table,
   TableBody,
   TableCell,
@@ -53,6 +59,7 @@ export default function Artifacts() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -92,6 +99,7 @@ export default function Artifacts() {
     if (summarizingId) return;
 
     setSummarizingId(artifact.id);
+    setStreamingSummary({ [artifact.id]: "" });
     toast.loading("Generating summary...", { id: "summarize-artifact" });
 
     try {
@@ -156,6 +164,7 @@ ${artifact.content}`;
 
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullSummary += parsed.text;
+                setStreamingSummary(prev => ({ ...prev, [artifact.id]: fullSummary }));
                 continue;
               }
 
@@ -166,6 +175,7 @@ ${artifact.content}`;
               const content = parsed.choices?.[0]?.delta?.content || "";
               if (content) {
                 fullSummary += content;
+                setStreamingSummary(prev => ({ ...prev, [artifact.id]: fullSummary }));
               }
             } catch (e) {
               console.error("Error parsing stream line", e);
@@ -180,9 +190,11 @@ ${artifact.content}`;
               const parsed = JSON.parse(data);
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullSummary += parsed.text;
+                setStreamingSummary(prev => ({ ...prev, [artifact.id]: fullSummary }));
               } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
                 const content = parsed.choices[0].delta.content;
                 fullSummary += content;
+                setStreamingSummary(prev => ({ ...prev, [artifact.id]: fullSummary }));
               }
             } catch (e) {
               console.error("Error parsing final stream buffer", e);
@@ -202,9 +214,19 @@ ${artifact.content}`;
       await updateArtifact(artifact.id, undefined, aiTitle, aiSummary);
       
       toast.success("Summary generated successfully", { id: "summarize-artifact" });
+      setStreamingSummary(prev => {
+        const newState = { ...prev };
+        delete newState[artifact.id];
+        return newState;
+      });
     } catch (error) {
       console.error("Error summarizing artifact:", error);
       toast.error("Failed to generate summary", { id: "summarize-artifact" });
+      setStreamingSummary(prev => {
+        const newState = { ...prev };
+        delete newState[artifact.id];
+        return newState;
+      });
     } finally {
       setSummarizingId(null);
     }
@@ -311,9 +333,6 @@ ${artifact.content}`;
                             <CardTitle className="text-lg">
                               {artifact.ai_title || "Untitled Artifact"}
                             </CardTitle>
-                            {artifact.ai_summary && (
-                              <CardDescription>{artifact.ai_summary}</CardDescription>
-                            )}
                             <p className="text-xs text-muted-foreground">
                               Created {format(new Date(artifact.created_at), "PPp")}
                             </p>
@@ -361,7 +380,21 @@ ${artifact.content}`;
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="space-y-4">
+                        {(artifact.ai_summary || streamingSummary[artifact.id]) && (
+                          <Accordion type="single" collapsible defaultValue="summary">
+                            <AccordionItem value="summary" className="border-none">
+                              <AccordionTrigger className="text-sm font-semibold py-2">
+                                AI Summary
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                  {streamingSummary[artifact.id] || artifact.ai_summary}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        )}
                         <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md max-h-64 overflow-y-auto">
                           {artifact.content}
                         </pre>
