@@ -256,14 +256,14 @@ ${artifact.content}`;
         <main className="flex-1 w-full">
           <div className="container px-6 py-8 max-w-6xl">
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4">
                 <div>
                   <h2 className="text-2xl font-bold mb-2">Artifacts</h2>
                   <p className="text-muted-foreground">
                     Reusable knowledge blocks for your project
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 items-center justify-end">
                   <div className="flex border rounded-md">
                     <Button
                       variant={viewMode === "cards" ? "secondary" : "ghost"}
