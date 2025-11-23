@@ -110,6 +110,13 @@ export const useRealtimeArtifacts = (
         );
       }
 
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: {}
+      });
+
       toast.success("Artifact created successfully");
       return data;
     } catch (error) {
@@ -155,6 +162,14 @@ export const useRealtimeArtifacts = (
       });
 
       if (error) throw error;
+      
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: {}
+      });
+      
       toast.success("Artifact updated successfully");
       return data;
     } catch (error) {
@@ -180,6 +195,14 @@ export const useRealtimeArtifacts = (
       });
 
       if (error) throw error;
+      
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: {}
+      });
+      
       toast.success("Artifact deleted successfully");
     } catch (error) {
       // Rollback on error
