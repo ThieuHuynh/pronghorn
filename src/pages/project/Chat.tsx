@@ -63,6 +63,7 @@ export default function Chat() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingSummary, setStreamingSummary] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
@@ -152,29 +153,145 @@ export default function Chat() {
 
     const session = sessions.find((s) => s.id === selectedSessionId);
     
+    // Show modal immediately
+    setShowSummaryDialog(true);
+    
     // If summary already exists, just show it
     if (session?.ai_summary) {
-      setShowSummaryDialog(true);
       return;
     }
 
-    // Otherwise generate new summary
+    // Otherwise generate new summary via streaming
     setIsProcessing(true);
-    toast.loading("Summarizing chat...", { id: "summarize" });
+    setStreamingSummary("");
+    toast.loading("Generating summary...", { id: "summarize" });
 
     try {
-      const { data, error } = await supabase.functions.invoke("summarize-chat", {
-        body: { chatSessionId: selectedSessionId, shareToken },
+      const model = project?.selected_model || "gemini-2.5-flash";
+      let edgeFunctionName = "chat-stream-gemini";
+
+      if (model.startsWith("claude-")) {
+        edgeFunctionName = "chat-stream-anthropic";
+      } else if (model.startsWith("grok-")) {
+        edgeFunctionName = "chat-stream-xai";
+      }
+
+      // Build conversation history
+      const conversationHistory = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      const systemPrompt = `You are a helpful assistant that creates clear, concise summaries of conversations. 
+Analyze the entire conversation and provide:
+1. A brief title (5-10 words) that captures the main topic
+2. A comprehensive summary (2-3 paragraphs) covering the key points discussed
+
+Format your response as:
+TITLE: [Your title here]
+SUMMARY: [Your summary here]`;
+
+      const response = await fetch(`https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
+        },
+        body: JSON.stringify({
+          systemPrompt,
+          messages: conversationHistory,
+          model: model,
+          maxOutputTokens: 4096,
+        }),
       });
 
-      if (error) throw error;
-      toast.success("Chat summarized successfully", { id: "summarize" });
-      setShowSummaryDialog(true);
+      if (!response.ok) throw new Error("Failed to generate summary");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullSummary = "";
+
+      if (reader) {
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === "delta" && typeof parsed.text === "string") {
+                fullSummary += parsed.text;
+                setStreamingSummary(fullSummary);
+                continue;
+              }
+
+              if (parsed.type === "done") {
+                continue;
+              }
+
+              const content = parsed.choices?.[0]?.delta?.content || "";
+              if (content) {
+                fullSummary += content;
+                setStreamingSummary(fullSummary);
+              }
+            } catch (e) {
+              console.error("Error parsing stream line", e);
+            }
+          }
+        }
+
+        if (buffer.trim().startsWith("data: ")) {
+          const data = buffer.trim().slice(6).trim();
+          if (data) {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "delta" && typeof parsed.text === "string") {
+                fullSummary += parsed.text;
+                setStreamingSummary(fullSummary);
+              } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
+                const content = parsed.choices[0].delta.content;
+                fullSummary += content;
+                setStreamingSummary(fullSummary);
+              }
+            } catch (e) {
+              console.error("Error parsing final stream buffer", e);
+            }
+          }
+        }
+      }
+
+      // Parse the summary to extract title and summary
+      const titleMatch = fullSummary.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+      const summaryMatch = fullSummary.match(/SUMMARY:\s*(.+)/is);
+      
+      const aiTitle = titleMatch ? titleMatch[1].trim() : "Chat Summary";
+      const aiSummary = summaryMatch ? summaryMatch[1].trim() : fullSummary;
+
+      // Save to database
+      await updateSession(selectedSessionId, undefined, aiTitle, aiSummary);
+      
+      toast.success("Summary generated successfully", { id: "summarize" });
     } catch (error) {
       console.error("Error summarizing chat:", error);
-      toast.error("Failed to summarize chat", { id: "summarize" });
+      toast.error("Failed to generate summary", { id: "summarize" });
+      setShowSummaryDialog(false);
     } finally {
       setIsProcessing(false);
+      setStreamingSummary("");
     }
   };
 
@@ -626,7 +743,7 @@ export default function Chat() {
                       )}
                       <Button variant="outline" size="sm" onClick={handleSummarizeChat} disabled={isProcessing}>
                         <Sparkles className="h-3 w-3 mr-2" />
-                        Summarize
+                        {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "Regenerate" : "Summarize"}
                       </Button>
                       <Button
                         variant="outline"
@@ -658,7 +775,7 @@ export default function Chat() {
                         )}
                         <DropdownMenuItem onClick={handleSummarizeChat}>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Summarize
+                          {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "Regenerate Summary" : "Summarize"}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleSaveFullChatAsArtifact}>
                           <Archive className="h-4 w-4 mr-2" />
@@ -778,15 +895,47 @@ export default function Chat() {
           <div className="space-y-4">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {sessions.find((s) => s.id === selectedSessionId)?.ai_summary || "No summary available"}
+                {streamingSummary || 
+                 sessions.find((s) => s.id === selectedSessionId)?.ai_summary || 
+                 "Click 'Generate Summary' to create an AI summary of this conversation"}
               </ReactMarkdown>
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing}>
-                <Archive className="h-4 w-4 mr-2" />
-                Save Summary as Artifact
+              {!isProcessing && sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+                <>
+                  <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing}>
+                    <Archive className="h-4 w-4 mr-2" />
+                    Save Summary as Artifact
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={async () => {
+                      const session = sessions.find((s) => s.id === selectedSessionId);
+                      if (session) {
+                        // Clear existing summary and regenerate
+                        await updateSession(selectedSessionId!, undefined, "", "");
+                        await handleSummarizeChat();
+                      }
+                    }}
+                    disabled={isProcessing}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Regenerate Summary
+                  </Button>
+                </>
+              )}
+              {!isProcessing && !sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+                <Button 
+                  onClick={handleSummarizeChat}
+                  disabled={isProcessing}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Summary
+                </Button>
+              )}
+              <Button onClick={() => setShowSummaryDialog(false)} disabled={isProcessing}>
+                {isProcessing ? "Generating..." : "Close"}
               </Button>
-              <Button onClick={() => setShowSummaryDialog(false)}>Close</Button>
             </div>
           </div>
         </DialogContent>

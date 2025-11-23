@@ -144,6 +144,10 @@ export const useRealtimeChatSessions = (
   };
 
   const deleteSession = async (id: string) => {
+    // Optimistic update
+    const originalSessions = sessions;
+    setSessions((prev) => prev.filter((session) => session.id !== id));
+
     try {
       const { error } = await supabase.rpc("delete_chat_session_with_token", {
         p_id: id,
@@ -155,6 +159,8 @@ export const useRealtimeChatSessions = (
     } catch (error) {
       console.error("Error deleting chat session:", error);
       toast.error("Failed to delete chat session");
+      // Rollback on error
+      setSessions(originalSessions);
       throw error;
     }
   };
