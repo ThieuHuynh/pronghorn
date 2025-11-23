@@ -648,31 +648,25 @@ export default function Chat() {
                   )}
                 </div>
 
-                <ScrollArea className="flex-1 p-6">
-                  <div className="max-w-4xl mx-auto space-y-6">
+                <ScrollArea className="flex-1 p-4">
+                  <div className="space-y-6">
                     {messages.map((message) => (
                       <div
                         key={message.id}
-                        className={`flex gap-4 ${
+                        className={`flex ${
                           message.role === "user" ? "justify-end" : "justify-start"
                         }`}
                       >
                         <Card
-                          className={`max-w-[80%] p-4 ${
+                          className={`w-full md:max-w-[85%] p-4 ${
                             message.role === "user" ? "bg-primary text-primary-foreground" : ""
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="prose prose-sm dark:prose-invert max-w-none flex-1">
-                              {message.role === "user" ? (
-                                <div className="whitespace-pre-wrap">{message.content}</div>
-                              ) : (
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {message.content}
-                                </ReactMarkdown>
-                              )}
-                            </div>
-                            <div className="flex gap-1 flex-shrink-0">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-xs opacity-70">
+                              {format(new Date(message.created_at), "h:mm a")}
+                            </p>
+                            <div className="flex gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -691,16 +685,22 @@ export default function Chat() {
                               </Button>
                             </div>
                           </div>
-                          <p className="text-xs opacity-70 mt-2">
-                            {format(new Date(message.created_at), "h:mm a")}
-                          </p>
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            {message.role === "user" ? (
+                              <div className="whitespace-pre-wrap">{message.content}</div>
+                            ) : (
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {message.content}
+                              </ReactMarkdown>
+                            )}
+                          </div>
                         </Card>
                       </div>
                     ))}
 
                     {streamingContent && (
-                      <div className="flex gap-4 justify-start">
-                        <Card className="max-w-[80%] p-4">
+                      <div className="flex justify-start">
+                        <Card className="w-full md:max-w-[85%] p-4">
                           <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {streamingContent}
@@ -714,8 +714,8 @@ export default function Chat() {
                   </div>
                 </ScrollArea>
 
-                <div className="border-t border-border p-4">
-                  <div className="max-w-4xl mx-auto flex gap-2">
+                <div className="border-t border-border p-4 flex-shrink-0">
+                  <div className="flex gap-2">
                     <Textarea
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
