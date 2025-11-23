@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { systemPrompt, userPrompt, tools = [], model, maxOutputTokens } = await req.json();
+    const { systemPrompt, userPrompt, messages = [], tools = [], model, maxOutputTokens } = await req.json();
     
     console.log("Received request:", { model, maxOutputTokens, toolsCount: tools.length });
 
@@ -133,10 +133,15 @@ serve(async (req) => {
               model: model,
               max_tokens: maxOutputTokens,
               system: systemPrompt,
-              messages: [{
-                role: "user",
-                content: finalPrompt
-              }],
+              messages: (Array.isArray(messages) && messages.length > 0)
+                ? messages.map((m: any) => ({
+                    role: m.role === "assistant" ? "assistant" : "user",
+                    content: m.content,
+                  }))
+                : [{
+                    role: "user",
+                    content: finalPrompt,
+                  }],
               stream: true,
             }),
           });

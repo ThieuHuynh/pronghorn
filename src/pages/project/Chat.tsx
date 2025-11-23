@@ -44,7 +44,7 @@ export default function Chat() {
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
-  const { messages, addMessage } = useRealtimeChatMessages(
+  const { messages, addMessage, refresh: refreshMessages } = useRealtimeChatMessages(
     selectedSessionId || undefined,
     shareToken,
     isTokenSet && !!selectedSessionId
@@ -292,10 +292,9 @@ export default function Chat() {
       // Save the complete AI response
       if (fullResponse) {
         await addMessage("assistant", fullResponse);
-        
-        // Small delay to allow realtime to update messages array
-        // before clearing streaming content
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Ensure messages state is refreshed so the final assistant message
+        // appears immediately after streaming completes
+        await refreshMessages();
       }
     } catch (error) {
       console.error("Error streaming response:", error);

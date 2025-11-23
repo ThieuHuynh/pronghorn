@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { systemPrompt, userPrompt, tools = [], model = "gemini-2.5-flash", maxOutputTokens = 32768, thinkingEnabled = false, thinkingBudget = 0 } = await req.json();
+    const { systemPrompt, userPrompt, messages = [], tools = [], model = "gemini-2.5-flash", maxOutputTokens = 32768, thinkingEnabled = false, thinkingBudget = 0 } = await req.json();
     
     // Ensure maxOutputTokens is a valid number
     let validMaxTokens = 32768;
@@ -122,7 +122,7 @@ serve(async (req) => {
     }
 
     // Call Gemini API directly with selected model using streaming
-    const finalPrompt = toolResults ? `${userPrompt}\n\nTool Results:${toolResults}` : userPrompt;
+    const finalPrompt = toolResults ? `${userPrompt}\n\nTool Results:${toolResults}` : (userPrompt || "");
     
     console.log(`Using Gemini API with model: ${selectedModel}, streaming enabled`);
     console.log(`Thinking: ${thinkingEnabled ? 'enabled' : 'disabled'}, budget: ${thinkingBudget}`);
@@ -143,6 +143,36 @@ serve(async (req) => {
       };
       console.log(`Added thinkingConfig with budget: ${thinkingEnabled ? thinkingBudget : 0} (${thinkingEnabled ? 'enabled' : 'disabled'})`);
     }
+
+    // Build contents from full message history if provided
+    let contentsPayload: any[] = [];
+
+    if (Array.isArray(messages) && messages.length > 0) {
+      const historyContents = messages.map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      // Optionally prepend system prompt as its own turn
+      if (systemPrompt) {
+        contentsPayload.push({
+          role: "user",
+          parts: [{ text: systemPrompt }],
+        });
+      }
+
+      contentsPayload = [...contentsPayload, ...historyContents];
+    } else {
+      // Fallback to single-turn behaviour
+      contentsPayload = [
+        {
+          role: "user",
+          parts: [
+            { text: `${systemPrompt}\n\n${finalPrompt}`.trim() }
+          ]
+        }
+      ];
+    }
     
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`,
@@ -152,14 +182,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: `${systemPrompt}\n\n${finalPrompt}` }
-              ]
-            }
-          ],
+          contents: contentsPayload,
           safetySettings: [
             {
               category: "HARM_CATEGORY_HARASSMENT",

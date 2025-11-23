@@ -15,6 +15,7 @@ serve(async (req) => {
     const { 
       systemPrompt, 
       userPrompt, 
+      messages = [],
       tools = [], 
       model = "grok-4-fast-non-reasoning",
       maxOutputTokens = 16384 
@@ -107,10 +108,18 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: finalPrompt }
-        ],
+        messages: (Array.isArray(messages) && messages.length > 0)
+          ? [
+              ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+              ...messages.map((m: any) => ({
+                role: m.role === 'assistant' ? 'assistant' : 'user',
+                content: m.content,
+              })),
+            ]
+          : [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: finalPrompt },
+            ],
         max_tokens: maxOutputTokens,
         stream: true,
       }),
