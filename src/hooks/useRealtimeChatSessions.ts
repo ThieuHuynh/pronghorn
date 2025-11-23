@@ -107,6 +107,21 @@ export const useRealtimeChatSessions = (
     aiTitle?: string,
     aiSummary?: string
   ) => {
+    // Optimistic update
+    const originalSessions = sessions;
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === id
+          ? {
+              ...session,
+              ...(title !== undefined && { title }),
+              ...(aiTitle !== undefined && { ai_title: aiTitle }),
+              ...(aiSummary !== undefined && { ai_summary: aiSummary }),
+            }
+          : session
+      )
+    );
+
     try {
       const { data, error } = await supabase.rpc("update_chat_session_with_token", {
         p_id: id,
@@ -122,6 +137,8 @@ export const useRealtimeChatSessions = (
     } catch (error) {
       console.error("Error updating chat session:", error);
       toast.error("Failed to update chat session");
+      // Rollback on error
+      setSessions(originalSessions);
       throw error;
     }
   };
@@ -234,7 +251,13 @@ export const useRealtimeChatMessages = (
 
       if (error) throw error;
 
-      // Let realtime reload the canonical list; no need to manually reconcile
+      // Replace temp message with real one from DB
+      if (data) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? data : m))
+        );
+      }
+
       return data;
     } catch (error) {
       console.error("Error adding message:", error);
@@ -245,10 +268,36 @@ export const useRealtimeChatMessages = (
     }
   };
 
+  const addTemporaryMessage = (role: string, content: string): string => {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempMessage: ChatMessage = {
+      id: tempId,
+      chat_session_id: chatSessionId!,
+      role,
+      content,
+      created_at: new Date().toISOString(),
+      created_by: null,
+    };
+    setMessages((prev) => [...prev, tempMessage]);
+    return tempId;
+  };
+
+  const updateStreamingMessage = (tempId: string, content: string, realId?: string) => {
+    setMessages((prev) =>
+      prev.map((m) => 
+        m.id === tempId 
+          ? { ...m, content, ...(realId && { id: realId }) }
+          : m
+      )
+    );
+  };
+
   return {
     messages,
     isLoading,
     addMessage,
+    addTemporaryMessage,
+    updateStreamingMessage,
     refresh: loadMessages,
   };
 };
