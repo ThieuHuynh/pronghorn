@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,6 +62,7 @@ export default function Artifacts() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -77,11 +78,17 @@ export default function Artifacts() {
     enabled: !!projectId && isTokenSet,
   });
 
-  const filteredArtifacts = artifacts.filter((artifact) =>
-    (artifact.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      artifact.ai_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      artifact.ai_summary?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredAndSortedArtifacts = artifacts
+    .filter((artifact) =>
+      (artifact.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        artifact.ai_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        artifact.ai_summary?.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
+    });
 
   const handleAddArtifact = async () => {
     if (!newContent.trim()) return;
@@ -273,6 +280,22 @@ ${artifact.content}`;
                       <List className="h-4 w-4" />
                     </Button>
                   </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+                        >
+                          <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {sortOrder === "newest" ? "Newest First" : "Oldest First"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                     <DialogTrigger asChild>
                       <Button>
@@ -317,7 +340,7 @@ ${artifact.content}`;
 
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading artifacts...</div>
-              ) : filteredArtifacts.length === 0 ? (
+              ) : filteredAndSortedArtifacts.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-12">
                     <p className="text-muted-foreground">
@@ -327,7 +350,7 @@ ${artifact.content}`;
                 </Card>
               ) : viewMode === "cards" ? (
                 <div className="space-y-4">
-                  {filteredArtifacts.map((artifact) => (
+                  {filteredAndSortedArtifacts.map((artifact) => (
                     <Card key={artifact.id}>
                       <CardHeader>
                         <div className="flex items-start justify-between">
@@ -418,7 +441,7 @@ ${artifact.content}`;
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredArtifacts.map((artifact) => (
+                      {filteredAndSortedArtifacts.map((artifact) => (
                         <TableRow key={artifact.id}>
                           <TableCell className="font-medium">
                             {artifact.ai_title || "Untitled Artifact"}
