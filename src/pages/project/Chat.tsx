@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
-import { useRealtimeChatSessions, useRealtimeChatMessages } from "@/hooks/useRealtimeChatSessions";
+import { useRealtimeChatSessions, useRealtimeChatMessages, ChatMessage } from "@/hooks/useRealtimeChatSessions";
 import {
   Plus,
   Send,
@@ -77,6 +77,8 @@ export default function Chat() {
   const {
     messages,
     addMessage,
+    updateStreamingMessage,
+    addTemporaryMessage,
     refresh: refreshMessages,
   } = useRealtimeChatMessages(selectedSessionId || undefined, shareToken, isTokenSet && !!selectedSessionId);
 
@@ -148,6 +150,15 @@ export default function Chat() {
   const handleSummarizeChat = async () => {
     if (!selectedSessionId || isProcessing) return;
 
+    const session = sessions.find((s) => s.id === selectedSessionId);
+    
+    // If summary already exists, just show it
+    if (session?.ai_summary) {
+      setShowSummaryDialog(true);
+      return;
+    }
+
+    // Otherwise generate new summary
     setIsProcessing(true);
     toast.loading("Summarizing chat...", { id: "summarize" });
 
@@ -198,15 +209,15 @@ export default function Chat() {
     const userMessage = inputMessage.trim();
     setInputMessage("");
 
-    // Start streaming AI response
-    setIsStreaming(true);
-    setStreamingContent("");
-
     try {
-      // Add user message to DB in background (hook will optimistically update UI per-session)
-      addMessage("user", userMessage).catch((error) => {
-        console.error("Error adding user message:", error);
-      });
+      // Add user message immediately
+      await addMessage("user", userMessage);
+
+      // Create temporary assistant message for streaming
+      const assistantTempId = addTemporaryMessage("assistant", "");
+
+      // Start streaming
+      setIsStreaming(true);
 
       const model = project?.selected_model || "gemini-2.5-flash";
       let edgeFunctionName = "chat-stream-gemini";
@@ -238,7 +249,7 @@ export default function Chat() {
         body: JSON.stringify({
           systemPrompt: "",
           messages: conversationHistory,
-          userPrompt: userMessage, // Keep for backward compatibility
+          userPrompt: userMessage,
           model: model,
           maxOutputTokens: project?.max_tokens || 32768,
           thinkingEnabled: project?.thinking_enabled || false,
@@ -263,7 +274,6 @@ export default function Chat() {
           buffer += chunk;
 
           const lines = buffer.split("\n");
-          // Keep the last partial line (if any) in the buffer
           buffer = lines.pop() || "";
 
           for (const line of lines) {
@@ -275,32 +285,27 @@ export default function Chat() {
             try {
               const parsed = JSON.parse(data);
 
-              // New agent-style format: { type: "delta", text: "..." }
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullResponse += parsed.text;
-                setStreamingContent(fullResponse);
+                updateStreamingMessage(assistantTempId, fullResponse);
                 continue;
               }
 
-              // Ignore explicit done events in this format
               if (parsed.type === "done") {
                 continue;
               }
 
-              // Fallback for OpenAI-style streaming: { choices[0].delta.content }
               const content = parsed.choices?.[0]?.delta?.content || "";
               if (content) {
                 fullResponse += content;
-                setStreamingContent(fullResponse);
+                updateStreamingMessage(assistantTempId, fullResponse);
               }
             } catch (e) {
-              // Ignore parse errors for malformed / partial lines
               console.error("Error parsing stream line", e);
             }
           }
         }
 
-        // Flush any remaining buffered line
         if (buffer.trim().startsWith("data: ")) {
           const data = buffer.trim().slice(6).trim();
           if (data) {
@@ -308,11 +313,11 @@ export default function Chat() {
               const parsed = JSON.parse(data);
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullResponse += parsed.text;
-                setStreamingContent(fullResponse);
+                updateStreamingMessage(assistantTempId, fullResponse);
               } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
                 const content = parsed.choices[0].delta.content;
                 fullResponse += content;
-                setStreamingContent(fullResponse);
+                updateStreamingMessage(assistantTempId, fullResponse);
               }
             } catch (e) {
               console.error("Error parsing final stream buffer", e);
@@ -321,19 +326,27 @@ export default function Chat() {
         }
       }
 
-      // Save the complete AI response
+      // Save to database and replace temp message with real one
       if (fullResponse) {
-        await addMessage("assistant", fullResponse);
-        // Ensure messages state is refreshed so the final assistant message
-        // appears immediately after streaming completes
-        await refreshMessages();
+        const { data, error } = await supabase.rpc("insert_chat_message_with_token", {
+          p_chat_session_id: selectedSessionId,
+          p_token: shareToken || null,
+          p_role: "assistant",
+          p_content: fullResponse,
+        });
+
+        if (error) throw error;
+
+        // Replace temp message with real DB message
+        if (data) {
+          updateStreamingMessage(assistantTempId, data.content, data.id);
+        }
       }
     } catch (error) {
       console.error("Error streaming response:", error);
       toast.error("Failed to get AI response");
     } finally {
       setIsStreaming(false);
-      setStreamingContent("");
     }
   };
 
