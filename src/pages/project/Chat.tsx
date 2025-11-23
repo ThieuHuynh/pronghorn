@@ -467,16 +467,16 @@ export default function Chat() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col">
       <PrimaryNav />
 
-      <div className="flex relative">
+      <div className="flex relative flex-1 overflow-hidden">
         <ProjectSidebar projectId={projectId!} />
 
-        <main className="flex-1 w-full flex">
+        <main className="flex-1 w-full flex overflow-hidden">
           {/* Sessions Sidebar */}
           <div 
-            className={`border-r border-border bg-card transition-all duration-300 ${
+            className={`border-r border-border bg-card transition-all duration-300 flex flex-col ${
               isSidebarCollapsed ? "w-12" : "w-64"
             }`}
           >
@@ -503,7 +503,7 @@ export default function Chat() {
                   New Chat
                 </Button>
 
-                <ScrollArea className="h-[calc(100vh-200px)]">
+                <ScrollArea className="flex-1">
                   <div className="space-y-2">
                     {sessions.map((session) => (
                       <Card
@@ -511,7 +511,10 @@ export default function Chat() {
                         className={`p-3 cursor-pointer hover:bg-muted transition-colors ${
                           selectedSessionId === session.id ? "bg-muted" : ""
                         }`}
-                        onClick={() => setSelectedSessionId(session.id)}
+                        onClick={() => {
+                          setSelectedSessionId(session.id);
+                          if (isMobile) setIsSidebarCollapsed(true);
+                        }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
@@ -588,11 +591,11 @@ export default function Chat() {
           </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {selectedSessionId ? (
               <>
                 {/* Action Buttons */}
-                <div className="border-b border-border p-3 flex gap-2 justify-end">
+                <div className="border-b border-border p-3 flex gap-2 justify-end flex-shrink-0">
                   {!isMobile ? (
                     <>
                       {sessions.find(s => s.id === selectedSessionId)?.ai_summary && (
