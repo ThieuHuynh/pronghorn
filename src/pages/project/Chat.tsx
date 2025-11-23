@@ -473,6 +473,13 @@ export default function Chat() {
         if (data) {
           updateStreamingMessage(assistantTempId, data.content, data.id);
         }
+
+        // Broadcast refresh event for real-time sync
+        await supabase.channel(`chat-messages-${selectedSessionId}`).send({
+          type: 'broadcast',
+          event: 'chat_message_refresh',
+          payload: {}
+        });
       }
     } catch (error) {
       console.error("Error streaming response:", error);

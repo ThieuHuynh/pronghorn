@@ -92,6 +92,14 @@ export const useRealtimeChatSessions = (
       if (data) {
         setSessions((prev) => [data, ...prev]);
       }
+      
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`chat-sessions-${projectId}`).send({
+        type: 'broadcast',
+        event: 'chat_session_refresh',
+        payload: {}
+      });
+      
       toast.success("Chat session created");
       return data;
     } catch (error) {
@@ -132,6 +140,14 @@ export const useRealtimeChatSessions = (
       });
 
       if (error) throw error;
+      
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`chat-sessions-${projectId}`).send({
+        type: 'broadcast',
+        event: 'chat_session_refresh',
+        payload: {}
+      });
+      
       toast.success("Chat session updated");
       return data;
     } catch (error) {
@@ -155,6 +171,14 @@ export const useRealtimeChatSessions = (
       });
 
       if (error) throw error;
+      
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`chat-sessions-${projectId}`).send({
+        type: 'broadcast',
+        event: 'chat_session_refresh',
+        payload: {}
+      });
+      
       toast.success("Chat session deleted");
     } catch (error) {
       console.error("Error deleting chat session:", error);
@@ -263,6 +287,13 @@ export const useRealtimeChatMessages = (
           prev.map((m) => (m.id === tempId ? data : m))
         );
       }
+
+      // Broadcast refresh event for real-time sync
+      await supabase.channel(`chat-messages-${chatSessionId}`).send({
+        type: 'broadcast',
+        event: 'chat_message_refresh',
+        payload: {}
+      });
 
       return data;
     } catch (error) {
