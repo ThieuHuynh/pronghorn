@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Download, FileArchive, FileText, FileJson, Loader2 } from "lucide-react";
+import { Download, FileArchive, FileText, FileJson, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import {
   fetchProjectData,
@@ -16,6 +14,7 @@ import {
   type DownloadOptions as DownloadOpts
 } from "@/lib/downloadUtils";
 import { toPng } from "html-to-image";
+import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 interface DownloadOptionsProps {
   projectId: string;
@@ -26,6 +25,8 @@ interface DownloadOptionsProps {
 
 export function DownloadOptions({ projectId, projectName, shareToken, hasGeneratedSpec }: DownloadOptionsProps) {
   const [downloading, setDownloading] = useState(false);
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectedContent, setSelectedContent] = useState<ProjectSelectionResult | null>(null);
   const [options, setOptions] = useState<DownloadOpts>({
     includeSettings: true,
     includeRequirements: true,
@@ -36,8 +37,20 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
     includeGeneratedSpec: hasGeneratedSpec
   });
 
-  const handleCheckboxChange = (key: keyof DownloadOpts) => {
-    setOptions(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleProjectSelection = (selection: ProjectSelectionResult) => {
+    setSelectedContent(selection);
+    // Update options based on selection
+    setOptions({
+      includeSettings: !!selection.projectMetadata,
+      includeRequirements: selection.requirements.length > 0,
+      includeStandards: selection.standards.length > 0,
+      includeCanvas: selection.canvasNodes.length > 0 || selection.canvasEdges.length > 0 || selection.canvasLayers.length > 0,
+      includeArtifacts: selection.artifacts.length > 0,
+      includeChats: selection.chatSessions.length > 0,
+      includeGeneratedSpec: hasGeneratedSpec
+    });
+    setSelectorOpen(false);
+    toast.success("Content selection updated!");
   };
 
   const captureCanvasPNG = async (): Promise<Blob | undefined> => {
@@ -68,7 +81,27 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
 
     setDownloading(true);
     try {
-      const data = await fetchProjectData(projectId, shareToken);
+      // Use selected content if available, otherwise fetch all data
+      let data;
+      if (selectedContent) {
+        // Convert selected content to fetchProjectData format
+        data = {
+          project: selectedContent.projectMetadata,
+          requirements: selectedContent.requirements,
+          canvasNodes: selectedContent.canvasNodes,
+          canvasEdges: selectedContent.canvasEdges,
+          canvasLayers: selectedContent.canvasLayers,
+          artifacts: selectedContent.artifacts,
+          chatSessions: selectedContent.chatSessions.map(chat => ({
+            ...chat,
+            messages: [] // Messages will be fetched if needed
+          })),
+          projectStandards: selectedContent.standards,
+          techStacks: selectedContent.techStacks
+        };
+      } else {
+        data = await fetchProjectData(projectId, shareToken);
+      }
       
       let canvasPNG: Blob | undefined;
       if (options.includeCanvas) {
@@ -110,95 +143,60 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Download Specifications</CardTitle>
-        <CardDescription>
-          Select what to include and choose your download format
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Checkboxes */}
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="settings"
-              checked={options.includeSettings}
-              onCheckedChange={() => handleCheckboxChange('includeSettings')}
-            />
-            <Label htmlFor="settings" className="cursor-pointer">
-              Project Settings & Metadata
-            </Label>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Download Specifications</CardTitle>
+          <CardDescription>
+            Select what to include and choose your download format
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Select Content Button */}
+          <div className="space-y-3">
+            <Button 
+              onClick={() => setSelectorOpen(true)}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <ListChecks className="mr-2 h-4 w-4" />
+              {selectedContent ? "Update Content Selection" : "Select Content to Include"}
+            </Button>
+            
+            {/* Show selected content summary */}
+            {selectedContent && (
+              <div className="p-3 bg-muted/50 rounded-md space-y-1 text-sm">
+                <p className="font-medium">Selected Content:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                  {selectedContent.projectMetadata && <li>Project Settings & Metadata</li>}
+                  {selectedContent.requirements.length > 0 && (
+                    <li>Requirements ({selectedContent.requirements.length} items)</li>
+                  )}
+                  {selectedContent.standards.length > 0 && (
+                    <li>Standards ({selectedContent.standards.length} items)</li>
+                  )}
+                  {selectedContent.canvasNodes.length > 0 && (
+                    <li>Canvas Nodes ({selectedContent.canvasNodes.length} items)</li>
+                  )}
+                  {selectedContent.canvasEdges.length > 0 && (
+                    <li>Canvas Edges ({selectedContent.canvasEdges.length} items)</li>
+                  )}
+                  {selectedContent.canvasLayers.length > 0 && (
+                    <li>Canvas Layers ({selectedContent.canvasLayers.length} items)</li>
+                  )}
+                  {selectedContent.artifacts.length > 0 && (
+                    <li>Artifacts ({selectedContent.artifacts.length} items)</li>
+                  )}
+                  {selectedContent.chatSessions.length > 0 && (
+                    <li>Chat Sessions ({selectedContent.chatSessions.length} items)</li>
+                  )}
+                  {hasGeneratedSpec && options.includeGeneratedSpec && (
+                    <li>AI Generated Specification</li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
-          
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="requirements"
-              checked={options.includeRequirements}
-              onCheckedChange={() => handleCheckboxChange('includeRequirements')}
-            />
-            <Label htmlFor="requirements" className="cursor-pointer">
-              Requirements (with attachments)
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="standards"
-              checked={options.includeStandards}
-              onCheckedChange={() => handleCheckboxChange('includeStandards')}
-            />
-            <Label htmlFor="standards" className="cursor-pointer">
-              Project Standards (with attachments)
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="canvas"
-              checked={options.includeCanvas}
-              onCheckedChange={() => handleCheckboxChange('includeCanvas')}
-            />
-            <Label htmlFor="canvas" className="cursor-pointer">
-              Canvas Architecture (JSON + PNG)
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="artifacts"
-              checked={options.includeArtifacts}
-              onCheckedChange={() => handleCheckboxChange('includeArtifacts')}
-            />
-            <Label htmlFor="artifacts" className="cursor-pointer">
-              Project Artifacts
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="chats"
-              checked={options.includeChats}
-              onCheckedChange={() => handleCheckboxChange('includeChats')}
-            />
-            <Label htmlFor="chats" className="cursor-pointer">
-              Chat Sessions & Messages
-            </Label>
-          </div>
-          
-          {hasGeneratedSpec && (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="generated-spec"
-                checked={options.includeGeneratedSpec}
-                onCheckedChange={() => handleCheckboxChange('includeGeneratedSpec')}
-              />
-              <Label htmlFor="generated-spec" className="cursor-pointer">
-                AI Generated Specification
-              </Label>
-            </div>
-          )}
-        </div>
 
         {/* Download buttons */}
         <div className="space-y-2 pt-4 border-t">
@@ -262,5 +260,15 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
         </div>
       </CardContent>
     </Card>
+
+    {/* Project Selector Modal */}
+    <ProjectSelector
+      projectId={projectId}
+      shareToken={shareToken}
+      open={selectorOpen}
+      onClose={() => setSelectorOpen(false)}
+      onConfirm={handleProjectSelection}
+    />
+  </>
   );
 }
