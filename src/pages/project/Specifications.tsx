@@ -431,6 +431,150 @@ export default function Specifications() {
     try {
       const children: Paragraph[] = [];
 
+      const parseMarkdownToParagraphs = (content: string): Paragraph[] => {
+        const paragraphs: Paragraph[] = [];
+        const lines = content.split('\n');
+        let currentParagraphLines: string[] = [];
+        let inCodeBlock = false;
+        let codeBlockLines: string[] = [];
+
+        const flushParagraph = () => {
+          if (currentParagraphLines.length > 0) {
+            const text = currentParagraphLines.join(' ').trim();
+            if (text) {
+              // Parse inline markdown (bold, italic, code)
+              const runs = parseInlineMarkdown(text);
+              paragraphs.push(
+                new Paragraph({
+                  children: runs,
+                  spacing: { after: 200 }
+                })
+              );
+            }
+            currentParagraphLines = [];
+          }
+        };
+
+        const parseInlineMarkdown = (text: string): TextRun[] => {
+          const runs: TextRun[] = [];
+          // Simple inline markdown parser - handles **bold**, *italic*, `code`
+          const segments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+          
+          segments.forEach(segment => {
+            if (segment.startsWith('**') && segment.endsWith('**')) {
+              runs.push(new TextRun({ text: segment.slice(2, -2), bold: true }));
+            } else if (segment.startsWith('*') && segment.endsWith('*')) {
+              runs.push(new TextRun({ text: segment.slice(1, -1), italics: true }));
+            } else if (segment.startsWith('`') && segment.endsWith('`')) {
+              runs.push(new TextRun({ text: segment.slice(1, -1), font: 'Courier New' }));
+            } else if (segment) {
+              runs.push(new TextRun(segment));
+            }
+          });
+          
+          return runs.length > 0 ? runs : [new TextRun(text)];
+        };
+
+        lines.forEach(line => {
+          // Handle code blocks
+          if (line.trim().startsWith('```')) {
+            if (inCodeBlock) {
+              // End code block
+              if (codeBlockLines.length > 0) {
+                paragraphs.push(
+                  new Paragraph({
+                    children: [new TextRun({ text: codeBlockLines.join('\n'), font: 'Courier New' })],
+                    spacing: { before: 200, after: 200 }
+                  })
+                );
+              }
+              codeBlockLines = [];
+              inCodeBlock = false;
+            } else {
+              // Start code block
+              flushParagraph();
+              inCodeBlock = true;
+            }
+            return;
+          }
+
+          if (inCodeBlock) {
+            codeBlockLines.push(line);
+            return;
+          }
+
+          // Handle headers
+          if (line.startsWith('#### ')) {
+            flushParagraph();
+            paragraphs.push(
+              new Paragraph({
+                text: line.substring(5).trim(),
+                heading: HeadingLevel.HEADING_4,
+                spacing: { before: 160, after: 100 }
+              })
+            );
+          } else if (line.startsWith('### ')) {
+            flushParagraph();
+            paragraphs.push(
+              new Paragraph({
+                text: line.substring(4).trim(),
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 200, after: 120 }
+              })
+            );
+          } else if (line.startsWith('## ')) {
+            flushParagraph();
+            paragraphs.push(
+              new Paragraph({
+                text: line.substring(3).trim(),
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 240, after: 160 }
+              })
+            );
+          } else if (line.startsWith('# ')) {
+            flushParagraph();
+            paragraphs.push(
+              new Paragraph({
+                text: line.substring(2).trim(),
+                heading: HeadingLevel.HEADING_1,
+                spacing: { before: 280, after: 200 }
+              })
+            );
+          } else if (line.trim() === '') {
+            flushParagraph();
+          } else if (line.trim().match(/^[-*+]\s/)) {
+            // Handle bullet points
+            flushParagraph();
+            const bulletText = line.trim().substring(2);
+            const runs = parseInlineMarkdown(bulletText);
+            paragraphs.push(
+              new Paragraph({
+                children: runs,
+                bullet: { level: 0 },
+                spacing: { after: 100 }
+              })
+            );
+          } else if (line.trim().match(/^\d+\.\s/)) {
+            // Handle numbered lists
+            flushParagraph();
+            const numberText = line.trim().replace(/^\d+\.\s/, '');
+            const runs = parseInlineMarkdown(numberText);
+            paragraphs.push(
+              new Paragraph({
+                children: runs,
+                numbering: { reference: 'default-numbering', level: 0 },
+                spacing: { after: 100 }
+              })
+            );
+          } else {
+            currentParagraphLines.push(line.trim());
+          }
+        });
+
+        flushParagraph();
+        return paragraphs;
+      };
+
       completedResults.forEach((result, index) => {
         // Add agent title as heading
         children.push(
@@ -441,85 +585,9 @@ export default function Specifications() {
           })
         );
 
-        // Parse markdown content into paragraphs
-        const lines = result.content.split('\n');
-        let currentParagraphLines: string[] = [];
-
-        lines.forEach((line, lineIdx) => {
-          if (line.trim() === '') {
-            if (currentParagraphLines.length > 0) {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun(currentParagraphLines.join(' '))],
-                  spacing: { after: 200 }
-                })
-              );
-              currentParagraphLines = [];
-            }
-          } else if (line.startsWith('### ')) {
-            if (currentParagraphLines.length > 0) {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun(currentParagraphLines.join(' '))],
-                  spacing: { after: 200 }
-                })
-              );
-              currentParagraphLines = [];
-            }
-            children.push(
-              new Paragraph({
-                text: line.substring(4),
-                heading: HeadingLevel.HEADING_3,
-                spacing: { before: 200, after: 120 }
-              })
-            );
-          } else if (line.startsWith('## ')) {
-            if (currentParagraphLines.length > 0) {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun(currentParagraphLines.join(' '))],
-                  spacing: { after: 200 }
-                })
-              );
-              currentParagraphLines = [];
-            }
-            children.push(
-              new Paragraph({
-                text: line.substring(3),
-                heading: HeadingLevel.HEADING_2,
-                spacing: { before: 240, after: 160 }
-              })
-            );
-          } else if (line.startsWith('# ')) {
-            if (currentParagraphLines.length > 0) {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun(currentParagraphLines.join(' '))],
-                  spacing: { after: 200 }
-                })
-              );
-              currentParagraphLines = [];
-            }
-            children.push(
-              new Paragraph({
-                text: line.substring(2),
-                heading: HeadingLevel.HEADING_1,
-                spacing: { before: 280, after: 200 }
-              })
-            );
-          } else {
-            currentParagraphLines.push(line);
-          }
-        });
-
-        if (currentParagraphLines.length > 0) {
-          children.push(
-            new Paragraph({
-              children: [new TextRun(currentParagraphLines.join(' '))],
-              spacing: { after: 200 }
-            })
-          );
-        }
+        // Parse markdown content recursively
+        const contentParagraphs = parseMarkdownToParagraphs(result.content);
+        children.push(...contentParagraphs);
       });
 
       const doc = new Document({
@@ -581,13 +649,15 @@ export default function Specifications() {
       <PrimaryNav />
       <div className="flex relative">
         <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
-        <main className="flex-1 w-full">
-          <ProjectPageHeader 
-            title="Project Specifications" 
-            onMenuClick={() => setIsSidebarOpen(true)} 
-          />
-          
-          <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+        <main className="flex-1 w-full overflow-auto">
+          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+            <ProjectPageHeader 
+              title="Project Specifications" 
+              subtitle="Generate comprehensive documentation and analysis for your project"
+              onMenuClick={() => setIsSidebarOpen(true)} 
+            />
+            
+            <div className="space-y-6">
             {/* Select Project Content */}
             <Card>
               <CardHeader>
@@ -810,10 +880,10 @@ export default function Specifications() {
                               {agentResults.find(r => r.agentId === activeAgentView)?.agentTitle}
                             </CardTitle>
                           </CardHeader>
-                          <CardContent>
+                           <CardContent>
                             <ScrollArea className="h-[600px] w-full rounded-md border p-4">
                               {agentResults.find(r => r.agentId === activeAgentView)?.content ? (
-                                <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3">
+                                <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3 [&_table]:border [&_table]:border-border [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_td]:border [&_td]:border-border [&_td]:p-2 [&_*]:max-w-full [&_pre]:overflow-x-auto">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {agentResults.find(r => r.agentId === activeAgentView)?.content || ''}
                                   </ReactMarkdown>
@@ -859,6 +929,7 @@ export default function Specifications() {
                 />
               </CardContent>
             </Card>
+            </div>
           </div>
         </main>
       </div>

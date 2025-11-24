@@ -126,7 +126,7 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
           break;
 
         case 'individual-json':
-          const jsons = buildIndividualJSONs(data, options);
+          const jsons = buildIndividualJSONs(data, options, agentResults);
           for (const [fileName, content] of Object.entries(jsons)) {
             downloadAsJSON(content, `${projectName}-${fileName}`);
           }
@@ -134,17 +134,7 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
           break;
 
         case 'comprehensive-json':
-          const comprehensive = buildComprehensiveJSON(data, options);
-          
-          // Add AI Analysis to comprehensive JSON
-          if (agentResults.length > 0) {
-            comprehensive.aiAnalysis = agentResults.map(result => ({
-              agentId: result.agentId,
-              agentTitle: result.agentTitle,
-              content: result.content,
-              contentLength: result.contentLength
-            }));
-          }
+          const comprehensive = buildComprehensiveJSON(data, options, agentResults);
           
           downloadAsJSON(comprehensive, `${projectName}-comprehensive.json`);
           toast.success('Comprehensive JSON downloaded successfully!');
