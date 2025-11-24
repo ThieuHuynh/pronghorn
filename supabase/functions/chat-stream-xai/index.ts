@@ -146,6 +146,39 @@ serve(async (req) => {
 
     console.log(`Final prompt length: ${finalPrompt.length}`);
 
+    // Build messages array with system prompt prepended to first user message
+    // This ensures xAI/Grok properly respects the system instructions
+    let messagesPayload: any[] = [];
+    
+    if (Array.isArray(messages) && messages.length > 0) {
+      // Convert message history, prepending system prompt to first user message
+      const convertedMessages = messages.map((m: any, index: number) => {
+        const role = m.role === 'assistant' ? 'assistant' : 'user';
+        let content = m.content;
+        
+        // Prepend system prompt to the first user message
+        if (index === 0 && role === 'user' && enrichedSystemPrompt) {
+          content = `${enrichedSystemPrompt}\n\n${content}`;
+        }
+        
+        return { role, content };
+      });
+      
+      messagesPayload = convertedMessages;
+    } else {
+      // Single turn: combine system prompt with user prompt
+      messagesPayload = [
+        { 
+          role: 'user', 
+          content: enrichedSystemPrompt 
+            ? `${enrichedSystemPrompt}\n\n${finalPrompt}`
+            : finalPrompt
+        }
+      ];
+    }
+
+    console.log(`Sending ${messagesPayload.length} messages to xAI API`);
+
     // Call xAI API with streaming
     const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -155,18 +188,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        messages: (Array.isArray(messages) && messages.length > 0)
-          ? [
-              ...(enrichedSystemPrompt ? [{ role: 'system', content: enrichedSystemPrompt }] : []),
-              ...messages.map((m: any) => ({
-                role: m.role === 'assistant' ? 'assistant' : 'user',
-                content: m.content,
-              })),
-            ]
-          : [
-              { role: 'system', content: enrichedSystemPrompt },
-              { role: 'user', content: finalPrompt },
-            ],
+        messages: messagesPayload,
         max_tokens: maxOutputTokens,
         stream: true,
       }),
