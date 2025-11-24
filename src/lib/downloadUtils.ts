@@ -500,7 +500,12 @@ export function buildComprehensiveJSON(data: any, options: DownloadOptions) {
   return comprehensive;
 }
 
-export async function downloadAsZip(data: any, options: DownloadOptions, projectName: string, canvasPNG?: Blob) {
+export async function downloadAsZip(data: any, options: DownloadOptions, projectName: string, canvasPNG?: Blob, agentResults?: Array<{
+  agentId: string;
+  agentTitle: string;
+  content: string;
+  contentLength: number;
+}>) {
   const zip = new JSZip();
 
   if (options.includeSettings && data.project) {
@@ -596,6 +601,25 @@ export async function downloadAsZip(data: any, options: DownloadOptions, project
           .join('\n---\n\n');
         
         chatsFolder.file(`${filename}_${session.id.slice(0, 8)}.txt`, chatTranscript);
+      }
+    }
+  }
+
+  // Add AI Analysis results
+  if (agentResults && agentResults.length > 0) {
+    const aiAnalysisFolder = zip.folder('ai-analysis');
+    if (aiAnalysisFolder) {
+      // Create summary file
+      aiAnalysisFolder.file('_summary.json', JSON.stringify(agentResults.map(r => ({
+        agentId: r.agentId,
+        agentTitle: r.agentTitle,
+        contentLength: r.contentLength
+      })), null, 2));
+      
+      // Add individual agent reports
+      for (const result of agentResults) {
+        const filename = result.agentTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        aiAnalysisFolder.file(`${filename}.md`, result.content);
       }
     }
   }

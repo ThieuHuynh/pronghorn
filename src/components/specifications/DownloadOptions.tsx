@@ -15,15 +15,23 @@ import {
 import { toPng } from "html-to-image";
 import { type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
+interface CompletedAgentResult {
+  agentId: string;
+  agentTitle: string;
+  content: string;
+  contentLength: number;
+}
+
 interface DownloadOptionsProps {
   projectId: string;
   projectName: string;
   shareToken: string | null;
   hasGeneratedSpec: boolean;
   selectedContent: ProjectSelectionResult | null;
+  agentResults?: CompletedAgentResult[];
 }
 
-export function DownloadOptions({ projectId, projectName, shareToken, hasGeneratedSpec, selectedContent }: DownloadOptionsProps) {
+export function DownloadOptions({ projectId, projectName, shareToken, hasGeneratedSpec, selectedContent, agentResults = [] }: DownloadOptionsProps) {
   const [downloading, setDownloading] = useState(false);
   const [options, setOptions] = useState<DownloadOpts>({
     includeSettings: true,
@@ -92,12 +100,27 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
 
       switch (format) {
         case 'zip':
-          await downloadAsZip(data, options, projectName, canvasPNG);
+          await downloadAsZip(data, options, projectName, canvasPNG, agentResults);
           toast.success('ZIP file downloaded successfully!');
           break;
 
         case 'markdown':
-          const markdown = buildMarkdownDocument(data, options);
+          let markdown = buildMarkdownDocument(data, options);
+          
+          // Append AI Analysis results if available
+          if (agentResults.length > 0) {
+            markdown += '\n\n' + '='.repeat(80) + '\n';
+            markdown += '# AI Analysis\n';
+            markdown += '='.repeat(80) + '\n\n';
+            agentResults.forEach((result, index) => {
+              markdown += `## ${result.agentTitle}\n\n`;
+              markdown += result.content + '\n\n';
+              if (index < agentResults.length - 1) {
+                markdown += '\n---\n\n';
+              }
+            });
+          }
+          
           downloadAsMarkdown(markdown, projectName);
           toast.success('Markdown file downloaded successfully!');
           break;
@@ -112,6 +135,17 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
 
         case 'comprehensive-json':
           const comprehensive = buildComprehensiveJSON(data, options);
+          
+          // Add AI Analysis to comprehensive JSON
+          if (agentResults.length > 0) {
+            comprehensive.aiAnalysis = agentResults.map(result => ({
+              agentId: result.agentId,
+              agentTitle: result.agentTitle,
+              content: result.content,
+              contentLength: result.contentLength
+            }));
+          }
+          
           downloadAsJSON(comprehensive, `${projectName}-comprehensive.json`);
           toast.success('Comprehensive JSON downloaded successfully!');
           break;

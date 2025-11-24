@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Sparkles, CheckCircle2, AlertCircle, Clock, RefreshCw, Download } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, Clock, RefreshCw, Download, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
@@ -18,7 +18,9 @@ import { ProjectSelector, ProjectSelectionResult } from "@/components/project/Pr
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import JSZip from "jszip";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 
 interface Agent {
   id: string;
@@ -51,6 +53,7 @@ export default function Specifications() {
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
   const [activeAgentView, setActiveAgentView] = useState<string | null>(null);
+  const [customizedAgents, setCustomizedAgents] = useState<Record<string, string>>({});
 
   // Load agents from JSON
   useEffect(() => {
@@ -139,6 +142,17 @@ export default function Specifications() {
     );
   };
 
+  const updateAgentPrompt = (agentId: string, newPrompt: string) => {
+    setCustomizedAgents(prev => ({
+      ...prev,
+      [agentId]: newPrompt
+    }));
+  };
+
+  const getAgentPrompt = (agent: Agent) => {
+    return customizedAgents[agent.id] || agent.systemPrompt;
+  };
+
   const buildContextFromSelection = () => {
     if (!selectedContent) return "";
     
@@ -183,6 +197,8 @@ export default function Specifications() {
       edgeFunctionName = 'chat-stream-xai';
     }
 
+    const agentPrompt = getAgentPrompt(agent);
+
     const response = await fetch(
       `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`,
       {
@@ -192,7 +208,7 @@ export default function Specifications() {
           'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`
         },
         body: JSON.stringify({
-          systemPrompt: agent.systemPrompt,
+          systemPrompt: agentPrompt,
           messages: [],
           userPrompt,
           model: projectSettings.selected_model,
@@ -315,7 +331,14 @@ export default function Specifications() {
       };
     });
     
-    setAgentResults(initialResults);
+    // Preserve existing results and add new ones
+    setAgentResults(prev => {
+      const existingMap = new Map(prev.map(r => [r.agentId, r]));
+      initialResults.forEach(newResult => {
+        existingMap.set(newResult.agentId, newResult);
+      });
+      return Array.from(existingMap.values());
+    });
     setActiveAgentView(selectedAgents[0]);
 
     const promises = selectedAgents.map(async (agentId) => {
@@ -405,48 +428,126 @@ export default function Specifications() {
       return;
     }
 
-    // Create HTML with proper Word formatting
-    let htmlContent = `<!DOCTYPE html>
-<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head>
-<meta charset='utf-8'>
-<title>${projectName} - Specifications</title>
-<style>
-body { font-family: Calibri, sans-serif; font-size: 11pt; line-height: 1.5; }
-h1 { font-size: 20pt; font-weight: bold; page-break-before: always; }
-h2 { font-size: 16pt; font-weight: bold; }
-h3 { font-size: 14pt; font-weight: bold; }
-pre { background-color: #f5f5f5; padding: 10px; border: 1px solid #ccc; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-</style>
-</head>
-<body>`;
+    try {
+      const children: Paragraph[] = [];
 
-    completedResults.forEach((result, index) => {
-      htmlContent += `<h1>${result.agentTitle}</h1>\n`;
-      // Convert markdown to simple HTML (basic conversion)
-      const html = result.content
-        .replace(/### (.*?)$/gm, '<h3>$1</h3>')
-        .replace(/## (.*?)$/gm, '<h2>$1</h2>')
-        .replace(/# (.*?)$/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>');
-      htmlContent += `<p>${html}</p>\n`;
-    });
+      completedResults.forEach((result, index) => {
+        // Add agent title as heading
+        children.push(
+          new Paragraph({
+            text: result.agentTitle,
+            heading: HeadingLevel.HEADING_1,
+            spacing: { before: index === 0 ? 0 : 400, after: 200 }
+          })
+        );
 
-    htmlContent += `</body></html>`;
+        // Parse markdown content into paragraphs
+        const lines = result.content.split('\n');
+        let currentParagraphLines: string[] = [];
 
-    const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${projectName}-all-specifications.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Downloaded Word document with ${completedResults.length} specifications`);
+        lines.forEach((line, lineIdx) => {
+          if (line.trim() === '') {
+            if (currentParagraphLines.length > 0) {
+              children.push(
+                new Paragraph({
+                  children: [new TextRun(currentParagraphLines.join(' '))],
+                  spacing: { after: 200 }
+                })
+              );
+              currentParagraphLines = [];
+            }
+          } else if (line.startsWith('### ')) {
+            if (currentParagraphLines.length > 0) {
+              children.push(
+                new Paragraph({
+                  children: [new TextRun(currentParagraphLines.join(' '))],
+                  spacing: { after: 200 }
+                })
+              );
+              currentParagraphLines = [];
+            }
+            children.push(
+              new Paragraph({
+                text: line.substring(4),
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 200, after: 120 }
+              })
+            );
+          } else if (line.startsWith('## ')) {
+            if (currentParagraphLines.length > 0) {
+              children.push(
+                new Paragraph({
+                  children: [new TextRun(currentParagraphLines.join(' '))],
+                  spacing: { after: 200 }
+                })
+              );
+              currentParagraphLines = [];
+            }
+            children.push(
+              new Paragraph({
+                text: line.substring(3),
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 240, after: 160 }
+              })
+            );
+          } else if (line.startsWith('# ')) {
+            if (currentParagraphLines.length > 0) {
+              children.push(
+                new Paragraph({
+                  children: [new TextRun(currentParagraphLines.join(' '))],
+                  spacing: { after: 200 }
+                })
+              );
+              currentParagraphLines = [];
+            }
+            children.push(
+              new Paragraph({
+                text: line.substring(2),
+                heading: HeadingLevel.HEADING_1,
+                spacing: { before: 280, after: 200 }
+              })
+            );
+          } else {
+            currentParagraphLines.push(line);
+          }
+        });
+
+        if (currentParagraphLines.length > 0) {
+          children.push(
+            new Paragraph({
+              children: [new TextRun(currentParagraphLines.join(' '))],
+              spacing: { after: 200 }
+            })
+          );
+        }
+      });
+
+      const doc = new Document({
+        sections: [{
+          children
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${projectName}-all-specifications.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded Word document with ${completedResults.length} specifications`);
+    } catch (error) {
+      console.error('Error generating Word document:', error);
+      toast.error('Failed to generate Word document');
+    }
+  };
+
+  const deleteAgentResult = (agentId: string) => {
+    setAgentResults(prev => prev.filter(r => r.agentId !== agentId));
+    if (activeAgentView === agentId) {
+      setActiveAgentView(agentResults.find(r => r.agentId !== agentId)?.agentId || null);
+    }
+    toast.success('Analysis deleted');
   };
 
   const getStatusIcon = (status: AgentResult['status']) => {
@@ -549,22 +650,43 @@ th, td { border: 1px solid #000; padding: 8px; text-align: left; }
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-80">
-                  <div className="space-y-4 pr-4">
-                    {agents.map(agent => (
-                      <div key={agent.id} className="flex items-start space-x-3 p-3 rounded-lg border">
-                        <Checkbox
-                          id={agent.id}
-                          checked={selectedAgents.includes(agent.id)}
-                          onCheckedChange={() => toggleAgent(agent.id)}
-                        />
-                        <div className="flex-1">
-                          <Label htmlFor={agent.id} className="text-base font-semibold cursor-pointer">
-                            {agent.title}
-                          </Label>
-                          <p className="text-sm text-muted-foreground mt-1">{agent.description}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="space-y-2 pr-4">
+                    <Accordion type="multiple" className="w-full">
+                      {agents.map(agent => (
+                        <AccordionItem key={agent.id} value={agent.id}>
+                          <AccordionTrigger className="hover:no-underline">
+                            <div className="flex items-center space-x-3 flex-1">
+                              <Checkbox
+                                id={agent.id}
+                                checked={selectedAgents.includes(agent.id)}
+                                onCheckedChange={() => toggleAgent(agent.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 text-left">
+                                <Label htmlFor={agent.id} className="text-base font-semibold cursor-pointer">
+                                  {agent.title}
+                                </Label>
+                                <p className="text-sm text-muted-foreground mt-1">{agent.description}</p>
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="pt-2 pl-9 space-y-2">
+                              <Label className="text-sm font-medium">System Prompt:</Label>
+                              <Textarea
+                                value={customizedAgents[agent.id] || agent.systemPrompt}
+                                onChange={(e) => updateAgentPrompt(agent.id, e.target.value)}
+                                className="min-h-[150px] font-mono text-xs"
+                                placeholder="Enter custom system prompt..."
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Changes won't be saved to agents.json but will be used for this session
+                              </p>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -633,18 +755,32 @@ th, td { border: 1px solid #000; padding: 8px; text-align: left; }
                                   </Button>
                                 )}
                                 {result.status === 'completed' && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      downloadSingleAgent(result);
-                                    }}
-                                    className="mt-2 w-full"
-                                  >
-                                    <Download className="h-3 w-3 mr-1" />
-                                    Download
-                                  </Button>
+                                  <div className="space-y-1 mt-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        downloadSingleAgent(result);
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <Download className="h-3 w-3 mr-1" />
+                                      Download
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteAgentResult(result.agentId);
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Delete
+                                    </Button>
+                                  </div>
                                 )}
                               </div>
                             </CardContent>
@@ -677,7 +813,7 @@ th, td { border: 1px solid #000; padding: 8px; text-align: left; }
                           <CardContent>
                             <ScrollArea className="h-[600px] w-full rounded-md border p-4">
                               {agentResults.find(r => r.agentId === activeAgentView)?.content ? (
-                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {agentResults.find(r => r.agentId === activeAgentView)?.content || ''}
                                   </ReactMarkdown>
@@ -712,6 +848,14 @@ th, td { border: 1px solid #000; padding: 8px; text-align: left; }
                   shareToken={shareToken}
                   hasGeneratedSpec={hasGeneratedSpec}
                   selectedContent={selectedContent}
+                  agentResults={agentResults
+                    .filter(r => r.status === 'completed')
+                    .map(r => ({
+                      agentId: r.agentId,
+                      agentTitle: r.agentTitle,
+                      content: r.content,
+                      contentLength: r.contentLength
+                    }))}
                 />
               </CardContent>
             </Card>
