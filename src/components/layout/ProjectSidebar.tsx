@@ -9,6 +9,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ProjectSidebarProps {
   projectId: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const activeNavItems = [
@@ -26,33 +28,21 @@ const comingSoonItems = [
   { icon: Code, label: "Repository" },
 ];
 
-export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
+export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: ProjectSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const isMobile = useIsMobile();
   const { buildUrl } = useProjectUrl(projectId);
-
-  // Close mobile menu when screen size changes
-  useEffect(() => {
-    if (!isMobile) {
-      setIsMobileOpen(false);
+  
+  const isMobileOpen = isMobile ? isOpen : false;
+  const setIsMobileOpen = (open: boolean) => {
+    if (isMobile && onOpenChange) {
+      onOpenChange(open);
     }
-  }, [isMobile]);
+  };
 
-  // Mobile menu button (rendered separately by parent)
+  // Don't render on mobile if not open
   if (isMobile && !isMobileOpen) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setIsMobileOpen(true)}
-        className="fixed bottom-4 left-4 z-[100] h-12 w-12 bg-card border border-border shadow-lg md:hidden"
-        style={{ position: 'fixed' }}
-        aria-label="Open menu"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-    );
+    return null;
   }
 
   return (

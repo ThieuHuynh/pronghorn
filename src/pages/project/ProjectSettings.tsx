@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ export default function ProjectSettings() {
   const [maxTokens, setMaxTokens] = useState(32768);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [thinkingBudget, setThinkingBudget] = useState(-1);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -164,19 +166,16 @@ export default function ProjectSettings() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
-
-        <main className="flex-1 w-full">
-          <div className="container px-6 py-8 max-w-6xl">
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+        <main className="flex-1 overflow-auto w-full">
+          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+            <ProjectPageHeader
+              title="Project Settings"
+              subtitle="Configure your project settings and sharing options"
+              onMenuClick={() => setIsSidebarOpen(true)}
+            />
             <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">Project Settings</h2>
-                <p className="text-muted-foreground">Configure your project settings and integrations</p>
-              </div>
-
-              <div className="space-y-6">
                 {/* Share Token Management */}
                 <Card>
                   <CardHeader>
@@ -457,7 +456,6 @@ export default function ProjectSettings() {
                   </CardContent>
                 </Card>
               </div>
-            </div>
           </div>
         </main>
       </div>

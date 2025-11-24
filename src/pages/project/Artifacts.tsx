@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,7 @@ export default function Artifacts() {
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -249,21 +251,27 @@ ${artifact.content}`;
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
-
-        <main className="flex-1 w-full">
-          <div className="container px-6 py-8 max-w-6xl">
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+        <main className="flex-1 overflow-auto w-full">
+          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-7xl">
+            <ProjectPageHeader
+              title="Artifacts"
+              subtitle="Manage reusable knowledge blocks and documentation"
+              onMenuClick={() => setIsSidebarOpen(true)}
+            />
             <div className="space-y-6">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">Artifacts</h2>
-                  <p className="text-muted-foreground">
-                    Reusable knowledge blocks for your project
-                  </p>
+              <div className="flex flex-col md:flex-row gap-3 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search artifacts..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-                <div className="flex flex-wrap gap-2 items-center justify-end">
+                <div className="flex gap-2 flex-wrap">
                   <div className="flex border rounded-md">
                     <Button
                       variant={viewMode === "cards" ? "secondary" : "ghost"}
@@ -326,16 +334,6 @@ ${artifact.content}`;
                     </DialogContent>
                   </Dialog>
                 </div>
-              </div>
-
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search artifacts by content, title, or summary..."
-                  className="pl-9"
-                />
               </div>
 
               {isLoading ? (
@@ -556,6 +554,10 @@ ${artifact.content}`;
           </DialogContent>
         </Dialog>
       )}
+    </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

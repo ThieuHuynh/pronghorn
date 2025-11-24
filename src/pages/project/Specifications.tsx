@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +23,7 @@ export default function Specifications() {
   const [rawData, setRawData] = useState<any>(null);
   const [projectName, setProjectName] = useState<string>("project");
   const [hasGeneratedSpec, setHasGeneratedSpec] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load saved specification and project name
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function Specifications() {
       <div className="min-h-screen bg-background">
         <PrimaryNav />
         <div className="flex relative">
-          <ProjectSidebar projectId={projectId!} />
+          <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
           <main className="flex-1 w-full flex items-center justify-center">
             <p>Loading...</p>
           </main>
@@ -370,35 +372,34 @@ export default function Specifications() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId || ""} />
-        <main className="flex-1 w-full p-8">
+        <ProjectSidebar projectId={projectId || ""} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+        <main className="flex-1 w-full p-4 md:p-8">
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-              <div className="space-y-1">
-                <h1 className="text-2xl md:text-3xl font-bold">Project Specifications</h1>
-                <p className="text-sm md:text-base text-muted-foreground">
-                  Generate comprehensive documentation with AI and export in multiple formats
-                </p>
-              </div>
-              <Button
-                onClick={generateSpecification}
-                disabled={isGenerating}
-                size="lg"
-                className="w-full md:w-auto shrink-0"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Specification
-                  </>
-                )}
-              </Button>
-            </div>
+            <ProjectPageHeader
+              title="Project Specifications"
+              subtitle="Generate comprehensive documentation with AI and export in multiple formats"
+              onMenuClick={() => setIsSidebarOpen(true)}
+              actions={
+                <Button
+                  onClick={generateSpecification}
+                  disabled={isGenerating}
+                  size="lg"
+                  className="w-full md:w-auto"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Generate Specification
+                    </>
+                  )}
+                </Button>
+              }
+            />
 
             {/* Download Options */}
             <DownloadOptions 
