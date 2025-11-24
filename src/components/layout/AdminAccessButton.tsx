@@ -19,16 +19,22 @@ export function AdminAccessButton() {
   const { isAdmin, requestAdminAccess, logout } = useAdmin();
   const [showDialog, setShowDialog] = useState(false);
   const [adminKey, setAdminKey] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    const success = await requestAdminAccess(adminKey);
-    if (success) {
-      toast.success("Admin mode activated!");
-      setShowDialog(false);
-      setAdminKey("");
-    } else {
-      toast.error("Invalid admin key");
-      setAdminKey("");
+    setIsLoading(true);
+    try {
+      const success = await requestAdminAccess(adminKey);
+      if (success) {
+        toast.success("Admin mode activated!");
+        setShowDialog(false);
+        setAdminKey("");
+      } else {
+        toast.error("Invalid admin key - please check your credentials");
+        setAdminKey("");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -82,11 +88,18 @@ export function AdminAccessButton() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={isLoading}>
               Cancel
             </Button>
-            <Button onClick={handleLogin} disabled={!adminKey.trim()}>
-              Login
+            <Button onClick={handleLogin} disabled={!adminKey.trim() || isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Login"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

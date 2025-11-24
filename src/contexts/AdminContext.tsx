@@ -44,7 +44,15 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const adminKey = key || prompt("Enter admin key:");
     if (!adminKey) return false;
 
-    // Store the key - it will be validated on every admin operation
+    // CRITICAL: Validate server-side before granting admin access
+    const { validateAdminToken } = await import("@/lib/adminAuth");
+    const isValid = await validateAdminToken(adminKey);
+    
+    if (!isValid) {
+      return false;
+    }
+
+    // Only store and set admin status after successful validation
     const encoded = encodeToken(adminKey);
     localStorage.setItem(STORAGE_KEY, encoded);
     setAdminToken(adminKey);
