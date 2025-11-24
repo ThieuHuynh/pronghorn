@@ -74,7 +74,6 @@ export default function Chat() {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const lastUserMessageRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const [shouldScrollToLastUserMessage, setShouldScrollToLastUserMessage] = useState(false);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -149,22 +148,9 @@ export default function Chat() {
     enabled: !!projectId && isTokenSet,
   });
 
-  // One-time scroll to the latest user message when sending
-  useEffect(() => {
-    if (!shouldScrollToLastUserMessage) return;
+  // Scroll the latest user message to the top of the viewport once after sending
+  // We now do this imperatively in handleSendMessage to avoid repeated scrolling during streaming.
 
-    const scrollArea = scrollViewportRef.current;
-    if (scrollArea && lastUserMessageRef.current) {
-      const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-      if (viewport) {
-        const elementTop = lastUserMessageRef.current.offsetTop;
-        viewport.scrollTop = elementTop - 16; // 16px padding from top
-      }
-    }
-
-    // Once we've scrolled to the user message, don't auto-scroll again
-    setShouldScrollToLastUserMessage(false);
-  }, [shouldScrollToLastUserMessage]);
 
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
@@ -389,15 +375,27 @@ export default function Chat() {
     const userMessage = inputMessage.trim();
     setInputMessage("");
     
-    // Prepare one-time scroll to the latest user message
-    setIsAutoScrollEnabled(true);
-    setShouldScrollToLastUserMessage(true);
-    // Add extra space immediately so there's room for the AI response
-    setIsStreaming(true);
+    // Ensure we start from a known auto-scroll state
+    setIsAutoScrollEnabled(false);
 
     try {
       // Add user message immediately (optimistic update)
       await addMessage("user", userMessage);
+
+      // After the message is rendered, scroll it to the top once
+      setTimeout(() => {
+        const scrollArea = scrollViewportRef.current;
+        if (!scrollArea || !lastUserMessageRef.current) return;
+
+        const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+        if (!viewport) return;
+
+        const elementTop = lastUserMessageRef.current.offsetTop;
+        viewport.scrollTop = elementTop - 16; // 16px padding from top
+      }, 0);
+
+      // Add extra space so there's room for the AI response
+      setIsStreaming(true);
 
       // Create temporary assistant message for streaming
       const assistantTempId = addTemporaryMessage("assistant", "");
