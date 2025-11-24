@@ -154,18 +154,11 @@ export default function Chat() {
     if (!shouldScrollToLastUserMessage) return;
 
     if (lastUserMessageRef.current) {
-      // Scroll the user message to the top of the viewport
-      const scrollArea = scrollViewportRef.current;
-      if (scrollArea) {
-        const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-        if (viewport) {
-          const elementTop = lastUserMessageRef.current.offsetTop;
-          viewport.scrollTop = elementTop - 16; // 16px padding from top
-        }
-      }
+      lastUserMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Once we've scrolled to the user message, don't auto-scroll again
       setShouldScrollToLastUserMessage(false);
     }
-  }, [shouldScrollToLastUserMessage, messages.length]);
+  }, [shouldScrollToLastUserMessage]);
 
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
@@ -929,7 +922,7 @@ export default function Chat() {
                     )}
 
                     {/* Extra space for AI responses when scrolled to user message */}
-                    <div className="min-h-[60vh]" />
+                    {isStreaming && <div className="min-h-[60vh]" />}
                     
                     <div ref={messagesEndRef} />
                   </div>
