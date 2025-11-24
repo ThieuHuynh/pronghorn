@@ -303,7 +303,12 @@ export function buildMarkdownDocument(data: any, options: DownloadOptions): stri
   return markdown;
 }
 
-export function buildIndividualJSONs(data: any, options: DownloadOptions) {
+export function buildIndividualJSONs(data: any, options: DownloadOptions, agentResults?: Array<{
+  agentId: string;
+  agentTitle: string;
+  content: string;
+  contentLength: number;
+}>) {
   const jsons: Record<string, any> = {};
 
   if (options.includeSettings && data.project) {
@@ -394,10 +399,25 @@ export function buildIndividualJSONs(data: any, options: DownloadOptions) {
     }));
   }
 
+  // Add AI Analysis
+  if (agentResults && agentResults.length > 0) {
+    jsons['ai-analysis.json'] = agentResults.map(result => ({
+      agentId: result.agentId,
+      agentTitle: result.agentTitle,
+      content: result.content,
+      contentLength: result.contentLength
+    }));
+  }
+
   return jsons;
 }
 
-export function buildComprehensiveJSON(data: any, options: DownloadOptions) {
+export function buildComprehensiveJSON(data: any, options: DownloadOptions, agentResults?: Array<{
+  agentId: string;
+  agentTitle: string;
+  content: string;
+  contentLength: number;
+}>) {
   const comprehensive: any = {
     metadata: {
       exported_at: new Date().toISOString(),
@@ -494,6 +514,16 @@ export function buildComprehensiveJSON(data: any, options: DownloadOptions) {
           content: m.content,
           created_at: m.created_at
         })) || []
+    }));
+  }
+
+  // Add AI Analysis
+  if (agentResults && agentResults.length > 0) {
+    comprehensive.ai_analysis = agentResults.map(result => ({
+      agentId: result.agentId,
+      agentTitle: result.agentTitle,
+      content: result.content,
+      contentLength: result.contentLength
     }));
   }
 
