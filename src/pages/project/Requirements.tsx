@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { RequirementsTree, RequirementType } from "@/components/requirements/RequirementsTree";
 import { AIDecomposeDialog } from "@/components/requirements/AIDecomposeDialog";
 import { LinkStandardsDialog } from "@/components/requirements/LinkStandardsDialog";
@@ -27,6 +28,7 @@ export default function Requirements() {
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [linkReq, setLinkReq] = useState<{ id: string; title: string } | null>(null);
   const [expandAll, setExpandAll] = useState<boolean | undefined>(undefined);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Log projectId for debugging
   console.log("Requirements page - projectId:", projectId);
@@ -45,7 +47,7 @@ export default function Requirements() {
       <div className="min-h-screen bg-background">
         <PrimaryNav />
         <div className="flex relative">
-          <ProjectSidebar projectId={projectId} />
+          <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
           <main className="flex-1 w-full flex items-center justify-center">
             <div className="text-center space-y-2 max-w-md px-4">
               <h1 className="text-xl font-semibold">Share token required</h1>
@@ -65,7 +67,7 @@ export default function Requirements() {
       <div className="min-h-screen bg-background">
         <PrimaryNav />
         <div className="flex relative">
-          <ProjectSidebar projectId={projectId} />
+          <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
           <main className="flex-1 w-full flex items-center justify-center">
             <p>Loading...</p>
           </main>
@@ -78,10 +80,13 @@ export default function Requirements() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 overflow-auto w-full">
           <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-2">Requirements</h1>
+            <ProjectPageHeader
+              title="Requirements"
+              onMenuClick={() => setIsSidebarOpen(true)}
+            />
             <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-6">
               <div className="relative flex-1 md:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

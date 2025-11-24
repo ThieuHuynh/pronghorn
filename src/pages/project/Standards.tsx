@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
 import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
 
@@ -45,6 +46,7 @@ export default function Standards() {
   const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (projectId) {
@@ -216,13 +218,14 @@ export default function Standards() {
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 w-full overflow-auto">
-          <div className="container px-6 py-8 max-w-6xl">
-            <h1 className="text-3xl font-bold mb-2">Project Standards</h1>
-            <p className="text-sm text-muted-foreground mb-6">
-              Select applicable standards and tech stacks for this project
-            </p>
+          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+            <ProjectPageHeader
+              title="Project Standards"
+              subtitle="Select applicable standards and tech stacks for this project"
+              onMenuClick={() => setIsSidebarOpen(true)}
+            />
 
             <div className="space-y-6">
               {/* Tech Stacks Section */}
