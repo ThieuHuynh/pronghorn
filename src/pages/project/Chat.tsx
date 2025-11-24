@@ -154,48 +154,35 @@ export default function Chat() {
     }
   }, [messages, streamingContent, isAutoScrollEnabled]);
 
-  // Detect user scroll and update auto-scroll state
+  // Detect user scroll and unlock auto-scroll when user scrolls up
   useEffect(() => {
     const scrollArea = scrollViewportRef.current;
-    console.log('Setting up scroll listener, scrollArea:', scrollArea);
-    
-    if (!scrollArea) {
-      console.log('No scroll area found');
-      return;
-    }
+    if (!scrollArea) return;
 
-    const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
-    console.log('Found viewport:', viewport);
-    
-    if (!viewport) {
-      console.log('No viewport found');
-      return;
-    }
+    const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (!viewport) return;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const threshold = 100;
-      const isAtBottom = distanceFromBottom < threshold;
-      
-      console.log('Scroll event:', { 
-        scrollTop, 
-        scrollHeight, 
-        clientHeight, 
-        distanceFromBottom, 
-        isAtBottom,
-        currentAutoScrollState: isAutoScrollEnabled 
+
+      // Only ever turn auto-scroll off here (when user scrolls up).
+      // Re-enabling is done explicitly via the scroll-to-bottom button or when sending a message.
+      setIsAutoScrollEnabled((prev) => {
+        if (!prev) {
+          return prev;
+        }
+
+        const isAtBottom = distanceFromBottom < threshold;
+        return isAtBottom ? prev : false;
       });
-      
-      setIsAutoScrollEnabled(isAtBottom);
     };
 
-    viewport.addEventListener('scroll', handleScroll, { passive: true });
-    console.log('Scroll listener attached');
-    
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+
     return () => {
-      viewport.removeEventListener('scroll', handleScroll);
-      console.log('Scroll listener removed');
+      viewport.removeEventListener("scroll", handleScroll);
     };
   }, [selectedSessionId]);
 
