@@ -240,6 +240,7 @@ export function AIArchitectDialog({
                     <div className="text-xs text-muted-foreground space-y-1">
                       {selectedContext.projectMetadata && <p>✓ Project metadata</p>}
                       {selectedContext.artifacts.length > 0 && <p>✓ {selectedContext.artifacts.length} artifacts</p>}
+                      {selectedContext.chatSessions.length > 0 && <p>✓ {selectedContext.chatSessions.length} chat sessions</p>}
                       {selectedContext.requirements.length > 0 && <p>✓ {selectedContext.requirements.length} requirements</p>}
                       {selectedContext.standards.length > 0 && <p>✓ {selectedContext.standards.length} standards</p>}
                       {selectedContext.techStacks.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stacks</p>}
@@ -330,6 +331,7 @@ export function AIArchitectDialog({
                     <div className="text-xs text-muted-foreground space-y-1">
                       {selectedContext.projectMetadata && <p>✓ Project metadata</p>}
                       {selectedContext.artifacts.length > 0 && <p>✓ {selectedContext.artifacts.length} artifacts</p>}
+                      {selectedContext.chatSessions.length > 0 && <p>✓ {selectedContext.chatSessions.length} chat sessions</p>}
                       {selectedContext.requirements.length > 0 && <p>✓ {selectedContext.requirements.length} requirements</p>}
                       {selectedContext.standards.length > 0 && <p>✓ {selectedContext.standards.length} standards</p>}
                       {selectedContext.techStacks.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stacks</p>}
