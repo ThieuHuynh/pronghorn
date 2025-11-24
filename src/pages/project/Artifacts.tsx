@@ -555,9 +555,5 @@ ${artifact.content}`;
         </Dialog>
       )}
     </div>
-          </div>
-        </main>
-      </div>
-    </div>
   );
 }
