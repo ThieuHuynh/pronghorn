@@ -20,9 +20,10 @@ interface AIDecomposeDialogProps {
   shareToken?: string | null;
   open: boolean;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
-export function AIDecomposeDialog({ projectId, shareToken, open, onClose }: AIDecomposeDialogProps) {
+export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefresh }: AIDecomposeDialogProps) {
   const [text, setText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [artifacts, setArtifacts] = useState<any[]>([]);
@@ -77,6 +78,12 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose }: AIDe
       }
 
       toast.success(`Successfully created ${data.epicCount} epics with requirements!`);
+      
+      // Refresh the requirements list to show new items
+      if (onRefresh) {
+        onRefresh();
+      }
+      
       onClose();
       setText("");
     } catch (error) {

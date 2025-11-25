@@ -142,7 +142,7 @@ export default function Requirements() {
           </div>
         </main>
       </div>
-      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId} shareToken={shareToken} />
+      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId} shareToken={shareToken} onRefresh={refresh} />
       {linkReq && <LinkStandardsDialog open={!!linkReq} onClose={() => setLinkReq(null)} requirementId={linkReq.id} requirementTitle={linkReq.title} />}
     </div>
   );
