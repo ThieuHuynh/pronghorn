@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus } from "lucide-react";
+import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const [selectedGenerationType, setSelectedGenerationType] = useState<string>("");
   const [selectedStyle, setSelectedStyle] = useState<string>("");
   const [graphicStyles, setGraphicStyles] = useState<GraphicStyles | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<GeneratedImage | null>(null);
 
   useEffect(() => {
     // Load graphic styles from JSON
@@ -248,20 +249,21 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const availableStyles = currentGenerationType?.styles || [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] p-0">
-        <div className="flex flex-col md:flex-row h-full">
-          {/* Side Menu */}
-          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-muted/30 flex flex-col">
-            <DialogHeader className="p-6 border-b">
-              <DialogTitle>Visual Generator</DialogTitle>
-              <DialogDescription className="text-xs">
-                Create stunning visuals
-              </DialogDescription>
-            </DialogHeader>
-            
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-6">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] p-0">
+          <div className="flex flex-col md:flex-row h-full">
+            {/* Side Menu */}
+            <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-muted/30 flex flex-col max-h-full">
+              <DialogHeader className="p-6 border-b flex-shrink-0">
+                <DialogTitle>Visual Generator</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Create stunning visuals
+                </DialogDescription>
+              </DialogHeader>
+              
+              <ScrollArea className="flex-1 h-0">
+                <div className="p-4 space-y-6 pb-6">
                 {/* Content Selection */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold">Content</Label>
@@ -341,34 +343,34 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                   </div>
                 )}
 
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="p-6 border-b flex-shrink-0">
+                <h3 className="text-lg font-semibold leading-none">Generated Visuals</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {generatedImages.length === 0 
+                    ? "Your generated images will appear here" 
+                    : `${generatedImages.length} visual${generatedImages.length !== 1 ? 's' : ''} generated`}
+                </p>
               </div>
-            </ScrollArea>
-          </div>
 
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col">
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-semibold leading-none">Generated Visuals</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {generatedImages.length === 0 
-                  ? "Your generated images will appear here" 
-                  : `${generatedImages.length} visual${generatedImages.length !== 1 ? 's' : ''} generated`}
-              </p>
-            </div>
+              {/* Custom Instructions - Full Width */}
+              <div className="p-6 border-b space-y-2 flex-shrink-0">
+                <Label className="text-sm font-semibold">Custom Instructions</Label>
+                <Textarea
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="Add specific details about what to visualize..."
+                  className="text-sm min-h-20 resize-none"
+                />
+              </div>
 
-            {/* Custom Instructions - Full Width */}
-            <div className="p-6 border-b space-y-2">
-              <Label className="text-sm font-semibold">Custom Instructions</Label>
-              <Textarea
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Add specific details about what to visualize..."
-                className="text-sm min-h-20 resize-none"
-              />
-            </div>
-
-            <ScrollArea className="flex-1">
-              <div className="p-6">
+              <ScrollArea className="flex-1 h-0">
+                <div className="p-6">
                 {generatedImages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center space-y-4">
                     <ImagePlus className="w-16 h-16 text-muted-foreground/50" />
@@ -381,17 +383,20 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                       </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {generatedImages.map((image) => (
-                      <div key={image.id} className="border rounded-lg overflow-hidden bg-card">
-                        <div className="aspect-video relative bg-muted">
-                          <img 
-                            src={image.imageUrl} 
-                            alt="Generated visual" 
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {generatedImages.map((image) => (
+                        <div key={image.id} className="border rounded-lg overflow-hidden bg-card">
+                          <div 
+                            className="aspect-video relative bg-muted cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setFullScreenImage(image)}
+                          >
+                            <img 
+                              src={image.imageUrl} 
+                              alt="Generated visual" 
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
                         <div className="p-4 space-y-3">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="secondary" className="text-xs">
@@ -434,14 +439,14 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
 
-            {/* Bottom Action Buttons */}
-            <div className="p-6 border-t bg-muted/30 flex justify-end gap-2">
+              {/* Bottom Action Buttons */}
+              <div className="p-6 border-t bg-muted/30 flex justify-end gap-2 flex-shrink-0">
               {generatedImages.length > 0 && (
                 <Button
                   onClick={downloadAllAsZip}
@@ -469,18 +474,60 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                   </>
                 )}
               </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
+        </DialogContent>
 
-      <ProjectSelector
-        projectId={projectId}
-        shareToken={shareToken}
-        open={showProjectSelector}
-        onClose={() => setShowProjectSelector(false)}
-        onConfirm={handleContentSelected}
-      />
-    </Dialog>
+        <ProjectSelector
+          projectId={projectId}
+          shareToken={shareToken}
+          open={showProjectSelector}
+          onClose={() => setShowProjectSelector(false)}
+          onConfirm={handleContentSelected}
+        />
+      </Dialog>
+
+      {/* Full Screen Image Viewer */}
+      <Dialog open={!!fullScreenImage} onOpenChange={() => setFullScreenImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-0">
+          <div className="relative w-full h-full flex flex-col bg-background">
+            {/* Top Menu */}
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+              <div className="flex items-center gap-2">
+                {fullScreenImage && (
+                  <>
+                    <Badge variant="secondary" className="text-xs">
+                      {graphicStyles?.generationTypes.find(t => t.id === fullScreenImage.generationType)?.label}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {currentGenerationType?.styles.find(s => s.id === fullScreenImage.style)?.label}
+                    </Badge>
+                  </>
+                )}
+              </div>
+              <Button
+                onClick={() => setFullScreenImage(null)}
+                variant="ghost"
+                size="icon"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Image */}
+            <div className="flex-1 flex items-center justify-center p-4 bg-muted/30 overflow-auto">
+              {fullScreenImage && (
+                <img 
+                  src={fullScreenImage.imageUrl} 
+                  alt="Generated visual" 
+                  className="max-w-full max-h-full object-contain"
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
