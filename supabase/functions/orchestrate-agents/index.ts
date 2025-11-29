@@ -123,6 +123,15 @@ serve(async (req) => {
           const metrics: ChangeMetric[] = [];
           const blackboard: string[] = []; // Shared memory for all agents
 
+          // Initialize delta with user's ProjectSelector canvas selection (if any)
+          // Delta tracks cumulative changes: what was selected + all agent modifications
+          const deltaNodes = attachedContext?.canvasNodes ? [...attachedContext.canvasNodes] : [];
+          const deltaEdges = attachedContext?.canvasEdges ? [...attachedContext.canvasEdges] : [];
+          
+          // Track IDs for quick lookup
+          const deltaNodeIds = new Set(deltaNodes.map((n: any) => n.id));
+          const deltaEdgeIds = new Set(deltaEdges.map((e: any) => e.id));
+
           // Run iterations
           for (let iteration = 1; iteration <= iterations; iteration++) {
             send({ 
@@ -131,19 +140,8 @@ serve(async (req) => {
               totalIterations: iterations 
             });
 
-            // Execute each agent in order - fetch fresh state before each agent
+            // Execute each agent in order - pass cumulative delta to each agent
             for (const agentNode of executionOrder) {
-              // CRITICAL FIX #1: Fetch fresh canvas state before each agent execution
-              const { data: currentNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
-                p_project_id: projectId,
-                p_token: shareToken,
-              });
-
-              const { data: currentEdges } = await supabase.rpc('get_canvas_edges_with_token', {
-                p_project_id: projectId,
-                p_token: shareToken,
-              });
-
               send({
                 type: 'agent_start',
                 iteration,
@@ -152,7 +150,7 @@ serve(async (req) => {
               });
 
               try {
-                // Validate agent is connected (FIX #4)
+                // Validate agent is connected
                 const isConnected = agentFlow.edges.some(
                   (e: any) => e.source === agentNode.id || e.target === agentNode.id
                 );
@@ -161,22 +159,23 @@ serve(async (req) => {
                 }
 
                 // CONTEXT PASSED TO EACH AGENT:
-                // 1. ProjectSelector content (artifacts, chat, requirements, standards, tech stacks, selected canvas nodes/edges/layers)
+                // 1. ProjectSelector content (artifacts, chat, requirements, standards, tech stacks)
                 // 2. Blackboard shared memory (orchestrator guidance from all previous agents)
-                // 3. CURRENT COMPLETE CANVAS STATE (currentNodes, currentEdges) - fetched fresh before each agent
-                //    - This includes ALL nodes and edges: original + all changes made by previous agents in this iteration
+                // 3. CUMULATIVE DELTA of canvas nodes/edges:
+                //    - Starts with whatever user selected in ProjectSelector (could be nothing)
+                //    - Accumulates all additions/edits/deletions from previous agents in this iteration
                 const result = await executeAgent(
                   agentNode,
                   {
                     projectId,
                     shareToken,
-                    currentNodes: currentNodes || [],
-                    currentEdges: currentEdges || [],
+                    currentNodes: deltaNodes,
+                    currentEdges: deltaEdges,
                     attachedContext,
                     iteration,
                     capabilities: agentNode.data.capabilities,
                     blackboard,
-                    customPrompt: agentPrompts[agentNode.id], // Pass custom prompts
+                    customPrompt: agentPrompts[agentNode.id],
                     selectedModel,
                     maxTokens,
                     thinkingEnabled,
@@ -186,6 +185,90 @@ serve(async (req) => {
                   apiKey,
                   apiProvider
                 );
+
+                // Apply agent's changes to the cumulative delta
+                // Fetch updated canvas state once to sync delta with DB reality
+                const { data: allCurrentNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
+                  p_project_id: projectId,
+                  p_token: shareToken,
+                });
+                const { data: allCurrentEdges } = await supabase.rpc('get_canvas_edges_with_token', {
+                  p_project_id: projectId,
+                  p_token: shareToken,
+                });
+                
+                // Nodes added: find newly created nodes and add to delta
+                if (result.newNodeIds && result.newNodeIds.length > 0) {
+                  for (const newId of result.newNodeIds) {
+                    const fetchedNode = (allCurrentNodes || []).find((n: any) => n.id === newId);
+                    if (fetchedNode && !deltaNodeIds.has(fetchedNode.id)) {
+                      deltaNodes.push(fetchedNode);
+                      deltaNodeIds.add(fetchedNode.id);
+                    }
+                  }
+                }
+
+                // Nodes edited: update in delta with fresh DB data
+                if (result.nodesToEdit && result.nodesToEdit.length > 0) {
+                  for (const editedNode of result.nodesToEdit) {
+                    const idx = deltaNodes.findIndex((n: any) => n.id === editedNode.id);
+                    if (idx !== -1) {
+                      const fetchedNode = (allCurrentNodes || []).find((n: any) => n.id === editedNode.id);
+                      if (fetchedNode) {
+                        deltaNodes[idx] = fetchedNode;
+                      }
+                    }
+                  }
+                }
+
+                // Nodes deleted: remove from delta
+                if (result.nodesToDelete && result.nodesToDelete.length > 0) {
+                  for (const deleteId of result.nodesToDelete) {
+                    const idx = deltaNodes.findIndex((n: any) => n.id === deleteId);
+                    if (idx !== -1) {
+                      deltaNodes.splice(idx, 1);
+                      deltaNodeIds.delete(deleteId);
+                    }
+                  }
+                }
+
+                // Edges added: find newly created edges and add to delta
+                if (result.edgesToAdd && result.edgesToAdd.length > 0) {
+                  for (const edgeSpec of result.edgesToAdd) {
+                    // Find the edge that was just created (matching source/target)
+                    const fetchedEdge = (allCurrentEdges || []).find((e: any) => 
+                      e.source_id === edgeSpec.source && e.target_id === edgeSpec.target && !deltaEdgeIds.has(e.id)
+                    );
+                    if (fetchedEdge) {
+                      deltaEdges.push(fetchedEdge);
+                      deltaEdgeIds.add(fetchedEdge.id);
+                    }
+                  }
+                }
+
+                // Edges edited: update in delta with fresh DB data
+                if (result.edgesToEdit && result.edgesToEdit.length > 0) {
+                  for (const editedEdge of result.edgesToEdit) {
+                    const idx = deltaEdges.findIndex((e: any) => e.id === editedEdge.id);
+                    if (idx !== -1) {
+                      const fetchedEdge = (allCurrentEdges || []).find((e: any) => e.id === editedEdge.id);
+                      if (fetchedEdge) {
+                        deltaEdges[idx] = fetchedEdge;
+                      }
+                    }
+                  }
+                }
+
+                // Edges deleted: remove from delta
+                if (result.edgesToDelete && result.edgesToDelete.length > 0) {
+                  for (const deleteId of result.edgesToDelete) {
+                    const idx = deltaEdges.findIndex((e: any) => e.id === deleteId);
+                    if (idx !== -1) {
+                      deltaEdges.splice(idx, 1);
+                      deltaEdgeIds.delete(deleteId);
+                    }
+                  }
+                }
 
                 // Record changes
                 const changeLog: ChangeLogEntry = {
@@ -212,17 +295,6 @@ serve(async (req) => {
                 };
                 metrics.push(metric);
 
-                // Fetch updated canvas state after this agent's changes to compute accurate counts
-                const { data: updatedNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
-                  p_project_id: projectId,
-                  p_token: shareToken,
-                });
-
-                const { data: updatedEdges } = await supabase.rpc('get_canvas_edges_with_token', {
-                  p_project_id: projectId,
-                  p_token: shareToken,
-                });
-
                 send({
                   type: 'agent_complete',
                   iteration,
@@ -230,8 +302,8 @@ serve(async (req) => {
                   changeLog,
                   metric,
                   currentCounts: {
-                    nodes: (updatedNodes || []).length,
-                    edges: (updatedEdges || []).length,
+                    nodes: deltaNodes.length,
+                    edges: deltaEdges.length,
                   },
                 });
 
@@ -243,8 +315,8 @@ serve(async (req) => {
                         agentLabel: agentNode.data.label,
                         changes: result.changes,
                         reasoning: result.reasoning,
-                        currentNodes: currentNodes || [],
-                        currentEdges: currentEdges || [],
+                        currentNodes: deltaNodes,
+                        currentEdges: deltaEdges,
                         attachedContext,
                         blackboard,
                         iteration,
@@ -305,8 +377,8 @@ serve(async (req) => {
                       {
                         projectId,
                         shareToken,
-                        currentNodes: currentNodes || [],
-                        currentEdges: currentEdges || [],
+                        currentNodes: deltaNodes,
+                        currentEdges: deltaEdges,
                         attachedContext,
                         iteration,
                         capabilities: agentNode.data.capabilities,
@@ -493,9 +565,10 @@ async function executeAgent(
   ];
   
   // Build context prompt
-  let contextPrompt = `Current Canvas State:\n`;
-  contextPrompt += `- Nodes: ${context.currentNodes.length}\n`;
-  contextPrompt += `- Edges: ${context.currentEdges.length}\n\n`;
+  let contextPrompt = `Current Canvas Delta (Cumulative Changes):\n`;
+  contextPrompt += `This represents the starting selection from ProjectSelector plus all modifications made by previous agents in this iteration.\n`;
+  contextPrompt += `- Nodes in delta: ${context.currentNodes.length}\n`;
+  contextPrompt += `- Edges in delta: ${context.currentEdges.length}\n\n`;
 
   // Add Blackboard memory if available
   if (context.blackboard && context.blackboard.length > 0) {
@@ -600,25 +673,27 @@ async function executeAgent(
   contextPrompt += `- For edgesToAdd, source and target MUST be node IDs from the list below (not labels).\n`;
   contextPrompt += `- If you create new nodes, you may optionally include an "id" field using a UUID string; otherwise only connect edges between existing node IDs.\n\n`;
 
-  contextPrompt += `Current Nodes in Database:\n`;
+  contextPrompt += `Current Nodes in Delta:\n`;
+  contextPrompt += `This list represents what the user originally selected plus all nodes added/edited by previous agents in this iteration.\n`;
   context.currentNodes.forEach((node: any) => {
-    contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${node.type})\n`;
+    contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${node.type || node.data?.type})\n`;
   });
   contextPrompt += `\n`;
 
-  contextPrompt += `Current Edges in Database:\n`;
+  contextPrompt += `Current Edges in Delta:\n`;
+  contextPrompt += `This list represents what the user originally selected plus all edges added/edited by previous agents in this iteration.\n`;
   if (context.currentEdges && context.currentEdges.length > 0) {
     context.currentEdges.forEach((edge: any) => {
-      contextPrompt += `- ${edge.id}: ${edge.source} -> ${edge.target}${edge.label ? ` (Label: ${edge.label})` : ''}\n`;
+      contextPrompt += `- ${edge.id}: ${edge.source_id || edge.source} -> ${edge.target_id || edge.target}${edge.label ? ` (Label: ${edge.label})` : ''}\n`;
     });
   } else {
-    contextPrompt += `(No edges currently exist)\n`;
+    contextPrompt += `(No edges in delta yet)\n`;
   }
-  contextPrompt += `\nIMPORTANT: The nodes and edges listed above are the COMPLETE CURRENT STATE of the canvas, including all changes made by previous agents in this iteration. This includes:\n`;
-  contextPrompt += `- All original nodes from the project\n`;
-  contextPrompt += `- All nodes added by previous agents in this iteration\n`;
-  contextPrompt += `- All edges created or modified during this iteration\n`;
-  contextPrompt += `Do NOT recreate existing edges unless they need modification. Only add NEW elements that don't already exist.\n`;
+  contextPrompt += `\nIMPORTANT: The nodes and edges listed above are the WORKING DELTA that accumulates all changes across agents in this iteration:\n`;
+  contextPrompt += `- Original items from user's ProjectSelector selection (if any)\n`;
+  contextPrompt += `- All nodes/edges added by previous agents in this iteration\n`;
+  contextPrompt += `- All modifications made by previous agents\n`;
+  contextPrompt += `Do NOT recreate existing items. Only add NEW elements that don't already exist in the delta.\n`;
 
   contextPrompt += `\nYour Task: Analyze the above and determine what changes are needed. Return a JSON object with:\n`;
   contextPrompt += `{\n`;
@@ -940,6 +1015,14 @@ async function executeAgent(
       edgesEdited,
       edgesDeleted,
     },
+    // Return actual arrays for delta tracking
+    nodesToAdd: aiResponse.nodesToAdd || [],
+    nodesToEdit: aiResponse.nodesToEdit || [],
+    nodesToDelete: aiResponse.nodesToDelete || [],
+    edgesToAdd: aiResponse.edgesToAdd || [],
+    edgesToEdit: aiResponse.edgesToEdit || [],
+    edgesToDelete: aiResponse.edgesToDelete || [],
+    newNodeIds,  // IDs of nodes created in this execution
   };
 }
 
