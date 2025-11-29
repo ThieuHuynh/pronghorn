@@ -59,7 +59,10 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
                 ? {
                     ...node,
                     position: payload.new.position as { x: number; y: number },
-                    data: payload.new.data,
+                    data: {
+                      ...(payload.new.data || {}),
+                      type: (payload.new.data as any)?.type || payload.new.type,
+                    },
                   }
                 : node
             ));
@@ -69,7 +72,10 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
               id: payload.new.id,
               type: "custom",
               position: payload.new.position as { x: number; y: number },
-              data: payload.new.data,
+              data: {
+                ...(payload.new.data || {}),
+                type: (payload.new.data as any)?.type || payload.new.type,
+              },
             };
             setNodes((nds) => [...nds, newNode]);
           } else if (payload.eventType === 'DELETE' && payload.old) {
@@ -178,11 +184,14 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       if (nodesResult.error) throw nodesResult.error;
       if (edgesResult.error) throw edgesResult.error;
 
-      const loadedNodes: Node[] = (nodesResult.data || []).map((node) => ({
+      const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => ({
         id: node.id,
         type: "custom",
         position: node.position as { x: number; y: number },
-        data: node.data,
+        data: {
+          ...(node.data || {}),
+          type: (node.data as any)?.type || node.type,
+        },
       }));
 
       const loadedEdges: Edge[] = (edgesResult.data || []).map((edge: any) => ({
