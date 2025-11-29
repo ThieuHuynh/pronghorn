@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus, X } from "lucide-react";
+import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus, X, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import JSZip from "jszip";
 
 interface GeneratedImage {
@@ -55,6 +56,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const [selectedStyle, setSelectedStyle] = useState<string>("");
   const [graphicStyles, setGraphicStyles] = useState<GraphicStyles | null>(null);
   const [fullScreenImage, setFullScreenImage] = useState<GeneratedImage | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     // Load graphic styles from JSON
@@ -248,22 +250,9 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const currentGenerationType = graphicStyles?.generationTypes.find(t => t.id === selectedGenerationType);
   const availableStyles = currentGenerationType?.styles || [];
 
-  return (
+  const sideMenuContent = (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] p-0 overflow-hidden">
-          <div className="flex flex-col md:flex-row h-full min-h-0 overflow-hidden">
-            {/* Side Menu */}
-            <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-muted/30 flex flex-col h-full min-h-0 overflow-hidden">
-              <DialogHeader className="p-6 border-b flex-shrink-0">
-                <DialogTitle>Visual Generator</DialogTitle>
-                <DialogDescription className="text-xs">
-                  Create stunning visuals
-                </DialogDescription>
-              </DialogHeader>
-              
-              <ScrollArea className="flex-1 overflow-y-auto">
-                <div className="p-4 space-y-6 pb-6">
+      <div className="p-4 space-y-6 pb-6">
                 {/* Content Selection */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold">Content</Label>
@@ -330,7 +319,10 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                       {availableStyles.map(style => (
                         <Button
                           key={style.id}
-                          onClick={() => setSelectedStyle(style.id)}
+                          onClick={() => {
+                            setSelectedStyle(style.id);
+                            setMobileMenuOpen(false);
+                          }}
                           variant={selectedStyle === style.id ? "default" : "ghost"}
                           size="sm"
                           className="w-full justify-start text-xs"
@@ -342,13 +334,55 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                     </div>
                   </div>
                 )}
+      </div>
+    </>
+  );
 
-                </div>
-              </ScrollArea>
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] p-0 overflow-hidden">
+          <div className="flex flex-col h-full min-h-0 overflow-hidden">
+            {/* Mobile Menu Button */}
+            <div className="md:hidden flex items-center gap-2 p-4 border-b flex-shrink-0">
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Menu className="w-4 h-4 mr-2" />
+                    Options
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[280px] p-0">
+                  <SheetHeader className="p-6 border-b">
+                    <SheetTitle>Visual Generator</SheetTitle>
+                  </SheetHeader>
+                  <ScrollArea className="h-[calc(100vh-80px)]">
+                    {sideMenuContent}
+                  </ScrollArea>
+                </SheetContent>
+              </Sheet>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold">Visual Generator</h3>
+              </div>
             </div>
 
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {/* Side Menu - Desktop Only */}
+              <div className="hidden md:flex w-64 border-r bg-muted/30 flex-col h-full min-h-0 overflow-hidden">
+                <DialogHeader className="p-6 border-b flex-shrink-0">
+                  <DialogTitle>Visual Generator</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    Create stunning visuals
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <ScrollArea className="flex-1 overflow-y-auto">
+                  {sideMenuContent}
+                </ScrollArea>
+              </div>
+
+              {/* Main Content Area */}
+              <div className="flex-1 flex flex-col min-h-0">
               <div className="p-6 border-b flex-shrink-0">
                 <h3 className="text-lg font-semibold leading-none">Generated Visuals</h3>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -475,6 +509,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                 )}
               </Button>
               </div>
+            </div>
             </div>
           </div>
         </DialogContent>
