@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -26,7 +26,7 @@ interface AgentDefinition {
 }
 
 // Custom agent node component with connection handles
-function AgentNode({ data }: { data: any }) {
+function AgentNode({ data, id, selected }: { data: any; id: string; selected: boolean }) {
   // Color mapping from Tailwind classes to actual colors
   const colorMap: Record<string, string> = {
     'bg-blue-500': '#3b82f6',
@@ -43,20 +43,51 @@ function AgentNode({ data }: { data: any }) {
   };
 
   const bgColor = colorMap[data.color] || '#3b82f6';
+  const isExecuting = data.isExecuting || false;
 
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3" />
       <Card 
-        className="p-4 rounded-lg shadow-lg min-w-[180px] border-2" 
+        className={`p-4 rounded-lg shadow-lg min-w-[180px] border-2 transition-all ${
+          isExecuting ? 'ring-4 ring-yellow-400 animate-pulse' : ''
+        } ${selected ? 'ring-2 ring-white' : ''}`}
         style={{ 
           backgroundColor: bgColor,
           borderColor: bgColor,
           color: '#ffffff'
         }}
       >
-        <div className="font-semibold text-sm">{data.label || data.type}</div>
-        <div className="text-xs opacity-90 mt-1">{data.description}</div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-semibold text-sm">{data.label || data.type}</div>
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onPlay?.(id);
+              }}
+              className="w-6 h-6 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded transition-colors"
+              title="Execute from this agent"
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M3 2.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 8zm0 5.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onEdit?.(id);
+              }}
+              className="w-6 h-6 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded transition-colors"
+              title="Edit agent prompt"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="text-xs opacity-90">{data.description}</div>
       </Card>
       <Handle type="source" position={Position.Right} className="w-3 h-3" />
     </div>
@@ -70,9 +101,12 @@ const nodeTypes: NodeTypes = {
 interface AgentFlowProps {
   onFlowChange?: (nodes: Node[], edges: Edge[]) => void;
   agentDefinitions: AgentDefinition[];
+  executingAgentId?: string | null;
+  onEditAgent?: (nodeId: string) => void;
+  onPlayAgent?: (nodeId: string) => void;
 }
 
-export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
+export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, onEditAgent, onPlayAgent }: AgentFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -110,6 +144,8 @@ export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
           description: agent.description,
           systemPrompt: agent.systemPrompt,
           capabilities: agent.capabilities,
+          onEdit: onEditAgent,
+          onPlay: onPlayAgent,
         },
       };
 
@@ -126,7 +162,7 @@ export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
       setEdges((eds) => addEdge({ 
         ...connection, 
         animated: true, 
-        type: 'smoothstep',
+        type: 'bezier',
         markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 20,
@@ -147,6 +183,20 @@ export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
     }
   }, [nodes, edges, onFlowChange]);
 
+  // Update nodes with execution state
+  useEffect(() => {
+    setNodes((nds) => 
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          isExecuting: executingAgentId === node.data.type,
+          onEdit: onEditAgent,
+          onPlay: onPlayAgent,
+        },
+      }))
+    );
+  }, [executingAgentId, onEditAgent, onPlayAgent]);
 
   return (
     <div ref={reactFlowWrapper} className="h-full w-full bg-background">
@@ -164,7 +214,7 @@ export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
         fitView
         defaultEdgeOptions={{
           animated: true,
-          type: 'smoothstep',
+          type: 'bezier',
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 20,

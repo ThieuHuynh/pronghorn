@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Play, Square, Settings2, BarChart3, Grid3x3 } from 'lucide-react';
 import { AgentFlow } from './AgentFlow';
+import { AgentPromptEditDialog } from './AgentPromptEditDialog';
 import { ChangeLogViewer } from './ChangeLogViewer';
 import { IterationVisualizer } from './IterationVisualizer';
 import { ChangeHeatmap } from './ChangeHeatmap';
@@ -41,6 +42,9 @@ export function IterativeEnhancement({
   const [orchestratorEnabled, setOrchestratorEnabled] = useState(true);
   const [blackboard, setBlackboard] = useState<string[]>([]);
   const [agentDefinitions, setAgentDefinitions] = useState<any[]>([]);
+  const [executingAgentId, setExecutingAgentId] = useState<string | null>(null);
+  const [editingAgentNodeId, setEditingAgentNodeId] = useState<string | null>(null);
+  const [agentPrompts, setAgentPrompts] = useState<Record<string, { system: string; user: string }>>({});
 
   useEffect(() => {
     fetch('/data/buildAgents.json')
@@ -130,7 +134,7 @@ export function IterativeEnhancement({
     return false;
   };
 
-  const startIteration = async () => {
+  const startIteration = async (startFromNodeId?: string) => {
     if (!validateAgentFlow()) return;
 
     setIsRunning(true);
@@ -138,6 +142,7 @@ export function IterativeEnhancement({
     setChangeLogs([]);
     setMetrics([]);
     setBlackboard([]);
+    setExecutingAgentId(null);
 
     // FIX #2: Create AbortController for stopping
     const controller = new AbortController();
@@ -162,6 +167,8 @@ export function IterativeEnhancement({
             attachedContext: selectedContext,
             iterations,
             orchestratorEnabled,
+            startFromNodeId,
+            agentPrompts,
           }),
           signal: controller.signal,
         }
@@ -197,7 +204,10 @@ export function IterativeEnhancement({
 
             if (event.type === 'iteration_start') {
               setCurrentIteration(event.iteration);
+            } else if (event.type === 'agent_start') {
+              setExecutingAgentId(event.agentId);
             } else if (event.type === 'agent_complete') {
+              setExecutingAgentId(null);
               setChangeLogs((prev) => [...prev, event.changeLog]);
               setMetrics((prev) => [...prev, event.metric]);
               onArchitectureGenerated([], []); // Trigger refresh
@@ -235,8 +245,27 @@ export function IterativeEnhancement({
       setAbortController(null);
     }
     setIsRunning(false);
+    setExecutingAgentId(null);
     toast.info('Iteration stopped');
   };
+
+  const handleEditAgent = (nodeId: string) => {
+    setEditingAgentNodeId(nodeId);
+  };
+
+  const handlePlayAgent = (nodeId: string) => {
+    startIteration(nodeId);
+  };
+
+  const handleSaveAgentPrompt = (nodeId: string, systemPrompt: string, userPrompt: string) => {
+    setAgentPrompts((prev) => ({
+      ...prev,
+      [nodeId]: { system: systemPrompt, user: userPrompt },
+    }));
+  };
+
+  const editingNode = agentFlowNodes.find((n) => n.id === editingAgentNodeId);
+  const editingAgentPrompt = editingAgentNodeId ? agentPrompts[editingAgentNodeId] : null;
 
   const handleSaveAsArtifact = async () => {
     try {
@@ -370,7 +399,7 @@ export function IterativeEnhancement({
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-sm">Agent Flow Design</h3>
               {!isRunning ? (
-                <Button onClick={startIteration} size="sm">
+                <Button onClick={() => startIteration()} size="sm">
                   <Play className="w-4 h-4 mr-2" />
                   Start Iteration
                 </Button>
@@ -453,6 +482,29 @@ export function IterativeEnhancement({
         onClose={() => setShowProjectSelector(false)}
         onConfirm={handleContextConfirm}
       />
+
+      {/* Agent Prompt Edit Dialog */}
+      {editingAgentNodeId && (() => {
+        const editingNode = agentFlowNodes.find((n) => n.id === editingAgentNodeId);
+        const editingAgentPrompt = agentPrompts[editingAgentNodeId];
+        
+        return editingNode ? (
+          <AgentPromptEditDialog
+            open={true}
+            onOpenChange={(open) => !open && setEditingAgentNodeId(null)}
+            agentLabel={editingNode.data.label}
+            systemPrompt={editingAgentPrompt?.system || editingNode.data.systemPrompt}
+            userPrompt={editingAgentPrompt?.user || ""}
+            onSave={(system, user) => {
+              setAgentPrompts((prev) => ({
+                ...prev,
+                [editingAgentNodeId]: { system, user },
+              }));
+              setEditingAgentNodeId(null);
+            }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
