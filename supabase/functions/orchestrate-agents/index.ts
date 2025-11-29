@@ -51,6 +51,7 @@ serve(async (req) => {
       agentFlow,
       attachedContext,
       iterations,
+      orchestratorEnabled = true,
     } = await req.json();
 
     if (!projectId || !shareToken) {
@@ -91,6 +92,7 @@ serve(async (req) => {
           
           const changeLogs: ChangeLogEntry[] = [];
           const metrics: ChangeMetric[] = [];
+          const blackboard: string[] = []; // Shared memory for all agents
 
           // Run iterations
           for (let iteration = 1; iteration <= iterations; iteration++) {
@@ -139,6 +141,7 @@ serve(async (req) => {
                     attachedContext,
                     iteration,
                     capabilities: agentNode.data.capabilities, // FIX #3: Pass capabilities
+                    blackboard, // Pass shared memory
                   },
                   supabase,
                   LOVABLE_API_KEY
@@ -176,6 +179,39 @@ serve(async (req) => {
                   changeLog,
                   metric,
                 });
+
+                // Call orchestrator after each agent execution
+                if (orchestratorEnabled) {
+                  try {
+                    const orchestratorGuidance = await executeOrchestrator(
+                      {
+                        agentLabel: agentNode.data.label,
+                        changes: result.changes,
+                        reasoning: result.reasoning,
+                        currentNodes: currentNodes || [],
+                        currentEdges: currentEdges || [],
+                        attachedContext,
+                        blackboard,
+                        iteration,
+                      },
+                      LOVABLE_API_KEY
+                    );
+
+                    // Add to blackboard
+                    const blackboardEntry = `[Iteration ${iteration} - After ${agentNode.data.label}]: ${orchestratorGuidance}`;
+                    blackboard.push(blackboardEntry);
+
+                    send({
+                      type: 'blackboard_update',
+                      iteration,
+                      entry: blackboardEntry,
+                      blackboard: [...blackboard],
+                    });
+                  } catch (orchError) {
+                    console.error('Orchestrator error:', orchError);
+                    // Continue execution even if orchestrator fails
+                  }
+                }
               } catch (agentError) {
                 console.error(`Agent ${agentNode.data.label} error:`, agentError);
                 
@@ -202,6 +238,7 @@ serve(async (req) => {
                         attachedContext,
                         iteration,
                         capabilities: agentNode.data.capabilities,
+                        blackboard,
                       },
                       supabase,
                       LOVABLE_API_KEY
@@ -360,6 +397,14 @@ async function executeAgent(
   let contextPrompt = `Current Canvas State:\n`;
   contextPrompt += `- Nodes: ${context.currentNodes.length}\n`;
   contextPrompt += `- Edges: ${context.currentEdges.length}\n\n`;
+
+  // Add Blackboard memory if available
+  if (context.blackboard && context.blackboard.length > 0) {
+    contextPrompt += `\n=== SHARED BLACKBOARD MEMORY ===\n`;
+    contextPrompt += `The following guidance has been provided by the Orchestrator for all agents:\n\n`;
+    contextPrompt += context.blackboard.join('\n\n');
+    contextPrompt += `\n=== END BLACKBOARD ===\n\n`;
+  }
 
   if (context.attachedContext) {
     if (context.attachedContext.requirements?.length > 0) {
@@ -563,4 +608,72 @@ async function executeAgent(
       edgesDeleted,
     },
   };
+}
+
+async function executeOrchestrator(
+  context: {
+    agentLabel: string;
+    changes: string;
+    reasoning: string;
+    currentNodes: any[];
+    currentEdges: any[];
+    attachedContext: any;
+    blackboard: string[];
+    iteration: number;
+  },
+  apiKey: string
+): Promise<string> {
+  const orchestratorPrompt = `You are the Orchestrator supervising all agents working on this architecture.
+
+**Agent That Just Completed**: ${context.agentLabel}
+**Iteration**: ${context.iteration}
+
+**Their Changes**:
+${context.changes}
+
+**Their Reasoning**:
+${context.reasoning}
+
+**Current Architecture State**:
+- Total Nodes: ${context.currentNodes.length}
+- Total Edges: ${context.currentEdges.length}
+
+**Shared Blackboard Memory** (Previous guidance from earlier in this iteration):
+${context.blackboard.length > 0 ? context.blackboard.join('\n') : 'No previous guidance yet this iteration.'}
+
+${context.attachedContext?.requirements?.length > 0 ? `\n**Requirements to Fulfill**: ${context.attachedContext.requirements.length} requirements` : ''}
+${context.attachedContext?.standards?.length > 0 ? `\n**Standards to Meet**: ${context.attachedContext.standards.length} standards` : ''}
+
+**Your Task**: Provide brief guidance (2-3 sentences) for all agents to consider. Focus on:
+- Architectural coherence and consistency
+- Missing critical elements
+- Potential conflicts or issues
+- Next priorities
+
+Keep it concise and actionable. This will be added to the Blackboard that all subsequent agents can reference.`;
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are the Orchestrator supervising all agents. Review changes and provide brief guidance that all agents can reference. Focus on architectural coherence, missing elements, potential issues, and next priorities. Keep guidance to 2-3 sentences.' 
+        },
+        { role: 'user', content: orchestratorPrompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Orchestrator AI API error: ${response.status}`);
+  }
+
+  const aiData = await response.json();
+  return aiData.choices[0].message.content.trim();
 }

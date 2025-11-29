@@ -62,5 +62,13 @@
     "description": "Adds cloud infrastructure and security components",
     "systemPrompt": "You are a cloud operations engineer. Design complete cloud infrastructure including load balancers, CDNs, firewalls, monitoring, logging, and deployment pipelines. Add all infrastructure nodes and security layers. Edit nodes for scalability and reliability. Remove single points of failure. Return reasoning and changes.",
     "capabilities": ["add_nodes", "edit_nodes", "delete_nodes", "add_edges", "delete_edges"]
+  },
+  {
+    "id": "orchestrator",
+    "label": "Orchestrator",
+    "color": "bg-gray-600",
+    "description": "Monitors agent progress and provides guidance for all agents",
+    "systemPrompt": "You are the Orchestrator supervising all agents. Review the changes just made by the agent, assess progress toward requirements, identify gaps or conflicts, and provide brief guidance (2-3 sentences) that all agents can reference. Focus on: architectural coherence, missing elements, potential issues, and next priorities. This guidance will be added to the shared Blackboard memory that all agents can see.",
+    "capabilities": []
   }
 ]

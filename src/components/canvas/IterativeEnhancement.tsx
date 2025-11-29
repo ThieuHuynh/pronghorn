@@ -37,7 +37,9 @@ export function IterativeEnhancement({
   const [changeLogs, setChangeLogs] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap'>('chart'); // FIX #7
+  const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap'>('chart');
+  const [orchestratorEnabled, setOrchestratorEnabled] = useState(true);
+  const [blackboard, setBlackboard] = useState<string[]>([]);
 
   const handleFlowChange = (nodes: Node[], edges: Edge[]) => {
     setAgentFlowNodes(nodes);
@@ -122,6 +124,11 @@ export function IterativeEnhancement({
     setCurrentIteration(0);
     setChangeLogs([]);
     setMetrics([]);
+    setBlackboard([]);
+
+    // FIX #2: Create AbortController for stopping
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
       const response = await fetch(
@@ -141,7 +148,9 @@ export function IterativeEnhancement({
             },
             attachedContext: selectedContext,
             iterations,
+            orchestratorEnabled,
           }),
+          signal: controller.signal,
         }
       );
 
@@ -179,11 +188,14 @@ export function IterativeEnhancement({
               setChangeLogs((prev) => [...prev, event.changeLog]);
               setMetrics((prev) => [...prev, event.metric]);
               onArchitectureGenerated([], []); // Trigger refresh
+            } else if (event.type === 'blackboard_update') {
+              setBlackboard(event.blackboard || []);
             } else if (event.type === 'agent_error') {
               toast.error(`Agent error: ${event.error}`);
             } else if (event.type === 'complete') {
               toast.success(`Completed ${iterations} iterations!`);
               setIsRunning(false);
+              setAbortController(null);
             } else if (event.type === 'error') {
               throw new Error(event.message);
             }
@@ -195,12 +207,20 @@ export function IterativeEnhancement({
       }
     } catch (error) {
       console.error('Iteration error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to run iteration');
+      if (error instanceof Error && error.name !== 'AbortError') {
+        toast.error(error.message || 'Failed to run iteration');
+      }
       setIsRunning(false);
+      setAbortController(null);
     }
   };
 
   const stopIteration = () => {
+    // FIX #2: Abort the stream
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
     setIsRunning(false);
     toast.info('Iteration stopped');
   };
@@ -256,6 +276,20 @@ export function IterativeEnhancement({
               />
             </div>
 
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="orchestrator"
+                checked={orchestratorEnabled}
+                onChange={(e) => setOrchestratorEnabled(e.target.checked)}
+                disabled={isRunning}
+                className="w-4 h-4"
+              />
+              <Label htmlFor="orchestrator" className="text-sm">
+                Enable Orchestrator
+              </Label>
+            </div>
+
             <Button
               variant="outline"
               onClick={() => setShowProjectSelector(true)}
@@ -296,7 +330,7 @@ export function IterativeEnhancement({
       {/* Visualization and Change Log */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          {/* FIX #7: Visualization mode toggle */}
+          {/* Visualization mode toggle */}
           <div className="flex justify-end gap-2 mb-2">
             <Button
               size="sm"
@@ -335,6 +369,20 @@ export function IterativeEnhancement({
           onSaveAsArtifact={handleSaveAsArtifact}
         />
       </div>
+
+      {/* Blackboard Memory Display */}
+      {orchestratorEnabled && blackboard.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-semibold mb-2">Orchestrator Blackboard (Shared Memory)</h3>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {blackboard.map((entry, index) => (
+              <div key={index} className="p-2 bg-muted rounded text-sm">
+                {entry}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Project Selector Modal */}
       <ProjectSelector
