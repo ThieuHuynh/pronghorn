@@ -212,7 +212,7 @@ export function IterativeEnhancement({
               setExecutingAgentId(null);
               setChangeLogs((prev) => [...prev, event.changeLog]);
               setMetrics((prev) => [...prev, event.metric]);
-              onArchitectureGenerated([], []); // Trigger refresh
+              // Don't call onArchitectureGenerated - let real-time subscriptions handle canvas updates
             } else if (event.type === 'blackboard_update') {
               setBlackboard(event.blackboard || []);
             } else if (event.type === 'agent_error') {

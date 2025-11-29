@@ -418,27 +418,90 @@ async function executeAgent(
     contextPrompt += `\n=== END BLACKBOARD ===\n\n`;
   }
 
+  // FIX: Include ALL ProjectSelector context
   if (context.attachedContext) {
+    // Project Metadata
+    if (context.attachedContext.projectMetadata) {
+      contextPrompt += `=== PROJECT METADATA ===\n`;
+      const meta = context.attachedContext.projectMetadata;
+      contextPrompt += `Name: ${meta.name}\n`;
+      if (meta.description) contextPrompt += `Description: ${meta.description}\n`;
+      if (meta.organization) contextPrompt += `Organization: ${meta.organization}\n`;
+      if (meta.scope) contextPrompt += `Scope: ${meta.scope}\n`;
+      if (meta.budget) contextPrompt += `Budget: ${meta.budget}\n`;
+      contextPrompt += '\n';
+    }
+
+    // Artifacts
+    if (context.attachedContext.artifacts?.length > 0) {
+      contextPrompt += `=== ARTIFACTS (${context.attachedContext.artifacts.length}) ===\n`;
+      context.attachedContext.artifacts.forEach((artifact: any) => {
+        contextPrompt += `- [${artifact.ai_title || 'Untitled'}]\n`;
+        if (artifact.ai_summary) contextPrompt += `  Summary: ${artifact.ai_summary}\n`;
+        if (artifact.content) contextPrompt += `  Content: ${artifact.content.substring(0, 200)}${artifact.content.length > 200 ? '...' : ''}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    // Chat Sessions
+    if (context.attachedContext.chatSessions?.length > 0) {
+      contextPrompt += `=== CHAT SESSIONS (${context.attachedContext.chatSessions.length}) ===\n`;
+      context.attachedContext.chatSessions.forEach((session: any) => {
+        contextPrompt += `- [${session.ai_title || session.title || 'Untitled Chat'}]\n`;
+        if (session.ai_summary) contextPrompt += `  Summary: ${session.ai_summary}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    // Requirements
     if (context.attachedContext.requirements?.length > 0) {
-      contextPrompt += `Requirements (${context.attachedContext.requirements.length}):\n`;
+      contextPrompt += `=== REQUIREMENTS (${context.attachedContext.requirements.length}) ===\n`;
       context.attachedContext.requirements.forEach((req: any) => {
-        contextPrompt += `- ${req.title}: ${req.content || 'No description'}\n`;
+        contextPrompt += `- ${req.code || ''} ${req.title}: ${req.content || 'No description'}\n`;
       });
       contextPrompt += '\n';
     }
 
+    // Standards
     if (context.attachedContext.standards?.length > 0) {
-      contextPrompt += `Standards (${context.attachedContext.standards.length}):\n`;
+      contextPrompt += `=== STANDARDS (${context.attachedContext.standards.length}) ===\n`;
       context.attachedContext.standards.forEach((std: any) => {
-        contextPrompt += `- ${std.title}: ${std.description || 'No description'}\n`;
+        contextPrompt += `- ${std.code || ''} ${std.title}: ${std.description || 'No description'}\n`;
       });
       contextPrompt += '\n';
     }
 
+    // Tech Stacks
     if (context.attachedContext.techStacks?.length > 0) {
-      contextPrompt += `Tech Stacks (${context.attachedContext.techStacks.length}):\n`;
+      contextPrompt += `=== TECH STACKS (${context.attachedContext.techStacks.length}) ===\n`;
       context.attachedContext.techStacks.forEach((ts: any) => {
         contextPrompt += `- ${ts.name}: ${ts.description || 'No description'}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    // Canvas Context (nodes/edges/layers from ProjectSelector)
+    if (context.attachedContext.canvasNodes?.length > 0) {
+      contextPrompt += `=== SELECTED CANVAS NODES (${context.attachedContext.canvasNodes.length}) ===\n`;
+      context.attachedContext.canvasNodes.forEach((node: any) => {
+        contextPrompt += `- ${node.data?.label || 'Unnamed'} (${node.type})\n`;
+        if (node.data?.description) contextPrompt += `  Description: ${node.data.description}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    if (context.attachedContext.canvasEdges?.length > 0) {
+      contextPrompt += `=== SELECTED CANVAS EDGES (${context.attachedContext.canvasEdges.length}) ===\n`;
+      context.attachedContext.canvasEdges.forEach((edge: any) => {
+        contextPrompt += `- ${edge.source_id} -> ${edge.target_id}${edge.label ? ` (${edge.label})` : ''}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    if (context.attachedContext.canvasLayers?.length > 0) {
+      contextPrompt += `=== SELECTED CANVAS LAYERS (${context.attachedContext.canvasLayers.length}) ===\n`;
+      context.attachedContext.canvasLayers.forEach((layer: any) => {
+        contextPrompt += `- ${layer.name} (${layer.node_ids?.length || 0} nodes)\n`;
       });
       contextPrompt += '\n';
     }
