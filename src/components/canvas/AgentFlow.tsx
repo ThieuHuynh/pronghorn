@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, memo } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -106,7 +106,8 @@ interface AgentFlowProps {
   onPlayAgent?: (nodeId: string) => void;
 }
 
-export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, onEditAgent, onPlayAgent }: AgentFlowProps) {
+// Memoize to prevent re-renders when parent updates
+export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, onEditAgent, onPlayAgent }: AgentFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -235,4 +236,4 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
       </ReactFlow>
     </div>
   );
-}
+});

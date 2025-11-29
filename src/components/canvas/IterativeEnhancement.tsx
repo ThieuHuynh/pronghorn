@@ -8,7 +8,6 @@ import { Play, Square, Settings2, BarChart3, Grid3x3, MessageSquare } from 'luci
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentFlow } from './AgentFlow';
 import { AgentPromptEditDialog } from './AgentPromptEditDialog';
-import { ChangeLogViewer } from './ChangeLogViewer';
 import { IterationVisualizer } from './IterationVisualizer';
 import { ChangeHeatmap } from './ChangeHeatmap';
 import { BlackboardViewer } from './BlackboardViewer';
@@ -444,61 +443,57 @@ export function IterativeEnhancement({
           </div>
         </Card>
 
-        {/* Visualization and Change Log */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            {/* Visualization mode toggle */}
-            <div className="flex justify-end gap-2 mb-2">
-              <Button
-                size="sm"
-                variant={visualizationMode === 'chart' ? 'default' : 'outline'}
-                onClick={() => setVisualizationMode('chart')}
-              >
-                <BarChart3 className="w-4 h-4 mr-2" />
-                Chart
-              </Button>
-              <Button
-                size="sm"
-                variant={visualizationMode === 'heatmap' ? 'default' : 'outline'}
-                onClick={() => setVisualizationMode('heatmap')}
-              >
-                <Grid3x3 className="w-4 h-4 mr-2" />
-                Heatmap
-              </Button>
-              <Button
-                size="sm"
-                variant={visualizationMode === 'blackboard' ? 'default' : 'outline'}
-                onClick={() => setVisualizationMode('blackboard')}
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Blackboard
-              </Button>
-            </div>
-            
-            {visualizationMode === 'chart' ? (
-              <IterationVisualizer
-                metrics={metrics}
-                currentIteration={currentIteration}
-                totalIterations={iterations}
-              />
-            ) : visualizationMode === 'heatmap' ? (
-              <ChangeHeatmap
-                metrics={metrics}
-                currentIteration={currentIteration}
-                totalIterations={iterations}
-              />
-            ) : (
-              <BlackboardViewer
-                blackboard={blackboard}
-                currentIteration={currentIteration}
-                totalIterations={iterations}
-              />
-            )}
+        {/* Visualization - Full Width */}
+        <div className="space-y-2">
+          {/* Visualization mode toggle */}
+          <div className="flex justify-end gap-2 mb-2">
+            <Button
+              size="sm"
+              variant={visualizationMode === 'chart' ? 'default' : 'outline'}
+              onClick={() => setVisualizationMode('chart')}
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Chart
+            </Button>
+            <Button
+              size="sm"
+              variant={visualizationMode === 'heatmap' ? 'default' : 'outline'}
+              onClick={() => setVisualizationMode('heatmap')}
+            >
+              <Grid3x3 className="w-4 h-4 mr-2" />
+              Heatmap
+            </Button>
+            <Button
+              size="sm"
+              variant={visualizationMode === 'blackboard' ? 'default' : 'outline'}
+              onClick={() => setVisualizationMode('blackboard')}
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Blackboard
+            </Button>
           </div>
-          <ChangeLogViewer
-            logs={changeLogs}
-            onSaveAsArtifact={handleSaveAsArtifact}
-          />
+          
+          {visualizationMode === 'chart' ? (
+            <IterationVisualizer
+              metrics={metrics}
+              currentIteration={currentIteration}
+              totalIterations={iterations}
+              changeLogs={changeLogs}
+              onSaveAsArtifact={handleSaveAsArtifact}
+            />
+          ) : visualizationMode === 'heatmap' ? (
+            <ChangeHeatmap
+              metrics={metrics}
+              currentIteration={currentIteration}
+              totalIterations={iterations}
+            />
+          ) : (
+            <BlackboardViewer
+              blackboard={blackboard}
+              currentIteration={currentIteration}
+              totalIterations={iterations}
+            />
+          )}
         </div>
       </div>
 
