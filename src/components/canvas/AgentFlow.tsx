@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -49,19 +49,57 @@ const nodeTypes: NodeTypes = {
 
 interface AgentFlowProps {
   onFlowChange?: (nodes: Node[], edges: Edge[]) => void;
+  agentDefinitions: AgentDefinition[];
 }
 
-export function AgentFlow({ onFlowChange }: AgentFlowProps) {
+export function AgentFlow({ onFlowChange, agentDefinitions }: AgentFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [agentDefinitions, setAgentDefinitions] = useState<AgentDefinition[]>([]);
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
-  useEffect(() => {
-    fetch('/data/buildAgents.json')
-      .then(res => res.json())
-      .then(data => setAgentDefinitions(data))
-      .catch(err => console.error('Error loading agent definitions:', err));
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
   }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      if (!reactFlowInstance || !reactFlowWrapper.current) return;
+
+      const agentData = event.dataTransfer.getData('application/reactflow');
+      if (!agentData) return;
+
+      const agent: AgentDefinition = JSON.parse(agentData);
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      });
+
+      const newNode: Node = {
+        id: `${agent.id}-${Date.now()}`,
+        type: 'agent',
+        position,
+        data: {
+          type: agent.id,
+          label: agent.label,
+          color: agent.color,
+          description: agent.description,
+          systemPrompt: agent.systemPrompt,
+          capabilities: agent.capabilities,
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      if (onFlowChange) {
+        onFlowChange([...nodes, newNode], edges);
+      }
+    },
+    [reactFlowInstance, nodes, edges, onFlowChange, setNodes]
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -89,73 +127,35 @@ export function AgentFlow({ onFlowChange }: AgentFlowProps) {
     }
   }, [nodes, edges, onFlowChange]);
 
-  const addAgentNode = useCallback((agentDef: AgentDefinition) => {
-    const newNode: Node = {
-      id: `${agentDef.id}-${Date.now()}`,
-      type: 'agent',
-      position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 },
-      data: { 
-        type: agentDef.id,
-        label: agentDef.label,
-        color: agentDef.color,
-        description: agentDef.description,
-        systemPrompt: agentDef.systemPrompt,
-        capabilities: agentDef.capabilities,
-      },
-    };
-    setNodes((nds) => [...nds, newNode]);
-    if (onFlowChange) {
-      onFlowChange([...nodes, newNode], edges);
-    }
-  }, [nodes, edges, onFlowChange, setNodes]);
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Agent Palette */}
-      <div className="w-64 space-y-2 overflow-y-auto pr-2">
-        <h3 className="font-semibold text-sm mb-3">Agent Types</h3>
-        {agentDefinitions.map((agent) => (
-          <Card
-            key={agent.id}
-            className="p-3 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => addAgentNode(agent)}
-          >
-            <div 
-              className="w-3 h-3 rounded-full inline-block mr-2" 
-              style={{ backgroundColor: agent.color }}
-            />
-            <span className="font-medium text-sm">{agent.label}</span>
-            <p className="text-xs text-muted-foreground mt-1">{agent.description}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* React Flow Canvas */}
-      <div className="flex-1 bg-background">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStop={onNodeDragStop}
-          nodeTypes={nodeTypes}
-          fitView
-          defaultEdgeOptions={{
-            animated: true,
-            type: 'smoothstep',
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              width: 20,
-              height: 20,
-            },
-            style: { strokeWidth: 2 }
-          }}
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
-      </div>
+    <div ref={reactFlowWrapper} className="h-full w-full bg-background">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeDragStop={onNodeDragStop}
+        onInit={setReactFlowInstance}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        nodeTypes={nodeTypes}
+        fitView
+        defaultEdgeOptions={{
+          animated: true,
+          type: 'smoothstep',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+          },
+          style: { strokeWidth: 2 }
+        }}
+      >
+        <Background />
+        <Controls />
+      </ReactFlow>
     </div>
   );
 }

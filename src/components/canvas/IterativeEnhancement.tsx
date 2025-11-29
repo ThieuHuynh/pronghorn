@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,19 @@ export function IterativeEnhancement({
   const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap'>('chart');
   const [orchestratorEnabled, setOrchestratorEnabled] = useState(true);
   const [blackboard, setBlackboard] = useState<string[]>([]);
+  const [agentDefinitions, setAgentDefinitions] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/data/buildAgents.json')
+      .then(res => res.json())
+      .then(data => setAgentDefinitions(data))
+      .catch(err => console.error('Error loading agent definitions:', err));
+  }, []);
+
+  const onDragStart = (event: React.DragEvent, agent: any) => {
+    event.dataTransfer.setData('application/reactflow', JSON.stringify(agent));
+    event.dataTransfer.effectAllowed = 'move';
+  };
 
   const handleFlowChange = (nodes: Node[], edges: Edge[]) => {
     setAgentFlowNodes(nodes);
@@ -324,19 +337,27 @@ export function IterativeEnhancement({
             />
           </div>
 
-          {/* Start/Stop Button */}
-          <div className="pt-4 border-t">
-            {!isRunning ? (
-              <Button onClick={startIteration} className="w-full" size="sm">
-                <Play className="w-4 h-4 mr-2" />
-                Start Iteration
-              </Button>
-            ) : (
-              <Button variant="destructive" onClick={stopIteration} className="w-full" size="sm">
-                <Square className="w-4 h-4 mr-2" />
-                Stop
-              </Button>
-            )}
+          {/* Agent Types */}
+          <div className="space-y-2 pt-4 border-t">
+            <h3 className="font-semibold text-sm mb-3">Agent Types</h3>
+            <p className="text-xs text-muted-foreground mb-2">Drag agents onto canvas</p>
+            <div className="space-y-2">
+              {agentDefinitions.map((agent) => (
+                <div
+                  key={agent.id}
+                  draggable
+                  onDragStart={(e) => onDragStart(e, agent)}
+                  className="p-3 border rounded-lg cursor-move hover:shadow-md transition-shadow bg-card"
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full inline-block mr-2" 
+                    style={{ backgroundColor: agent.color }}
+                  />
+                  <span className="font-medium text-sm">{agent.label}</span>
+                  <p className="text-xs text-muted-foreground mt-1">{agent.description}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -346,9 +367,22 @@ export function IterativeEnhancement({
         {/* Agent Flow Canvas */}
         <Card className="flex-shrink-0">
           <div className="p-4">
-            <h3 className="font-semibold mb-4 text-sm">Agent Flow Design</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-sm">Agent Flow Design</h3>
+              {!isRunning ? (
+                <Button onClick={startIteration} size="sm">
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Iteration
+                </Button>
+              ) : (
+                <Button variant="destructive" onClick={stopIteration} size="sm">
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              )}
+            </div>
             <div className="h-[500px] border rounded-lg overflow-hidden">
-              <AgentFlow onFlowChange={handleFlowChange} />
+              <AgentFlow onFlowChange={handleFlowChange} agentDefinitions={agentDefinitions} />
             </div>
           </div>
         </Card>
