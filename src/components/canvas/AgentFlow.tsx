@@ -127,10 +127,12 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
       if (!agentData) return;
 
       const agent: AgentDefinition = JSON.parse(agentData);
-      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      
+      // Use screenToFlowPosition with raw client coordinates
+      // This automatically accounts for zoom and pan
       const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX - bounds.left,
-        y: event.clientY - bounds.top,
+        x: event.clientX,
+        y: event.clientY,
       });
 
       const newNode: Node = {
@@ -154,7 +156,7 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
         onFlowChange([...nodes, newNode], edges);
       }
     },
-    [reactFlowInstance, nodes, edges, onFlowChange, setNodes]
+    [reactFlowInstance, nodes, edges, onFlowChange, setNodes, onEditAgent, onPlayAgent]
   );
 
   const onConnect = useCallback(

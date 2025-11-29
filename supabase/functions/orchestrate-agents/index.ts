@@ -632,8 +632,11 @@ async function executeAgent(
           p_source_id: edgeData.source,
           p_target_id: edgeData.target,
           p_label: edgeData.label || '',
-          p_edge_type: 'bezier',
-          p_style: {},
+          p_edge_type: 'default',
+          p_style: {
+            stroke: 'hsl(var(--primary))',
+            strokeWidth: 2,
+          },
         });
         
         if (error) {

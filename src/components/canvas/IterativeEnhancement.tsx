@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Play, Square, Settings2, BarChart3, Grid3x3 } from 'lucide-react';
+import { Play, Square, Settings2, BarChart3, Grid3x3, AlignLeft } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentFlow } from './AgentFlow';
 import { AgentPromptEditDialog } from './AgentPromptEditDialog';
 import { ChangeLogViewer } from './ChangeLogViewer';
@@ -38,7 +39,7 @@ export function IterativeEnhancement({
   const [changeLogs, setChangeLogs] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap'>('chart');
+  const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap' | 'blackboard'>('chart');
   const [orchestratorEnabled, setOrchestratorEnabled] = useState(true);
   const [blackboard, setBlackboard] = useState<string[]>([]);
   const [agentDefinitions, setAgentDefinitions] = useState<any[]>([]);
@@ -458,20 +459,6 @@ export function IterativeEnhancement({
             onSaveAsArtifact={handleSaveAsArtifact}
           />
         </div>
-
-        {/* Blackboard Memory Display */}
-        {orchestratorEnabled && blackboard.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-2 text-sm">Orchestrator Blackboard (Shared Memory)</h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {blackboard.map((entry, index) => (
-                <div key={index} className="p-2 bg-muted rounded text-sm">
-                  {entry}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
 
       {/* Project Selector Modal */}
