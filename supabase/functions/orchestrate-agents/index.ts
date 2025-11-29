@@ -52,6 +52,8 @@ serve(async (req) => {
       attachedContext,
       iterations,
       orchestratorEnabled = true,
+      startFromNodeId,
+      agentPrompts = {},
     } = await req.json();
 
     if (!projectId || !shareToken) {
@@ -88,7 +90,15 @@ serve(async (req) => {
           if (projectError) throw projectError;
 
           // Get execution order from agent flow edges
-          const executionOrder = buildExecutionOrder(agentFlow.nodes, agentFlow.edges);
+          let executionOrder = buildExecutionOrder(agentFlow.nodes, agentFlow.edges);
+          
+          // If startFromNodeId is specified, start execution from that node
+          if (startFromNodeId) {
+            const startIndex = executionOrder.findIndex((n) => n.id === startFromNodeId);
+            if (startIndex > 0) {
+              executionOrder = executionOrder.slice(startIndex);
+            }
+          }
           
           const changeLogs: ChangeLogEntry[] = [];
           const metrics: ChangeMetric[] = [];
@@ -140,8 +150,9 @@ serve(async (req) => {
                     currentEdges: currentEdges || [],
                     attachedContext,
                     iteration,
-                    capabilities: agentNode.data.capabilities, // FIX #3: Pass capabilities
-                    blackboard, // Pass shared memory
+                    capabilities: agentNode.data.capabilities,
+                    blackboard,
+                    customPrompt: agentPrompts[agentNode.id], // Pass custom prompts
                   },
                   supabase,
                   LOVABLE_API_KEY
@@ -390,7 +401,8 @@ async function executeAgent(
   supabase: any,
   apiKey: string
 ) {
-  const systemPrompt = agentNode.data.systemPrompt;
+  const systemPrompt = context.customPrompt?.system || agentNode.data.systemPrompt;
+  const userAddition = context.customPrompt?.user || '';
   const capabilities = context.capabilities || [];
   
   // Build context prompt
@@ -452,6 +464,10 @@ async function executeAgent(
   contextPrompt += `  "edgesToAdd": [{ "source": "node-uuid-1", "target": "node-uuid-2", "label": "Connection" }],\n`;
   contextPrompt += `  "edgesToDelete": ["edge-uuid-1"]\n`;
   contextPrompt += `}\n`;
+  
+  if (userAddition) {
+    contextPrompt += `\n=== ADDITIONAL INSTRUCTIONS ===\n${userAddition}\n=== END ADDITIONAL INSTRUCTIONS ===\n`;
+  }
 
   // Call AI
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -475,7 +491,28 @@ async function executeAgent(
   }
 
   const aiData = await response.json();
-  const aiResponse = JSON.parse(aiData.choices[0].message.content);
+  
+  // Robust JSON extraction - handles markdown code blocks and extra text
+  let aiResponse;
+  try {
+    const content = aiData.choices[0].message.content;
+    console.log('Raw AI response:', content);
+    
+    // Try to extract JSON from markdown code blocks
+    const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    if (jsonMatch) {
+      aiResponse = JSON.parse(jsonMatch[1]);
+      console.log('Extracted JSON from markdown:', aiResponse);
+    } else {
+      // Try direct JSON parse
+      aiResponse = JSON.parse(content);
+      console.log('Parsed JSON directly:', aiResponse);
+    }
+  } catch (parseError) {
+    console.error('Failed to parse AI response:', parseError);
+    console.error('Raw content:', aiData.choices[0].message.content);
+    throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+  }
 
   // Apply changes via RPC
   let nodesAdded = 0, nodesEdited = 0, nodesDeleted = 0;
@@ -490,16 +527,26 @@ async function executeAgent(
 
   // Add nodes
   if (aiResponse.nodesToAdd && canAddNodes) {
+    console.log(`Adding ${aiResponse.nodesToAdd.length} nodes...`);
     for (const nodeData of aiResponse.nodesToAdd) {
       try {
-        await supabase.rpc('upsert_canvas_node_with_token', {
-          p_id: crypto.randomUUID(),
+        const newNodeId = crypto.randomUUID();
+        console.log(`Creating node ${newNodeId}:`, nodeData);
+        
+        const { data, error } = await supabase.rpc('upsert_canvas_node_with_token', {
+          p_id: newNodeId,
           p_project_id: context.projectId,
           p_token: context.shareToken,
           p_type: nodeData.type || 'COMPONENT',
           p_position: { x: Math.random() * 500, y: Math.random() * 500 },
           p_data: { label: nodeData.label, description: nodeData.description },
         });
+        
+        if (error) {
+          console.error('Error adding node:', error);
+          throw error;
+        }
+        console.log('Node added successfully:', data);
         nodesAdded++;
       } catch (err) {
         console.error('Error adding node:', err);
@@ -511,11 +558,14 @@ async function executeAgent(
 
   // Edit nodes
   if (aiResponse.nodesToEdit && canEditNodes) {
+    console.log(`Editing ${aiResponse.nodesToEdit.length} nodes...`);
     for (const edit of aiResponse.nodesToEdit) {
       try {
         const existingNode = context.currentNodes.find((n: any) => n.id === edit.id);
         if (existingNode) {
-          await supabase.rpc('upsert_canvas_node_with_token', {
+          console.log(`Updating node ${edit.id}:`, edit.updates);
+          
+          const { data, error } = await supabase.rpc('upsert_canvas_node_with_token', {
             p_id: edit.id,
             p_project_id: context.projectId,
             p_token: context.shareToken,
@@ -523,7 +573,15 @@ async function executeAgent(
             p_position: existingNode.position,
             p_data: { ...existingNode.data, ...edit.updates },
           });
+          
+          if (error) {
+            console.error('Error editing node:', error);
+            throw error;
+          }
+          console.log('Node edited successfully:', data);
           nodesEdited++;
+        } else {
+          console.warn(`Node ${edit.id} not found in current nodes`);
         }
       } catch (err) {
         console.error('Error editing node:', err);
@@ -535,12 +593,21 @@ async function executeAgent(
 
   // Delete nodes
   if (aiResponse.nodesToDelete && canDeleteNodes) {
+    console.log(`Deleting ${aiResponse.nodesToDelete.length} nodes...`);
     for (const nodeId of aiResponse.nodesToDelete) {
       try {
-        await supabase.rpc('delete_canvas_node_with_token', {
+        console.log(`Deleting node ${nodeId}...`);
+        
+        const { error } = await supabase.rpc('delete_canvas_node_with_token', {
           p_id: nodeId,
           p_token: context.shareToken,
         });
+        
+        if (error) {
+          console.error('Error deleting node:', error);
+          throw error;
+        }
+        console.log('Node deleted successfully');
         nodesDeleted++;
       } catch (err) {
         console.error('Error deleting node:', err);
@@ -552,18 +619,28 @@ async function executeAgent(
 
   // Add edges
   if (aiResponse.edgesToAdd && canAddEdges) {
+    console.log(`Adding ${aiResponse.edgesToAdd.length} edges...`);
     for (const edgeData of aiResponse.edgesToAdd) {
       try {
-        await supabase.rpc('upsert_canvas_edge_with_token', {
-          p_id: crypto.randomUUID(),
+        const newEdgeId = crypto.randomUUID();
+        console.log(`Creating edge ${newEdgeId}:`, edgeData);
+        
+        const { data, error } = await supabase.rpc('upsert_canvas_edge_with_token', {
+          p_id: newEdgeId,
           p_project_id: context.projectId,
           p_token: context.shareToken,
           p_source_id: edgeData.source,
           p_target_id: edgeData.target,
           p_label: edgeData.label || '',
-          p_edge_type: 'smoothstep',
+          p_edge_type: 'bezier',
           p_style: {},
         });
+        
+        if (error) {
+          console.error('Error adding edge:', error);
+          throw error;
+        }
+        console.log('Edge added successfully:', data);
         edgesAdded++;
       } catch (err) {
         console.error('Error adding edge:', err);
@@ -575,12 +652,21 @@ async function executeAgent(
 
   // Delete edges
   if (aiResponse.edgesToDelete && canDeleteEdges) {
+    console.log(`Deleting ${aiResponse.edgesToDelete.length} edges...`);
     for (const edgeId of aiResponse.edgesToDelete) {
       try {
-        await supabase.rpc('delete_canvas_edge_with_token', {
+        console.log(`Deleting edge ${edgeId}...`);
+        
+        const { error } = await supabase.rpc('delete_canvas_edge_with_token', {
           p_id: edgeId,
           p_token: context.shareToken,
         });
+        
+        if (error) {
+          console.error('Error deleting edge:', error);
+          throw error;
+        }
+        console.log('Edge deleted successfully');
         edgesDeleted++;
       } catch (err) {
         console.error('Error deleting edge:', err);
