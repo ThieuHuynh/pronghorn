@@ -126,6 +126,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
               source: payload.new.source_id,
               target: payload.new.target_id,
               label: payload.new.label,
+              type: payload.new.edge_type || 'default',
+              style: payload.new.style || {},
             };
             setEdges((eds) => [...eds, newEdge]);
           } else if (payload.eventType === 'DELETE' && payload.old) {
@@ -138,6 +140,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
                     source: payload.new.source_id,
                     target: payload.new.target_id,
                     label: payload.new.label,
+                    type: payload.new.edge_type || edge.type || 'default',
+                    style: payload.new.style || edge.style || {},
                   }
                 : edge
             ));
