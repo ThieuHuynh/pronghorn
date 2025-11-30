@@ -142,6 +142,19 @@ export function StandardsTreeSelector({
     setExpandedStandards(newExpanded);
   };
 
+  const handleSelectAll = () => {
+    const allIds = new Set<string>();
+    categories.forEach((category) => {
+      const categoryIds = getAllCategoryStandards(category.standards);
+      categoryIds.forEach((id) => allIds.add(id));
+    });
+    onSelectionChange(allIds);
+  };
+
+  const handleSelectNone = () => {
+    onSelectionChange(new Set());
+  };
+
   const renderStandard = (standard: Standard, level: number = 0) => {
     const isExpanded = expandedStandards.has(standard.id);
     const hasChildren = standard.children && standard.children.length > 0;
@@ -193,8 +206,17 @@ export function StandardsTreeSelector({
   };
 
   return (
-    <div className="space-y-2">
-      {categories.map((category) => {
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={handleSelectAll}>
+          Select All
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleSelectNone}>
+          Select None
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {categories.map((category) => {
         const isExpanded = expandedCategories.has(category.id);
         const hasStandards = category.standards.length > 0;
         const allSelected = areAllCategoryStandardsSelected(category.standards);
@@ -242,6 +264,7 @@ export function StandardsTreeSelector({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
