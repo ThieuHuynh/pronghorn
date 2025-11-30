@@ -162,23 +162,21 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
 
   if (!node) return null;
 
-  if (!isOpen) {
-    return (
-      <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full z-50 animate-slide-in-right">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="h-8 w-8"
-        >
-          <ChevronRight className="h-4 w-4 rotate-180" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-80 border-l border-border bg-card flex flex-col h-full z-50 animate-slide-in-right">
+    <div className={`border-l border-border bg-card flex flex-col h-full z-50 transition-all duration-300 ${isOpen ? 'w-80' : 'w-12'}`}>
+      {!isOpen ? (
+        <div className="flex flex-col items-center py-4 h-full">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="h-8 w-8"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+          </Button>
+        </div>
+      ) : (
+        <>
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <h3 className="font-semibold text-lg">Node Properties</h3>
         <Button variant="ghost" size="icon" onClick={onToggle}>
@@ -329,6 +327,8 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
           </Button>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

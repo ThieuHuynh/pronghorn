@@ -100,21 +100,6 @@ export function CanvasPalette({
     "TECH_STACK",
   ];
 
-  if (isCollapsed) {
-    return (
-      <div className="w-12 border-r border-border bg-card flex flex-col items-center py-4 h-full animate-slide-in-left">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsCollapsed(false)}
-          className="h-8 w-8"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  }
-
   const handleToggleAllLayers = () => {
     const allVisible = layers.every((layer) => layer.visible);
     layers.forEach((layer) => {
@@ -123,7 +108,20 @@ export function CanvasPalette({
   };
 
   return (
-    <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden animate-slide-in-left">
+    <div className={`border-r border-border bg-card flex flex-col h-full overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-80'}`}>
+      {isCollapsed ? (
+        <div className="flex flex-col items-center py-4 h-full">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsCollapsed(false)}
+            className="h-8 w-8"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <>
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <Button
@@ -230,6 +228,8 @@ export function CanvasPalette({
         </Accordion>
         </div>
       </ScrollArea>
+        </>
+      )}
     </div>
   );
 }
