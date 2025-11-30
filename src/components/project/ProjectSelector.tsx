@@ -229,6 +229,7 @@ export function ProjectSelector({
 
   const loadProjectTechStacks = async () => {
     try {
+      // Get project-linked tech stack IDs (includes both parents and children)
       const { data: projectTechStacks } = await supabase.rpc(
         "get_project_tech_stacks_with_token",
         {
@@ -241,12 +242,18 @@ export function ProjectSelector({
 
       const linkedStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
 
-      const { data: stacks } = await supabase
+      // Load only top-level tech stack categories (parent_id IS NULL and type IS NULL)
+      const { data: parentStacks } = await supabase
         .from("tech_stacks")
         .select("*")
-        .in("id", linkedStackIds);
+        .is("parent_id", null)
+        .is("type", null)
+        .order("name");
 
-      setTechStacks(stacks || []);
+      setTechStacks(parentStacks || []);
+      
+      // Pre-select the linked tech stack IDs
+      setSelectedTechStacks(new Set(linkedStackIds));
     } catch (error) {
       console.error("Error loading tech stacks:", error);
     }
@@ -505,12 +512,12 @@ export function ProjectSelector({
       case "techStacks":
         return techStacks.length > 0 ? (
           <TechStackTreeSelector
-            techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
+            techStacks={techStacks}
             selectedItems={selectedTechStacks}
             onSelectionChange={setSelectedTechStacks}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">No tech stacks linked to this project.</p>
+          <p className="text-sm text-muted-foreground">No tech stacks available.</p>
         );
 
       case "canvas":
