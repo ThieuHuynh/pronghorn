@@ -130,7 +130,7 @@ export default function Standards() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Get existing project standards and tech stacks to delete
+      // Get existing project standards and tech stacks
       const { data: existingStandards } = await supabase.rpc("get_project_standards_with_token", {
         p_project_id: projectId!,
         p_token: shareToken || null
@@ -141,59 +141,54 @@ export default function Standards() {
         p_token: shareToken || null
       });
 
-      // Delete all existing project standards
-      if (existingStandards && existingStandards.length > 0) {
-        for (const existing of existingStandards) {
-          await supabase.rpc("delete_project_standard_with_token", {
-            p_id: existing.id,
-            p_token: shareToken || null
-          });
-        }
-      }
+      // Calculate deltas for standards
+      const existingStandardIds = new Set(existingStandards?.map(ps => ps.standard_id) || []);
+      const standardsToAdd = Array.from(selectedStandards).filter(id => !existingStandardIds.has(id));
+      const standardsToRemove = (existingStandards || []).filter(ps => !selectedStandards.has(ps.standard_id));
 
-      // Insert new selections for standards
-      if (selectedStandards.size > 0) {
-        for (const standardId of Array.from(selectedStandards)) {
-          await supabase.rpc("insert_project_standard_with_token", {
-            p_project_id: projectId!,
-            p_token: shareToken || null,
-            p_standard_id: standardId
-          });
-        }
-      }
+      // Calculate deltas for tech stacks
+      const existingTechStackIds = new Set(existingTechStacks?.map(pts => pts.tech_stack_id) || []);
+      const techStacksToAdd = Array.from(selectedTechStacks).filter(id => !existingTechStackIds.has(id));
+      const techStacksToRemove = (existingTechStacks || []).filter(pts => !selectedTechStacks.has(pts.tech_stack_id));
 
-      // Delete all existing project tech stacks
-      if (existingTechStacks && existingTechStacks.length > 0) {
-        for (const existing of existingTechStacks) {
-          await supabase.rpc("delete_project_tech_stack_with_token", {
-            p_id: existing.id,
-            p_token: shareToken || null
-          });
-        }
-      }
-
-      // Insert new selections for tech stacks (parent tech stack IDs only)
-      if (selectedTechStacks.size > 0) {
-        // Convert selected item IDs back to parent tech stack IDs
-        const parentTechStackIds = new Set<string>();
-        techStacks.forEach(stack => {
-          // If any item from this tech stack is selected, include the tech stack
-          if (selectedTechStacks.has(stack.id)) {
-            parentTechStackIds.add(stack.id);
-          }
+      // Delete only removed standards
+      for (const existing of standardsToRemove) {
+        await supabase.rpc("delete_project_standard_with_token", {
+          p_id: existing.id,
+          p_token: shareToken || null
         });
+      }
 
-        for (const techStackId of Array.from(parentTechStackIds)) {
-          await supabase.rpc("insert_project_tech_stack_with_token", {
-            p_project_id: projectId!,
-            p_token: shareToken || null,
-            p_tech_stack_id: techStackId
-          });
-        }
+      // Insert only new standards
+      for (const standardId of standardsToAdd) {
+        await supabase.rpc("insert_project_standard_with_token", {
+          p_project_id: projectId!,
+          p_token: shareToken || null,
+          p_standard_id: standardId
+        });
+      }
+
+      // Delete only removed tech stacks
+      for (const existing of techStacksToRemove) {
+        await supabase.rpc("delete_project_tech_stack_with_token", {
+          p_id: existing.id,
+          p_token: shareToken || null
+        });
+      }
+
+      // Insert only new tech stacks
+      for (const techStackId of techStacksToAdd) {
+        await supabase.rpc("insert_project_tech_stack_with_token", {
+          p_project_id: projectId!,
+          p_token: shareToken || null,
+          p_tech_stack_id: techStackId
+        });
       }
 
       toast.success("Project standards saved successfully");
+      await loadData(); // Refresh to confirm changes
     } catch (error: any) {
+      console.error("Save error:", error);
       toast.error("Failed to save: " + error.message);
     } finally {
       setSaving(false);
