@@ -239,52 +239,58 @@ export function ProjectSelector({
         }
       );
 
-      if (!projectTechStacks) return;
-
-      const linkedStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
-
-      // Store all linked tech stack item IDs so the tree can filter to project-linked items only
-      setLinkedTechStackIds(new Set(linkedStackIds));
-
-      // Fetch all linked tech stack items to find their parents
-      const { data: linkedItems } = await supabase
-        .from("tech_stacks")
-        .select("*")
-        .in("id", linkedStackIds);
-
-      if (!linkedItems || linkedItems.length === 0) {
+      if (!projectTechStacks || projectTechStacks.length === 0) {
         setTechStacks([]);
+        setLinkedTechStackIds(new Set());
         return;
       }
 
-      // Find unique parent IDs from linked items
-      const parentIds = new Set<string>();
-      linkedItems.forEach((item) => {
-        if (item.parent_id && item.type !== null) {
-          // This is a child item, find its ultimate parent
-          const findRootParent = (currentItem: any): string | null => {
-            if (!currentItem.parent_id) return currentItem.id;
-            const parent = linkedItems.find(i => i.id === currentItem.parent_id);
-            return parent ? findRootParent(parent) : currentItem.parent_id;
-          };
-          const rootId = findRootParent(item);
-          if (rootId) parentIds.add(rootId);
-        } else if (!item.parent_id && item.type === null) {
-          // This is already a parent
-          parentIds.add(item.id);
+      const linkedStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id as string);
+
+      // Fetch all linked tech stack rows so we can determine which parents actually
+      // have linked children for this project
+      const { data: linkedStacks, error } = await supabase
+        .from("tech_stacks")
+        .select("id, parent_id, type")
+        .in("id", linkedStackIds);
+
+      if (error) {
+        console.error("Error loading linked tech stacks:", error);
+        setTechStacks([]);
+        setLinkedTechStackIds(new Set());
+        return;
+      }
+
+      // Parents that have at least one linked child (child has parent_id pointing to them)
+      const parentIdsWithChildren = new Set<string>();
+      (linkedStacks || []).forEach((stack) => {
+        if (stack.parent_id) {
+          parentIdsWithChildren.add(stack.parent_id as string);
         }
       });
 
-      // Fetch only those parent tech stacks
+      if (parentIdsWithChildren.size === 0) {
+        // No parents with linked children – nothing to show in selector
+        setTechStacks([]);
+        setLinkedTechStackIds(new Set());
+        return;
+      }
+
+      // Store all linked item IDs so the tree filters children to project-linked items only
+      setLinkedTechStackIds(new Set(linkedStackIds));
+
+      // Fetch only those parent tech stacks that actually have linked children
       const { data: parentStacks } = await supabase
         .from("tech_stacks")
         .select("*")
-        .in("id", Array.from(parentIds))
+        .in("id", Array.from(parentIdsWithChildren))
         .order("order_index");
 
       setTechStacks(parentStacks || []);
     } catch (error) {
       console.error("Error loading tech stacks:", error);
+      setTechStacks([]);
+      setLinkedTechStackIds(new Set());
     }
   };
 
