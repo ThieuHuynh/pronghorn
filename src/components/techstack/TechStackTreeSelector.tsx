@@ -198,6 +198,19 @@ export function TechStackTreeSelector({
     setExpandedItems(newExpanded);
   };
 
+  const handleSelectAll = () => {
+    const allIds = new Set<string>();
+    techStacksWithItems.forEach((stack) => {
+      const stackIds = getAllStackItems(stack.items);
+      stackIds.forEach((id) => allIds.add(id));
+    });
+    onSelectionChange(allIds);
+  };
+
+  const handleSelectNone = () => {
+    onSelectionChange(new Set());
+  };
+
   const renderItem = (item: TechStackItem, level: number = 0) => {
     const isExpanded = expandedItems.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
@@ -253,8 +266,17 @@ export function TechStackTreeSelector({
   }
 
   return (
-    <div className="space-y-2">
-      {techStacksWithItems.map((stack) => {
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={handleSelectAll}>
+          Select All
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleSelectNone}>
+          Select None
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {techStacksWithItems.map((stack) => {
         const isExpanded = expandedTechStacks.has(stack.id);
         const hasItems = stack.items.length > 0;
         const allSelected = areAllStackItemsSelected(stack.items);
@@ -302,6 +324,7 @@ export function TechStackTreeSelector({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
