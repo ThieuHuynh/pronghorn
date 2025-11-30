@@ -856,8 +856,8 @@ function CanvasFlow() {
 
   const handleAutoOrder = useCallback(() => {
     // Configuration
-    const HORIZONTAL_SPACING = 250; // Space between type columns
-    const VERTICAL_SPACING = 125;   // Space between nodes vertically
+    const HORIZONTAL_SPACING = 375; // Space between type columns (50% farther)
+    const VERTICAL_SPACING = 84;    // Space between nodes vertically (33% less)
     const START_X = 50;             // Left margin
     const START_Y = 50;             // Top margin
     
