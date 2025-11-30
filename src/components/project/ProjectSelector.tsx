@@ -242,18 +242,22 @@ export function ProjectSelector({
 
       const linkedStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
 
-      // Load only top-level tech stack categories (parent_id IS NULL and type IS NULL)
-      const { data: parentStacks } = await supabase
+      // Fetch all linked tech stack items
+      const { data: linkedStacks } = await supabase
         .from("tech_stacks")
         .select("*")
-        .is("parent_id", null)
-        .is("type", null)
-        .order("name");
+        .in("id", linkedStackIds)
+        .order("order_index");
 
-      setTechStacks(parentStacks || []);
-      
-      // Pre-select the linked tech stack IDs
-      setSelectedTechStacks(new Set(linkedStackIds));
+      // Filter to show only top-level parents (parent_id IS NULL and type IS NULL)
+      // that are part of the linked items or have linked children
+      const allLinkedIds = new Set(linkedStackIds);
+      const parentStacks = (linkedStacks || []).filter(
+        (stack) => stack.parent_id === null && stack.type === null
+      );
+
+      setTechStacks(parentStacks);
+      // Don't pre-select - user must choose which to include
     } catch (error) {
       console.error("Error loading tech stacks:", error);
     }
