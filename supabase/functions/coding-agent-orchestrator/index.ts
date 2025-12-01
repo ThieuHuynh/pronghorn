@@ -123,6 +123,18 @@ serve(async (req) => {
     );
 
     if (sessionError) throw sessionError;
+    if (!session) throw new Error("Failed to create session");
+
+    const sessionId = session.id;
+
+    // Log user's task as first message
+    await supabase.rpc("insert_agent_message_with_token", {
+      p_session_id: sessionId,
+      p_token: shareToken,
+      p_role: "user",
+      p_content: taskDescription,
+      p_metadata: { attachedFileIds, projectContext },
+    });
     console.log("Created session:", session.id);
 
     // Load instruction manifest
@@ -364,6 +376,19 @@ Think step-by-step and continue until the task is complete.`;
       }
 
       console.log("Parsed agent response:", agentResponse);
+
+      // Log agent response to database
+      await supabase.rpc("insert_agent_message_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_role: "agent",
+        p_content: JSON.stringify({
+          reasoning: agentResponse.reasoning,
+          operations: agentResponse.operations,
+          status: agentResponse.status,
+        }),
+        p_metadata: { iteration },
+      });
 
       // Add blackboard entry
       if (agentResponse.blackboard_entry) {

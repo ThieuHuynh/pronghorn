@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X } from "lucide-react";
 
@@ -35,6 +36,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [committing, setCommitting] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadRepoAndStagedChanges();
@@ -150,6 +152,61 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
     }
   };
 
+  const handleUnstageFile = async (filePath: string) => {
+    if (!repoId) return;
+
+    try {
+      const { error } = await supabase.rpc("unstage_file_with_token", {
+        p_repo_id: repoId,
+        p_file_path: filePath,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "File unstaged",
+      });
+      loadRepoAndStagedChanges();
+    } catch (error: any) {
+      console.error("Error unstaging file:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unstage file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUnstageSelected = async () => {
+    if (!repoId || selectedFiles.size === 0) return;
+
+    try {
+      const { error } = await supabase.rpc("unstage_files_with_token", {
+        p_repo_id: repoId,
+        p_file_paths: Array.from(selectedFiles),
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${selectedFiles.size} file(s) unstaged`,
+      });
+      setSelectedFiles(new Set());
+      loadRepoAndStagedChanges();
+    } catch (error: any) {
+      console.error("Error unstaging files:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unstage files",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDiscardAll = async () => {
     if (!repoId) return;
 
@@ -237,10 +294,18 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                 <p className="text-sm text-muted-foreground">
                   {stagedChanges.length} file{stagedChanges.length !== 1 ? "s" : ""} changed
                 </p>
-                <Button variant="ghost" size="sm" onClick={handleDiscardAll}>
-                  <X className="w-4 h-4 mr-2" />
-                  Discard All
-                </Button>
+                <div className="flex items-center gap-2">
+                  {selectedFiles.size > 0 && (
+                    <Button variant="outline" size="sm" onClick={handleUnstageSelected}>
+                      <X className="w-4 h-4 mr-2" />
+                      Unstage Selected ({selectedFiles.size})
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={handleDiscardAll}>
+                    <X className="w-4 h-4 mr-2" />
+                    Discard All
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -249,6 +314,18 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                     key={change.id}
                     className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                   >
+                    <Checkbox
+                      checked={selectedFiles.has(change.file_path)}
+                      onCheckedChange={(checked) => {
+                        const newSelected = new Set(selectedFiles);
+                        if (checked) {
+                          newSelected.add(change.file_path);
+                        } else {
+                          newSelected.delete(change.file_path);
+                        }
+                        setSelectedFiles(newSelected);
+                      }}
+                    />
                     {getOperationIcon(change.operation_type)}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{change.file_path}</p>
@@ -259,15 +336,24 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                       )}
                     </div>
                     {getOperationBadge(change.operation_type)}
-                    {onViewDiff && (change.operation_type === 'edit' || change.operation_type === 'add') && (
+                    <div className="flex items-center gap-1">
+                      {onViewDiff && (change.operation_type === 'edit' || change.operation_type === 'add') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onViewDiff(change)}
+                        >
+                          Diff
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewDiff(change)}
+                        onClick={() => handleUnstageFile(change.file_path)}
                       >
-                        Diff
+                        <X className="w-4 h-4" />
                       </Button>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>

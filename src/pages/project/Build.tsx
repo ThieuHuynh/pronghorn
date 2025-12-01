@@ -12,6 +12,7 @@ import { AgentFileTree } from "@/components/build/AgentFileTree";
 import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
 import { DiffViewer } from "@/components/build/DiffViewer";
 import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
+import { AgentChatViewer } from "@/components/build/AgentChatViewer";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -365,8 +366,9 @@ export default function Build() {
               {/* Right: Tabs for Agent/Progress/Staging/History */}
               <ResizablePanel defaultSize={40} minSize={25}>
                 <Tabs defaultValue="agent" className="h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-4 shrink-0">
+                  <TabsList className="grid w-full grid-cols-5 shrink-0">
                     <TabsTrigger value="agent">Agent</TabsTrigger>
+                    <TabsTrigger value="chat">Chat</TabsTrigger>
                     <TabsTrigger value="progress">Progress</TabsTrigger>
                     <TabsTrigger value="staging">Staging</TabsTrigger>
                     <TabsTrigger value="history">History</TabsTrigger>
@@ -381,6 +383,10 @@ export default function Build() {
                       repoId={defaultRepo?.id || ""}
                       shareToken={shareToken}
                     />
+                  </TabsContent>
+
+                  <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-4">
+                    <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
                   </TabsContent>
 
                   <TabsContent value="progress" className="flex-1 overflow-hidden mt-0 p-4">

@@ -131,6 +131,41 @@ export type Database = {
           },
         ]
       }
+      agent_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_session_context: {
         Row: {
           context_data: Json
@@ -1777,6 +1812,23 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_agent_messages_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          session_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_agent_operations_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -2232,6 +2284,29 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_agent_message_with_token: {
+        Args: {
+          p_content: string
+          p_metadata?: Json
+          p_role: string
+          p_session_id: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          session_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_artifact_with_token:
         | {
             Args: {
@@ -2644,6 +2719,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      unstage_file_with_token: {
+        Args: { p_file_path: string; p_repo_id: string; p_token: string }
+        Returns: number
+      }
+      unstage_files_with_token: {
+        Args: { p_file_paths: string[]; p_repo_id: string; p_token: string }
+        Returns: number
       }
       update_agent_operation_status_with_token: {
         Args: {
