@@ -44,8 +44,11 @@ export function UnifiedAgentInterface({
   attachedFiles,
   onRemoveFile
 }: UnifiedAgentInterfaceProps) {
-  const { messages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
+  const { messages: loadedMessages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
   const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
+  
+  // Local messages state for optimistic updates
+  const [messages, setMessages] = useState<any[]>(loadedMessages);
   
   const [taskInput, setTaskInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +64,11 @@ export function UnifiedAgentInterface({
   const operationObserverRef = useRef<IntersectionObserver | null>(null);
   const messageLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const operationLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
+
+  // Sync loaded messages with local state
+  useEffect(() => {
+    setMessages(loadedMessages);
+  }, [loadedMessages]);
 
   // Combine messages and operations into a unified timeline
   const timeline = [...messages, ...operations].sort((a, b) => 
@@ -150,8 +158,24 @@ export function UnifiedAgentInterface({
       return;
     }
 
+    const userMessageContent = taskInput;
     setIsSubmitting(true);
-    setIsAutoScrollEnabled(false);
+    setTaskInput(''); // Clear input immediately
+    setIsAutoScrollEnabled(true); // Enable auto-scroll for new message
+
+    // Add optimistic user message to timeline immediately
+    const optimisticUserMessage = {
+      id: `temp-${Date.now()}`,
+      session_id: 'temp',
+      role: 'user',
+      content: userMessageContent,
+      metadata: {},
+      created_at: new Date().toISOString(),
+    };
+
+    // Temporarily add to messages state for immediate display
+    const previousMessages = messages;
+    setMessages((prev: any[]) => [...prev, optimisticUserMessage]);
 
     try {
       const { error } = await supabase.functions.invoke('coding-agent-orchestrator', {
@@ -159,7 +183,7 @@ export function UnifiedAgentInterface({
           projectId,
           repoId,
           shareToken: shareToken || null,
-          taskDescription: taskInput,
+          taskDescription: userMessageContent,
           mode: 'task', // Required parameter - can be 'task', 'iterative_loop', or 'continuous_improvement'
           autoCommit,
           attachedFileIds: attachedFiles.map(f => f.id),
@@ -178,25 +202,15 @@ export function UnifiedAgentInterface({
       if (error) throw error;
 
       toast.success('Agent task submitted');
-      setTaskInput('');
 
-      // Refresh messages and operations so the new user message and agent work appear promptly
+      // Refresh messages and operations so the real user message and agent work replace optimistic one
       refetchMessages();
       refetchOperations();
-
-      // Scroll to new user message after submission
-      setTimeout(() => {
-        if (lastUserMessageRef.current && scrollViewportRef.current) {
-          const viewport = scrollViewportRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-          if (viewport) {
-            const elementTop = lastUserMessageRef.current.offsetTop;
-            viewport.scrollTop = elementTop - 16;
-          }
-        }
-      }, 100);
     } catch (error) {
       console.error('Error submitting task:', error);
       toast.error('Failed to submit task');
+      // Rollback optimistic update on error
+      setMessages(previousMessages);
     } finally {
       setIsSubmitting(false);
     }
@@ -429,9 +443,9 @@ export function UnifiedAgentInterface({
             )}
             
             {item.error_message && (
-              <p className="text-xs text-destructive mt-1 bg-destructive/10 px-2 py-1 rounded">
-                {item.error_message}
-              </p>
+              <div className="text-xs text-destructive mt-1 bg-destructive/10 px-2 py-1 rounded">
+                <pre className="whitespace-pre-wrap font-mono text-xs">{item.error_message}</pre>
+              </div>
             )}
 
             {renderOperationDetails(item.details)}

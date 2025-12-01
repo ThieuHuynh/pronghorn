@@ -467,12 +467,31 @@ Think step-by-step and continue until the task is complete.`;
                 lines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
                 const newContent = lines.join('\n');
                 
+                // Check if file is already staged to prevent duplicate constraint violation
+                const { data: existingStaging } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                
+                const alreadyStaged = existingStaging?.find((s: any) => s.file_path === fileData[0].path);
+                
+                // If already staged, unstage first to maintain original old_content baseline
+                if (alreadyStaged) {
+                  await supabase.rpc("unstage_file_with_token", {
+                    p_staging_id: alreadyStaged.id,
+                    p_token: shareToken,
+                  });
+                }
+                
+                // Stage with original old_content (from existing staging) or current content
+                const oldContentBaseline = alreadyStaged ? alreadyStaged.old_content : fileData[0].content;
+                
                 result = await supabase.rpc("stage_file_change_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                   p_operation_type: "edit",
                   p_file_path: fileData[0].path,
-                  p_old_content: fileData[0].content,
+                  p_old_content: oldContentBaseline,
                   p_new_content: newContent,
                 });
               }
@@ -538,18 +557,29 @@ Think step-by-step and continue until the task is complete.`;
         } catch (error) {
           console.error("Operation failed:", error);
           
+          // Properly serialize error for display
+          let errorMessage: string;
+          if (error instanceof Error) {
+            errorMessage = error.message;
+          } else if (typeof error === 'object' && error !== null) {
+            // PostgreSQL errors are objects with code, message, details, hint
+            errorMessage = JSON.stringify(error, null, 2);
+          } else {
+            errorMessage = String(error);
+          }
+          
           // Update operation log to failed
           await supabase.rpc("update_agent_operation_status_with_token", {
             p_operation_id: logEntry.id,
             p_status: "failed",
-            p_error_message: error instanceof Error ? error.message : String(error),
+            p_error_message: errorMessage,
             p_token: shareToken,
           });
 
           operationResults.push({ 
             type: op.type, 
             success: false, 
-            error: error instanceof Error ? error.message : String(error) 
+            error: errorMessage
           });
         }
       }
