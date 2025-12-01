@@ -104,12 +104,12 @@ export default function Build() {
     // TODO: Trigger agent audit task
   };
 
-  const handleSubmitTask = (prompt: string, fileIds: string[]) => {
+  const handleSubmitTask = (sessionId: string) => {
+    setActiveSessionId(sessionId);
     toast({
-      title: "Task Submitted",
-      description: "CodingAgent will process your task",
+      title: "Task Started",
+      description: "Monitor progress in the Progress tab",
     });
-    // TODO: Trigger agent orchestration
   };
 
   const handleViewDiff = (change: any) => {
@@ -179,6 +179,8 @@ export default function Build() {
                     attachedFiles={attachedFiles}
                     onRemoveFile={handleRemoveAttachedFile}
                     onSubmitTask={handleSubmitTask}
+                    projectId={projectId}
+                    shareToken={shareToken}
                   />
                 </TabsContent>
 
@@ -262,6 +264,8 @@ export default function Build() {
                       attachedFiles={attachedFiles}
                       onRemoveFile={handleRemoveAttachedFile}
                       onSubmitTask={handleSubmitTask}
+                      projectId={projectId}
+                      shareToken={shareToken}
                     />
                   </TabsContent>
 
