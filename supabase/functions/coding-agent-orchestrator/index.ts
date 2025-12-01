@@ -691,12 +691,43 @@ Think step-by-step and continue until the task is complete.`;
               break;
               
             case "move_file":
-              // Use the new dedicated move_file RPC function
-              result = await supabase.rpc("move_file_with_token", {
+              // First, get file info (works for both repo_files and repo_staging)
+              const { data: moveFileData } = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
-                p_new_path: op.params.new_path,
                 p_token: shareToken,
               });
+              
+              if (moveFileData?.[0]) {
+                // Check if file was newly created (staged as "add")
+                const { data: stagedForMove } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                
+                const newlyCreated = stagedForMove?.find(
+                  (s: any) => s.file_path === moveFileData[0].path && s.operation_type === 'add'
+                );
+                
+                if (newlyCreated) {
+                  // For staged "add" files, just update the staging record's file_path
+                  result = await supabase.rpc("update_staged_file_path_with_token", {
+                    p_staging_id: newlyCreated.id,
+                    p_new_path: op.params.new_path,
+                    p_token: shareToken,
+                  });
+                  console.log(`[AGENT] Moved staged file from ${moveFileData[0].path} to ${op.params.new_path}`);
+                } else {
+                  // For committed files, use the existing move logic
+                  result = await supabase.rpc("move_file_with_token", {
+                    p_file_id: op.params.file_id,
+                    p_new_path: op.params.new_path,
+                    p_token: shareToken,
+                  });
+                  console.log(`[AGENT] Moved committed file from ${moveFileData[0].path} to ${op.params.new_path}`);
+                }
+              } else {
+                throw new Error(`File not found with ID: ${op.params.file_id}`);
+              }
               break;
           }
  

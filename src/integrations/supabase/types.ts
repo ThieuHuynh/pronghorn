@@ -3105,6 +3105,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_staged_file_path_with_token: {
+        Args: { p_new_path: string; p_staging_id: string; p_token: string }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_canvas_edge_with_token:
         | {
             Args: {
