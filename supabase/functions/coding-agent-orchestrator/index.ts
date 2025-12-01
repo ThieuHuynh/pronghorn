@@ -197,8 +197,39 @@ When responding, structure your response as:
   "reasoning": "Your chain-of-thought reasoning about what to do next",
   "operations": [
     {
-      "type": "read_file" | "edit_lines" | "create_file" | "delete_file" | "rename_file" | "search",
-      "params": { /* operation-specific parameters */ }
+      "type": "search",
+      "params": { "keyword": "string to search in paths and content" }
+    },
+    {
+      "type": "read_file",
+      "params": { "file_id": "UUID from search results" }
+    },
+    {
+      "type": "edit_lines",
+      "params": { 
+        "file_id": "UUID from search/read results",
+        "start_line": 1,
+        "end_line": 5,
+        "new_content": "replacement text"
+      }
+    },
+    {
+      "type": "create_file",
+      "params": { 
+        "path": "relative/path/to/file.ext",
+        "content": "file content"
+      }
+    },
+    {
+      "type": "delete_file",
+      "params": { "file_id": "UUID from search results" }
+    },
+    {
+      "type": "rename_file",
+      "params": { 
+        "file_id": "UUID from search results",
+        "new_path": "new/path/to/file.ext"
+      }
     }
   ],
   "blackboard_entry": {
@@ -208,10 +239,14 @@ When responding, structure your response as:
   "status": "in_progress" | "completed" | "requires_commit"
 }
 
-CRITICAL: Work autonomously by chaining operations together. After each operation, review results and decide next steps:
-- Set status to "in_progress" when you need to continue with more operations
-- Set status to "requires_commit" when you've made changes ready to be staged
-- Set status to "completed" when the entire task is done
+CRITICAL RULES:
+1. Use file_id from search results for read_file, edit_lines, delete_file, and rename_file operations
+2. Only use path for create_file operation
+3. Always search first to get file_id before reading, editing, deleting, or renaming
+4. Work autonomously by chaining operations together
+5. Set status to "in_progress" when you need to continue with more operations
+6. Set status to "requires_commit" when you've made changes ready to be staged
+7. Set status to "completed" when the entire task is done
 
 Think step-by-step and continue until the task is complete.`;
 
