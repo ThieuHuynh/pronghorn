@@ -12,7 +12,8 @@ import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
-import { GitBranch, FileCode, Settings, Database, Maximize2 } from "lucide-react";
+import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
+import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
@@ -44,6 +45,8 @@ export default function Repository() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncDialogType, setSyncDialogType] = useState<"push" | "pull">("push");
   const [autoSync, setAutoSync] = useState(false);
+  const [rootCreateDialogOpen, setRootCreateDialogOpen] = useState(false);
+  const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -90,12 +93,9 @@ export default function Repository() {
     const root: FileNode[] = [];
     const map: Record<string, FileNode> = {};
 
-    // Filter out .gitkeep files
-    const filteredFiles = files.filter(f => !f.path.endsWith('/.gitkeep'));
+    const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
 
-    filteredFiles.sort((a, b) => a.path.localeCompare(b.path));
-
-    filteredFiles.forEach((file) => {
+    sortedFiles.forEach((file) => {
       const parts = file.path.split("/");
       let currentLevel = root;
       let currentPath = "";
@@ -415,6 +415,10 @@ export default function Repository() {
     }
   };
 
+  const handleRootCreateConfirm = (name: string) => {
+    handleFileCreate(name, rootCreateType === "folder");
+  };
+
   const handleFileRename = async (oldPath: string, newPath: string) => {
     if (!selectedRepoId) return;
 
@@ -641,22 +645,48 @@ export default function Repository() {
 
               <TabsContent value="files" className="space-y-6">
                 {selectedRepoId ? (
-                  <Card className="p-0 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
-                      <h3 className="font-semibold text-sm">Explorer</h3>
-                      <Button
-                        onClick={() => setIdeModalOpen(true)}
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 h-8"
-                      >
-                        <Maximize2 className="h-4 w-4" />
-                        Full-Screen IDE
-                      </Button>
+                  <Card className="p-0 overflow-hidden bg-[#1e1e1e] border-none">
+                    <div className="px-4 py-3 border-b border-[#3e3e42] bg-[#252526] flex items-center justify-between">
+                      <h3 className="font-semibold text-sm text-[#cccccc]">Explorer</h3>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => {
+                            setRootCreateType("file");
+                            setRootCreateDialogOpen(true);
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2 gap-1 bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]"
+                        >
+                          <FilePlus className="h-3 w-3" />
+                          File
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setRootCreateType("folder");
+                            setRootCreateDialogOpen(true);
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2 gap-1 bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]"
+                        >
+                          <FolderPlus className="h-3 w-3" />
+                          Folder
+                        </Button>
+                        <Button
+                          onClick={() => setIdeModalOpen(true)}
+                          size="sm"
+                          variant="outline"
+                          className="gap-2 h-8 bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]"
+                        >
+                          <Maximize2 className="h-4 w-4" />
+                          Full-Screen IDE
+                        </Button>
+                      </div>
                     </div>
-                    <ResizablePanelGroup direction="horizontal" className="min-h-[700px]">
+                    <ResizablePanelGroup direction="horizontal" className="min-h-[700px] bg-[#1e1e1e]">
                       <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-                        <div className="h-full border-r border-border bg-muted/5">
+                        <div className="h-full border-r border-[#3e3e42] bg-[#252526]">
                           {loadingFiles ? (
                             <div className="flex items-center justify-center h-full text-muted-foreground">
                               Loading files...
@@ -688,6 +718,12 @@ export default function Repository() {
                         />
                       </ResizablePanel>
                     </ResizablePanelGroup>
+                    <CreateFileDialog
+                      open={rootCreateDialogOpen}
+                      onOpenChange={setRootCreateDialogOpen}
+                      type={rootCreateType}
+                      onConfirm={handleRootCreateConfirm}
+                    />
                   </Card>
                 ) : (
                   <Card>

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Maximize2 } from "lucide-react";
+import { X, Maximize2, FilePlus, FolderPlus } from "lucide-react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { EnhancedFileTree } from "./EnhancedFileTree";
 import { CodeEditor } from "./CodeEditor";
+import { CreateFileDialog } from "./CreateFileDialog";
 
 interface IDEModalProps {
   open: boolean;
@@ -36,6 +38,13 @@ export function IDEModal({
   autoSync,
   onAutoSync,
 }: IDEModalProps) {
+  const [rootCreateDialogOpen, setRootCreateDialogOpen] = useState(false);
+  const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
+
+  const handleRootCreateConfirm = (name: string) => {
+    onFileCreate(name, rootCreateType === "folder");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
       <DialogContent 
@@ -54,14 +63,40 @@ export function IDEModal({
               <Maximize2 className="h-4 w-4 text-[#858585]" />
               <h2 className="font-semibold text-sm text-[#cccccc]">Pronghorn IDE</h2>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-8 w-8 hover:bg-[#2a2d2e] text-[#cccccc]"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 gap-1 bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]"
+                onClick={() => {
+                  setRootCreateType("file");
+                  setRootCreateDialogOpen(true);
+                }}
+              >
+                <FilePlus className="h-3 w-3" />
+                File
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 gap-1 bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]"
+                onClick={() => {
+                  setRootCreateType("folder");
+                  setRootCreateDialogOpen(true);
+                }}
+              >
+                <FolderPlus className="h-3 w-3" />
+                Folder
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="h-8 w-8 hover:bg-[#2a2d2e] text-[#cccccc]"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Editor Layout */}
@@ -96,6 +131,12 @@ export function IDEModal({
                 />
               </ResizablePanel>
             </ResizablePanelGroup>
+            <CreateFileDialog
+              open={rootCreateDialogOpen}
+              onOpenChange={setRootCreateDialogOpen}
+              type={rootCreateType}
+              onConfirm={handleRootCreateConfirm}
+            />
           </div>
         </div>
       </DialogContent>
