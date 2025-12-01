@@ -176,7 +176,8 @@ export default function Build() {
       const folderPath = path.substring(0, path.lastIndexOf('/'));
       setSelectedFolderPath(folderPath);
     } else {
-      setSelectedFolderPath(null);
+      // File in root directory
+      setSelectedFolderPath('/');
     }
 
     // For staged-only files (newly created by agent), we need to load content from staging
@@ -204,7 +205,7 @@ export default function Build() {
     if (!defaultRepo || !projectId) return;
 
     try {
-      const fullPath = selectedFolderPath 
+      const fullPath = selectedFolderPath && selectedFolderPath !== '/'
         ? `${selectedFolderPath}/${name}` 
         : name;
 
@@ -349,9 +350,14 @@ export default function Build() {
                             </Button>
                           </div>
                         </div>
-                        {selectedFolderPath && (
+                        {selectedFolderPath && selectedFolderPath !== '/' && (
                           <div className="text-xs text-[#858585] truncate bg-[#1e2a3a] px-2 py-1 rounded border border-[#3e5a7a]">
                             Creating in: <span className="text-[#4ec9b0]">{selectedFolderPath}</span>
+                          </div>
+                        )}
+                        {selectedFolderPath === '/' && (
+                          <div className="text-xs text-[#858585] truncate bg-[#1e2a3a] px-2 py-1 rounded border border-[#3e5a7a]">
+                            Creating in: <span className="text-[#4ec9b0]">root directory</span>
                           </div>
                         )}
                       </div>
@@ -361,6 +367,7 @@ export default function Build() {
                           stagedChanges={stagedChanges}
                           selectedFileId={selectedFile?.id || null}
                           onSelectFile={handleSelectFile}
+                          onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
                           onReviewFile={handleReviewFile}
                           onEditFile={handleEditFile}
@@ -481,6 +488,7 @@ export default function Build() {
                       stagedChanges={stagedChanges}
                       selectedFileId={selectedFile?.id || null}
                       onSelectFile={handleSelectFile}
+                      onFolderSelect={setSelectedFolderPath}
                       onAttachToPrompt={handleAttachToPrompt}
                       onReviewFile={handleReviewFile}
                       onEditFile={handleEditFile}

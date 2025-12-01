@@ -42,7 +42,7 @@ export function CreateFileDialog({
         <DialogHeader>
           <DialogTitle className="text-[#cccccc]">Create New {type === "file" ? "File" : "Folder"}</DialogTitle>
           <DialogDescription className="text-[#858585]">
-            {basePath ? `Creating in: ${basePath}` : "Creating in root directory"}
+            {basePath && basePath !== '/' ? `Creating in: ${basePath}` : "Creating in root directory"}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
