@@ -42,6 +42,31 @@ export default function Build() {
     }
   }, [defaultRepo, projectId, shareToken]);
 
+  // Real-time subscription for file changes
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`repo-files-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repo_files",
+          filter: `project_id=eq.${projectId}`,
+        },
+        () => {
+          loadFiles();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId]);
+
   const loadFiles = async () => {
     if (!defaultRepo) return;
 

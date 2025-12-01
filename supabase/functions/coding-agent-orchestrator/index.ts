@@ -327,37 +327,80 @@ Execute file operations carefully and document your reasoning.`;
             break;
             
           case "edit_lines":
-            result = await supabase.rpc("agent_edit_file_lines_with_token", {
+            // First get the current file content
+            const { data: fileData } = await supabase.rpc("get_file_content_with_token", {
               p_file_id: op.params.file_id,
-              p_start_line: op.params.start_line,
-              p_end_line: op.params.end_line,
-              p_new_content: op.params.new_content,
               p_token: shareToken,
             });
+            
+            if (fileData?.[0]) {
+              // Split into lines and replace the specified range
+              const lines = fileData[0].content.split('\n');
+              const startIdx = op.params.start_line - 1;
+              const endIdx = op.params.end_line - 1;
+              lines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
+              const newContent = lines.join('\n');
+              
+              // Stage the edit
+              result = await supabase.rpc("stage_file_change_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+                p_operation_type: "edit",
+                p_file_path: fileData[0].path,
+                p_old_content: fileData[0].content,
+                p_new_content: newContent,
+              });
+            }
             break;
             
           case "create_file":
-            result = await supabase.rpc("create_file_with_token", {
+            // Stage the file creation
+            result = await supabase.rpc("stage_file_change_with_token", {
               p_repo_id: repoId,
-              p_path: op.params.path,
-              p_content: op.params.content,
               p_token: shareToken,
+              p_operation_type: "add",
+              p_file_path: op.params.path,
+              p_new_content: op.params.content,
             });
             break;
             
           case "delete_file":
-            result = await supabase.rpc("agent_delete_file_with_token", {
+            // Get file info first
+            const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
               p_file_id: op.params.file_id,
               p_token: shareToken,
             });
+            
+            if (deleteFileData?.[0]) {
+              // Stage the deletion
+              result = await supabase.rpc("stage_file_change_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+                p_operation_type: "delete",
+                p_file_path: deleteFileData[0].path,
+                p_old_content: deleteFileData[0].content,
+              });
+            }
             break;
             
           case "rename_file":
-            result = await supabase.rpc("agent_rename_file_with_token", {
+            // Get file info first
+            const { data: renameFileData } = await supabase.rpc("get_file_content_with_token", {
               p_file_id: op.params.file_id,
-              p_new_path: op.params.new_path,
               p_token: shareToken,
             });
+            
+            if (renameFileData?.[0]) {
+              // Stage the rename
+              result = await supabase.rpc("stage_file_change_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+                p_operation_type: "rename",
+                p_file_path: op.params.new_path,
+                p_old_path: renameFileData[0].path,
+                p_new_content: renameFileData[0].content,
+              });
+            }
             break;
         }
 

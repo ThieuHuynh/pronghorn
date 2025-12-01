@@ -40,6 +40,31 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
     loadRepoAndStagedChanges();
   }, [projectId, shareToken]);
 
+  // Real-time subscription for staged changes
+  useEffect(() => {
+    if (!repoId) return;
+
+    const channel = supabase
+      .channel(`repo-staging-${repoId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repo_staging",
+          filter: `repo_id=eq.${repoId}`,
+        },
+        () => {
+          loadRepoAndStagedChanges();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [repoId]);
+
   const loadRepoAndStagedChanges = async () => {
     if (!projectId) return;
 
