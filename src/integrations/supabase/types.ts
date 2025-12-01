@@ -1467,6 +1467,81 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      agent_get_artifacts_with_token: {
+        Args: { p_project_id: string; p_search_term?: string; p_token: string }
+        Returns: {
+          ai_summary: string
+          ai_title: string
+          content: string
+          created_at: string
+          id: string
+          source_type: string
+        }[]
+      }
+      agent_get_canvas_summary_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          edges: Json
+          edges_count: number
+          layers_count: number
+          node_types: Json
+          nodes: Json
+          nodes_count: number
+        }[]
+      }
+      agent_get_project_metadata_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          budget: number
+          description: string
+          id: string
+          max_tokens: number
+          name: string
+          organization: string
+          priority: string
+          scope: string
+          selected_model: string
+          status: string
+          thinking_budget: number
+          thinking_enabled: boolean
+          timeline_end: string
+          timeline_start: string
+        }[]
+      }
+      agent_get_tech_stacks_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          description: string
+          id: string
+          name: string
+          parent_id: string
+          type: string
+        }[]
+      }
+      agent_search_requirements_with_token: {
+        Args: { p_project_id: string; p_search_term?: string; p_token: string }
+        Returns: {
+          code: string
+          content: string
+          id: string
+          order_index: number
+          parent_id: string
+          title: string
+          type: string
+        }[]
+      }
+      agent_search_standards_with_token: {
+        Args: { p_project_id: string; p_search_term?: string; p_token: string }
+        Returns: {
+          category_id: string
+          category_name: string
+          code: string
+          content: string
+          description: string
+          id: string
+          title: string
+        }[]
+      }
       commit_staged_with_token: {
         Args: {
           p_branch?: string

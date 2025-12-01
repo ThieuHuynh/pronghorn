@@ -142,14 +142,34 @@ export default function Build() {
               </div>
             </div>
 
-            {/* Mobile Layout (< md) - Vertical Stack */}
-            <div className="flex-1 flex flex-col md:hidden overflow-hidden">
-              <Tabs defaultValue="agent" className="h-full flex flex-col">
-                <TabsList className="grid w-full grid-cols-3 shrink-0">
-                  <TabsTrigger value="agent">Agent</TabsTrigger>
-                  <TabsTrigger value="staging">Staging</TabsTrigger>
-                  <TabsTrigger value="history">History</TabsTrigger>
+            {/* Mobile Layout (< md) - Full Screen Tabs */}
+            <div className="flex-1 md:hidden overflow-hidden">
+              <Tabs defaultValue="files" className="h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-4 shrink-0">
+                  <TabsTrigger value="files" className="text-xs">Files</TabsTrigger>
+                  <TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger>
+                  <TabsTrigger value="staging" className="text-xs">Staging</TabsTrigger>
+                  <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="files" className="flex-1 overflow-hidden mt-0">
+                  <div className="h-full flex flex-col">
+                    <div className="px-3 py-2 border-b">
+                      <h3 className="text-sm font-semibold">Repository Files</h3>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <AgentFileTree
+                        files={files}
+                        selectedFileId={selectedFileId}
+                        onSelectFile={handleSelectFile}
+                        onAttachToPrompt={handleAttachToPrompt}
+                        onReviewFile={handleReviewFile}
+                        onEditFile={handleEditFile}
+                        onAuditFile={handleAuditFile}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
 
                 <TabsContent value="agent" className="flex-1 overflow-auto mt-0 p-3">
                   <AgentPromptPanel
