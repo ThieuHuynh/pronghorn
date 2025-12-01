@@ -39,6 +39,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<any>(null);
+  const [pendingCommits, setPendingCommits] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewingDiff, setViewingDiff] = useState<StagedChange | null>(null);
 
@@ -92,6 +93,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       if (!defaultRepo) {
         setStagedChanges([]);
         setRepoInfo(null);
+        setPendingCommits([]);
         if (withLoading) {
           setLoading(false);
         }
@@ -110,6 +112,18 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       if (stagedError) throw stagedError;
 
       setStagedChanges((staged || []) as StagedChange[]);
+
+      // Load pending commits (commits not yet pushed to GitHub)
+      const { data: commits, error: commitsError } = await supabase.rpc("get_commit_history_with_token", {
+        p_repo_id: defaultRepo.id,
+        p_token: shareToken || null,
+        p_branch: defaultRepo.branch,
+        p_limit: 10,
+      });
+
+      if (!commitsError && commits) {
+        setPendingCommits(commits);
+      }
     } catch (error: any) {
       console.error("Error loading staged changes:", error);
       toast({
@@ -196,7 +210,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
         description: `Pushed to ${repoInfo.organization}/${repoInfo.repo}`,
       });
 
-      // Refresh to show any new sync state
+      // Refresh to clear pending commits and show new sync state
       loadRepoAndStagedChanges(false);
     } catch (error: any) {
       console.error("Error pushing to GitHub:", error);
@@ -376,11 +390,46 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
               <div className="text-center text-muted-foreground">
                 <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p className="mb-2">No staged changes</p>
-                {repoInfo && (
-                  <p className="text-sm">Ready to push commits to GitHub</p>
+                {repoInfo && pendingCommits.length > 0 && (
+                  <p className="text-sm">Ready to push {pendingCommits.length} commit{pendingCommits.length !== 1 ? 's' : ''} to GitHub</p>
+                )}
+                {repoInfo && pendingCommits.length === 0 && (
+                  <p className="text-sm">All commits are up to date</p>
                 )}
               </div>
-              {repoInfo && (
+              
+              {repoInfo && pendingCommits.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold">Pending Commits</h4>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {pendingCommits.map((commit) => (
+                        <div
+                          key={commit.id}
+                          className="p-3 rounded-lg border border-border bg-card/50 hover:bg-card transition-colors"
+                        >
+                          <div className="flex items-start gap-2">
+                            <GitCommit className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{commit.commit_message}</p>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                <span className="font-mono">{commit.commit_sha.substring(0, 7)}</span>
+                                <span>•</span>
+                                <span>{commit.files_changed} file{commit.files_changed !== 1 ? 's' : ''}</span>
+                                <span>•</span>
+                                <span>{new Date(commit.committed_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {repoInfo && pendingCommits.length > 0 && (
                 <>
                   <Separator />
                   <div className="space-y-4">

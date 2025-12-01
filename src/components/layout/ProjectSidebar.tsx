@@ -22,8 +22,8 @@ const activeNavItems = [
   { icon: ListTree, label: "Requirements", path: "requirements" },
   { icon: ShieldCheck, label: "Standards", path: "standards" },
   { icon: Layout, label: "Canvas", path: "canvas" },
-  { icon: GitBranch, label: "Repository", path: "repository" },
   { icon: FileText, label: "Specifications", path: "specifications" },
+  { icon: GitBranch, label: "Repository", path: "repository" },
   { icon: Hammer, label: "Build", path: "build" },
 ];
 
