@@ -31,15 +31,30 @@ function parseAgentResponseText(rawText: string): any {
 
   try {
     return JSON.parse(text);
-  } catch {
-    // Fallback: grab from first '{' to last '}'
-    const firstBrace = text.indexOf("{");
-    const lastBrace = text.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const candidate = text.slice(firstBrace, lastBrace + 1);
-      return JSON.parse(candidate);
+  } catch (primaryError) {
+    // Fallback: grab from first '{' to last '}' and try again
+    try {
+      const firstBrace = text.indexOf("{");
+      const lastBrace = text.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const candidate = text.slice(firstBrace, lastBrace + 1);
+        return JSON.parse(candidate);
+      }
+      throw primaryError;
+    } catch (secondaryError) {
+      console.error("Unable to parse agent JSON response", {
+        primaryError,
+        secondaryError,
+        rawPreview: text.slice(0, 500),
+      });
+
+      // Graceful fallback: treat whole response as reasoning-only
+      return {
+        reasoning: rawText,
+        operations: [],
+        status: "parse_error",
+      };
     }
-    throw new Error("Unable to parse agent JSON response");
   }
 }
 
