@@ -165,21 +165,23 @@
       "workflow": "Creates 'delete' operation in repo_staging table"
     },
     
-    "rename_file": {
-      "rpc_function": "agent_rename_file_with_token",
-      "description": "Rename/move file and stage as rename operation",
+    "move_file": {
+      "rpc_function": "move_file_with_token",
+      "description": "Move or rename file to a new path and stage as rename operation. IMPORTANT: Use this for moving files between directories, not just renaming in place. Properly tracks both old_path and new_path.",
       "parameters": {
-        "p_file_id": "UUID of the file to rename",
-        "p_new_path": "New file path",
+        "p_file_id": "UUID of the file to move/rename",
+        "p_new_path": "Complete new file path including directory and filename (e.g., 'src/composables/useAuth.ts')",
         "p_token": "Share token for authorization"
       },
-      "returns": "Staged rename operation record",
+      "returns": "Staged rename operation record with old_path and new_path tracked",
       "use_cases": [
-        "Reorganize file structure",
-        "Rename components",
-        "Move files to new directories"
+        "Move files to different directories (e.g., 'composables/useAuth.ts' -> 'src/composables/useAuth.ts')",
+        "Reorganize file structure across folders",
+        "Rename files while keeping them in same directory",
+        "Consolidate files from multiple directories into one"
       ],
-      "workflow": "Creates 'rename' operation in repo_staging table"
+      "workflow": "Creates 'rename' operation in repo_staging table with proper old_path tracking",
+      "important": "ALWAYS use complete new path including all directory segments. This function handles both directory moves and simple renames."
     },
     
     "batch_stage": {

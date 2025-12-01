@@ -166,7 +166,7 @@ serve(async (req) => {
         edit_lines: { description: "Edit specific line range in a file and stage the change" },
         create_file: { description: "Create new file and stage as add operation" },
         delete_file: { description: "Delete file and stage as delete operation" },
-        rename_file: { description: "Rename/move file and stage as rename operation" },
+        move_file: { description: "Move or rename file to a new path (handles directory moves properly)" },
       },
     } as const;
 
@@ -339,10 +339,10 @@ When responding, structure your response as:
       "params": { "file_id": "UUID from list_files or search results" }
     },
     {
-      "type": "rename_file",
+      "type": "move_file",
       "params": { 
         "file_id": "UUID from list_files or search results",
-        "new_path": "new/path/to/file.ext"
+        "new_path": "src/composables/file.ext"
       }
     }
   ],
@@ -355,7 +355,7 @@ When responding, structure your response as:
 
 CRITICAL RULES:
 1. ALWAYS call list_files FIRST to load file structure before any other operations
-2. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and rename_file operations
+2. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and move_file operations
 3. Only use path for create_file operation
 4. Work autonomously by chaining operations together
 5. Set status to "in_progress" when you need to continue with more operations
@@ -630,50 +630,20 @@ Think step-by-step and continue until the task is complete.`;
               }
               break;
               
-            case "rename_file":
-              const { data: renameFileData } = await supabase.rpc("get_file_content_with_token", {
+            case "move_file":
+              // Use the new dedicated move_file RPC function
+              result = await supabase.rpc("move_file_with_token", {
                 p_file_id: op.params.file_id,
+                p_new_path: op.params.new_path,
                 p_token: shareToken,
               });
-              
-              if (renameFileData?.[0]) {
-                // Check if file is already staged
-                const { data: stagedForRename } = await supabase.rpc("get_staged_changes_with_token", {
-                  p_repo_id: repoId,
-                  p_token: shareToken,
-                });
-                
-                const stagedFile = stagedForRename?.find((s: any) => s.file_path === renameFileData[0].path);
-                
-                if (stagedFile) {
-                  // Update the staged entry's path instead of creating new rename
-                  result = await supabase.rpc("stage_file_change_with_token", {
-                    p_repo_id: repoId,
-                    p_token: shareToken,
-                    p_operation_type: stagedFile.operation_type, // Preserve operation type
-                    p_file_path: op.params.new_path,
-                    p_old_content: stagedFile.old_content,
-                    p_new_content: stagedFile.new_content,
-                  });
-                } else {
-                  // Stage rename for committed file
-                  result = await supabase.rpc("stage_file_change_with_token", {
-                    p_repo_id: repoId,
-                    p_token: shareToken,
-                    p_operation_type: "rename",
-                    p_file_path: op.params.new_path,
-                    p_old_path: renameFileData[0].path,
-                    p_new_content: renameFileData[0].content,
-                  });
-                }
-              }
               break;
           }
  
           if (result?.error) throw result.error;
 
           // Mark that files have changed for broadcast purposes
-          if (["edit_lines", "create_file", "delete_file", "rename_file"].includes(op.type)) {
+          if (["edit_lines", "create_file", "delete_file", "move_file"].includes(op.type)) {
             filesChanged = true;
           }
  

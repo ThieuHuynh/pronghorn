@@ -2643,6 +2643,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      move_file_with_token: {
+        Args: { p_file_id: string; p_new_path: string; p_token: string }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       regenerate_share_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: string
