@@ -308,7 +308,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                 {stagedChanges.map((change) => (
                   <div
                     key={change.id}
