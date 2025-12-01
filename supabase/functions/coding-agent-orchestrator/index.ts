@@ -596,9 +596,17 @@ Think step-by-step and continue until the task is complete.`;
                     // Re-stringify to canonical JSON (no duplicate keys, consistent formatting)
                     finalContent = JSON.stringify(parsed, null, 2) + '\n';
                   } catch (parseError: any) {
-                    throw new Error(
-                      `Edit resulted in invalid JSON. Original lines ${op.params.start_line}-${op.params.end_line} replaced with invalid content. Error: ${parseError?.message || String(parseError)}`
+                    // Allow invalid JSON edits to be staged - agent may need multiple iterations to fix complex issues
+                    // Log the error but don't fail the operation
+                    console.warn(
+                      `Warning: Edit resulted in invalid JSON for ${fileData[0].path}. ` +
+                      `Lines ${op.params.start_line}-${op.params.end_line}. ` +
+                      `Error: ${parseError?.message || String(parseError)}. ` +
+                      `Staging anyway to allow iterative fixes.`
                     );
+                    // Include error in result for agent awareness
+                    if (!result.data) result.data = {};
+                    result.data.json_parse_warning = parseError?.message || String(parseError);
                   }
                 }
                 
