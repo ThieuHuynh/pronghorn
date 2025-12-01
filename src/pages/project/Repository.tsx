@@ -659,14 +659,23 @@ export default function Repository() {
               <TabsContent value="files" className="space-y-6">
                 {selectedRepoId ? (
                   <Card className="p-0 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
+                      <h3 className="font-semibold text-sm">Explorer</h3>
+                      <Button
+                        onClick={() => setIdeModalOpen(true)}
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 h-8"
+                      >
+                        <Maximize2 className="h-4 w-4" />
+                        Full-Screen IDE
+                      </Button>
+                    </div>
                     <ResizablePanelGroup direction="horizontal" className="h-[600px]">
-                      <ResizablePanel defaultSize={25} minSize={15}>
-                        <div className="h-full border-r border-border">
-                          <div className="p-4 border-b border-border">
-                            <h3 className="font-semibold">Files</h3>
-                          </div>
+                      <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+                        <div className="h-full border-r border-border bg-muted/5">
                           {loadingFiles ? (
-                            <div className="flex items-center justify-center h-full">
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
                               Loading files...
                             </div>
                           ) : (
@@ -681,7 +690,7 @@ export default function Repository() {
                           )}
                         </div>
                       </ResizablePanel>
-                      <ResizableHandle />
+                      <ResizableHandle withHandle />
                       <ResizablePanel defaultSize={75}>
                         <CodeEditor
                           fileId={selectedFileId}

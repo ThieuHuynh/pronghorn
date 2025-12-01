@@ -46,12 +46,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get repo details
-    const { data: repo, error: repoError } = await supabaseClient
-      .from('project_repos')
-      .select('*')
-      .eq('id', repoId)
-      .single();
+    // Get repo details using RPC with token validation
+    const { data: repoData, error: repoError } = await supabaseClient.rpc('get_repo_by_id_with_token', {
+      p_repo_id: repoId,
+      p_token: shareToken || null,
+    });
+
+    const repo = repoData && repoData.length > 0 ? repoData[0] : null;
 
     if (repoError || !repo) {
       console.error('Repo not found:', repoError);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, FilePlus, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileTreeContextMenu } from "./FileTreeContextMenu";
@@ -49,7 +49,7 @@ function TreeNode({
   onFileRename: (oldPath: string, newPath: string) => void;
   onFileDelete: (path: string) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(level === 0);
+  const [isOpen, setIsOpen] = useState(level < 2);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createType, setCreateType] = useState<"file" | "folder">("file");
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -94,16 +94,16 @@ function TreeNode({
           onRename={() => setRenameDialogOpen(true)}
           onDelete={() => setDeleteDialogOpen(true)}
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`w-full justify-start font-normal ${isSelected ? 'bg-accent' : ''}`}
-            style={{ paddingLeft: `${level * 1.5 + 0.5}rem` }}
+          <button
+            className={`w-full text-left px-2 py-1 text-sm hover:bg-accent/50 transition-colors flex items-center gap-2 ${
+              isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground'
+            }`}
+            style={{ paddingLeft: `${level * 16 + 8}px` }}
             onClick={() => onFileSelect?.(node.path)}
           >
-            <File className="h-4 w-4 mr-2 shrink-0" />
-            <span className="truncate">{node.name}</span>
-          </Button>
+            <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm">{node.name}</span>
+          </button>
         </FileTreeContextMenu>
         <CreateFileDialog
           open={createDialogOpen}
@@ -148,25 +148,23 @@ function TreeNode({
         onRename={() => setRenameDialogOpen(true)}
         onDelete={() => setDeleteDialogOpen(true)}
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start font-normal"
-          style={{ paddingLeft: `${level * 1.5 + 0.5}rem` }}
+        <button
+          className="w-full text-left px-2 py-1 text-sm hover:bg-accent/50 transition-colors flex items-center gap-1"
+          style={{ paddingLeft: `${level * 16 + 8}px` }}
           onClick={() => setIsOpen(!isOpen)}
         >
           {isOpen ? (
-            <ChevronDown className="h-4 w-4 mr-1 shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronRight className="h-4 w-4 mr-1 shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
           {isOpen ? (
-            <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
+            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
-            <Folder className="h-4 w-4 mr-2 shrink-0" />
+            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate">{node.name}</span>
-        </Button>
+          <span className="truncate text-sm font-medium">{node.name}</span>
+        </button>
       </FileTreeContextMenu>
       {isOpen && node.children && (
         <div>
@@ -240,11 +238,37 @@ export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCrea
             setCreateDialogOpen(true);
           }}
         >
-          <div className="space-y-0.5 p-2">
+          <div className="py-1 min-h-full">
             {files.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Right-click to create files
-              </p>
+              <div className="px-4 py-8 text-center space-y-4">
+                <p className="text-sm text-muted-foreground">No files yet</p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCreateType("file");
+                      setCreateDialogOpen(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <FilePlus className="h-4 w-4" />
+                    New File
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCreateType("folder");
+                      setCreateDialogOpen(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    New Folder
+                  </Button>
+                </div>
+              </div>
             ) : (
               files.map((node) => (
                 <TreeNode

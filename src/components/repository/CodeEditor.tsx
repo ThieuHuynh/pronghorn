@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
-import { Save, X } from "lucide-react";
+import { Save, X, FileText } from "lucide-react";
 
 interface CodeEditorProps {
   fileId: string | null;
@@ -128,30 +128,36 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-        <h3 className="text-sm font-medium truncate flex-1">{filePath}</h3>
-        <div className="flex gap-2">
+    <div className="flex flex-col h-full bg-[#1e1e1e]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-[#252526]">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+          <h3 className="text-sm font-normal truncate text-foreground">{filePath}</h3>
+        </div>
+        <div className="flex gap-1">
           <Button
             size="sm"
             onClick={handleSave}
             disabled={saving || loading}
+            variant="ghost"
+            className="h-8 gap-2 text-foreground hover:bg-accent/50"
           >
-            <Save className="h-4 w-4 mr-2" />
+            <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Save"}
           </Button>
           <Button
             size="sm"
             variant="ghost"
             onClick={onClose}
+            className="h-8 hover:bg-accent/50"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full text-muted-foreground">
             Loading...
           </div>
         ) : (
@@ -162,11 +168,17 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
             onChange={(value) => setContent(value || "")}
             theme="vs-dark"
             options={{
-              minimap: { enabled: false },
+              minimap: { enabled: true },
               fontSize: 14,
               lineNumbers: "on",
               scrollBeyondLastLine: false,
               automaticLayout: true,
+              fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace",
+              fontLigatures: true,
+              cursorBlinking: "smooth",
+              smoothScrolling: true,
+              renderLineHighlight: "all",
+              bracketPairColorization: { enabled: true },
             }}
           />
         )}

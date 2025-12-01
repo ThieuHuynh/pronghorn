@@ -34,18 +34,19 @@ export function IDEModal({
 }: IDEModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0">
+      <DialogContent className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0 bg-[#1e1e1e]">
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-[#252526]">
             <div className="flex items-center gap-2">
-              <Maximize2 className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold">Full-Screen IDE</h2>
+              <Maximize2 className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-semibold text-sm text-foreground">Pronghorn IDE</h2>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
+              className="h-8 w-8 hover:bg-accent/50"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -55,9 +56,9 @@ export function IDEModal({
           <div className="flex-1 overflow-hidden">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
-                <div className="h-full border-r">
-                  <div className="p-2 border-b bg-muted/20">
-                    <p className="text-xs font-medium text-muted-foreground uppercase">Explorer</p>
+                <div className="h-full border-r border-border/50 bg-[#252526]">
+                  <div className="px-3 py-2 border-b border-border/50 bg-[#252526]">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Explorer</p>
                   </div>
                   <EnhancedFileTree
                     files={fileStructure}
