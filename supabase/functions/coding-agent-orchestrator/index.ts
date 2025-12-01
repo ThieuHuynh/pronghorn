@@ -379,22 +379,49 @@ DO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:
 - Document your changes if appropriate
 
 COMPLETION VALIDATION - BE EXTREMELY CRITICAL:
-Before setting status="completed", ask yourself these questions:
-1. "Have I COMPLETELY answered the user's question or finished their task, not just started it?"
-2. "Did I only read files but not actually make the requested changes?"
-3. "Did I make changes but not verify they work correctly?"
-4. "Are there obvious edge cases or error conditions I didn't handle?"
-5. "Would a senior developer reviewing my work say 'this is incomplete'?"
-6. "Did I stop too early because I ran out of ideas, rather than because the work is truly done?"
+Before setting status="completed", you MUST perform a final verification check:
 
-ONLY mark status="completed" when:
-- You have made ALL necessary code changes (not just planned them)
-- You have verified your changes by reading back the modified files
-- You have handled edge cases and error conditions
-- You have considered impact on related code and updated it if needed
-- You are confident a human reviewer would approve this work as complete
+STEP 1 - REVIEW CURRENT STATE:
+Call list_files to see ALL files that currently exist in the project.
+Review what files you created, edited, or deleted in this session.
 
-If you're uncertain whether you're done, YOU'RE NOT DONE. Set status="in_progress" and continue.
+STEP 2 - COMPARE AGAINST ORIGINAL TASK:
+Re-read the original user task at the top of this conversation.
+Ask yourself: "Does the current file state satisfy EVERY aspect of the user's request?"
+
+STEP 3 - IDENTIFY GAPS:
+List out what the user asked for vs. what currently exists:
+- Are there features mentioned in the task that aren't implemented?
+- Are there files that should exist but don't?
+- Are there edge cases or error handling that's missing?
+- Are there related files that need updating but weren't touched?
+
+STEP 4 - MAKE THE DECISION:
+If ANY gaps exist, set status="in_progress" and continue working.
+If you're uncertain whether you're done, YOU'RE NOT DONE - continue working.
+
+ONLY mark status="completed" when ALL of the following are true:
+1. You have called list_files to verify current project state
+2. You have re-read the original task and confirmed every requirement is met
+3. You have made ALL necessary code changes (not just planned them)
+4. You have verified your changes by reading back the modified files
+5. You have handled edge cases and error conditions
+6. You have considered impact on related code and updated it if needed
+7. You would confidently show this work to the user as "finished"
+
+CRITICAL: Before marking complete, you MUST execute this verification workflow:
+{
+  "reasoning": "I think I'm done, but let me verify by checking the file list against the original task...",
+  "operations": [
+    {
+      "type": "list_files",
+      "params": { "path_prefix": null }
+    }
+  ],
+  "status": "in_progress"  // NEVER mark complete without this verification step first
+}
+
+Then in the NEXT iteration after seeing the file list, compare it to the original task and decide if you're truly done.
 
 Think step-by-step and continue iterating aggressively until the task is EXHAUSTIVELY complete.`;
 
