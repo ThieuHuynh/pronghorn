@@ -28,6 +28,7 @@ interface AgentFileTreeProps {
   }>;
   selectedFileId: string | null;
   onSelectFile: (fileId: string, path: string, isStaged?: boolean) => void;
+  onFolderSelect: (folderPath: string) => void;
   onAttachToPrompt: (fileId: string, path: string) => void;
   onReviewFile: (fileId: string, path: string) => void;
   onEditFile: (fileId: string, path: string) => void;
@@ -39,6 +40,7 @@ export function AgentFileTree({
   stagedChanges = [],
   selectedFileId,
   onSelectFile,
+  onFolderSelect,
   onAttachToPrompt,
   onReviewFile,
   onEditFile,
@@ -140,7 +142,8 @@ export function AgentFileTree({
     return "text-[#cccccc]";
   };
 
-  const toggleFolder = (path: string) => {
+  const handleFolderClick = (path: string) => {
+    // Toggle expansion
     setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
@@ -150,6 +153,8 @@ export function AgentFileTree({
       }
       return next;
     });
+    // Set as selected folder for creating new files
+    onFolderSelect(path);
   };
 
   const renderNode = (node: FileNode, level: number = 0) => {
@@ -164,7 +169,7 @@ export function AgentFileTree({
           <div
             className={`flex items-center gap-1 px-2 py-1 hover:bg-[#2a2d2e] cursor-pointer transition-colors ${folderBgColor}`}
             style={{ paddingLeft: `${level * 12 + 8}px` }}
-            onClick={() => toggleFolder(node.path)}
+            onClick={() => handleFolderClick(node.path)}
           >
             {isExpanded ? (
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
