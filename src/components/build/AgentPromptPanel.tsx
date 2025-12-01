@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { X, Send } from "lucide-react";
+import { X, Send, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface AttachedFile {
   id: string;
@@ -14,20 +16,58 @@ interface AttachedFile {
 interface AgentPromptPanelProps {
   attachedFiles: AttachedFile[];
   onRemoveFile: (fileId: string) => void;
-  onSubmitTask: (prompt: string, fileIds: string[]) => void;
+  onSubmitTask: (sessionId: string) => void;
+  projectId: string;
+  shareToken: string | null;
 }
 
 export function AgentPromptPanel({
   attachedFiles,
   onRemoveFile,
   onSubmitTask,
+  projectId,
+  shareToken,
 }: AgentPromptPanelProps) {
   const [prompt, setPrompt] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
-  const handleSubmit = () => {
-    if (!prompt.trim()) return;
-    onSubmitTask(prompt, attachedFiles.map(f => f.id));
-    setPrompt("");
+  const handleSubmit = async () => {
+    if (!prompt.trim() || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("coding-agent-orchestrator", {
+        body: {
+          projectId,
+          taskDescription: prompt,
+          attachedFileIds: attachedFiles.map(f => f.id),
+          projectContext: {}, // TODO: Add ProjectSelector context
+          shareToken,
+          mode: "edit", // Default mode, could be made selectable
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Task Submitted",
+        description: "CodingAgent is processing your request",
+      });
+
+      onSubmitTask(data.sessionId);
+      setPrompt("");
+    } catch (error) {
+      console.error("Error submitting task:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit task",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -79,11 +119,20 @@ export function AgentPromptPanel({
 
         <Button
           onClick={handleSubmit}
-          disabled={!prompt.trim()}
+          disabled={!prompt.trim() || isSubmitting}
           className="w-full gap-2"
         >
-          <Send className="h-4 w-4" />
-          Submit Task
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4" />
+              Submit Task
+            </>
+          )}
         </Button>
       </CardContent>
     </Card>
