@@ -1,31 +1,29 @@
 import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepoCard } from "@/components/repository/RepoCard";
 import { FileTree } from "@/components/repository/FileTree";
 import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
+import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { GitBranch, FileCode, Settings, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Repository() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = useState<string>();
+  const [managePATDialogOpen, setManagePATDialogOpen] = useState(false);
+  const [selectedRepoForPAT, setSelectedRepoForPAT] = useState<{id: string; name: string} | null>(null);
 
-  // Mock data - will be replaced with real data from RPC functions
-  const mockRepos = [
-    {
-      id: "1",
-      organization: "pronghorn-red",
-      repo: "demo-project",
-      branch: "main",
-      is_default: true,
-    },
-  ];
+  const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
   const mockFiles = [
     {
@@ -49,44 +47,151 @@ export default function Repository() {
     { name: "package.json", path: "package.json", type: "file" as const },
   ];
 
-  const handleCreateEmpty = (name: string) => {
-    toast({
-      title: "Creating repository",
-      description: `Creating empty repository: ${name}`,
-    });
-    // TODO: Call RPC function
+  const handleCreateEmpty = async (name: string) => {
+    if (!projectId) return;
+
+    try {
+      const { error } = await supabase.rpc("create_project_repo_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_organization: "pronghorn-red",
+        p_repo: name,
+        p_branch: "main",
+        p_is_default: repos.length === 0, // First repo is default
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Repository created",
+        description: `Created empty repository: pronghorn-red/${name}`,
+      });
+
+      refetch();
+    } catch (error: any) {
+      console.error("Error creating repo:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create repository",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleCreateFromTemplate = (name: string, templateOrg: string, templateRepo: string) => {
-    toast({
-      title: "Creating from template",
-      description: `Cloning ${templateOrg}/${templateRepo} to ${name}`,
-    });
-    // TODO: Call RPC function
+  const handleCreateFromTemplate = async (name: string, templateOrg: string, templateRepo: string) => {
+    if (!projectId) return;
+
+    try {
+      const { error } = await supabase.rpc("create_project_repo_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_organization: "pronghorn-red",
+        p_repo: name,
+        p_branch: "main",
+        p_is_default: repos.length === 0,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Repository created from template",
+        description: `Cloning ${templateOrg}/${templateRepo} to ${name}`,
+      });
+
+      refetch();
+    } catch (error: any) {
+      console.error("Error creating repo:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create repository from template",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleLinkExisting = (org: string, repo: string, branch: string, pat?: string) => {
-    toast({
-      title: "Linking repository",
-      description: `Linking ${org}/${repo} (${branch})`,
-    });
-    // TODO: Call RPC function
+  const handleLinkExisting = async (org: string, repo: string, branch: string, pat?: string) => {
+    if (!projectId) return;
+
+    try {
+      const { data, error } = await supabase.rpc("create_project_repo_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_organization: org,
+        p_repo: repo,
+        p_branch: branch,
+        p_is_default: false,
+      });
+
+      if (error) throw error;
+
+      // If PAT provided, store it
+      if (pat && data) {
+        const { error: patError } = await supabase.rpc("insert_repo_pat_with_token", {
+          p_repo_id: data.id,
+          p_pat: pat,
+        });
+
+        if (patError) {
+          console.error("Error storing PAT:", patError);
+          toast({
+            title: "Repository linked, but PAT not saved",
+            description: "Repository was linked successfully, but there was an error storing the PAT",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      toast({
+        title: "Repository linked",
+        description: `Linked ${org}/${repo} (${branch})`,
+      });
+
+      refetch();
+    } catch (error: any) {
+      console.error("Error linking repo:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to link repository",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteRepo = (repoId: string) => {
-    toast({
-      title: "Repository removed",
-      description: "Repository has been unlinked from this project",
-    });
-    // TODO: Call RPC function
+  const handleDeleteRepo = async (repoId: string) => {
+    try {
+      const { error } = await supabase.rpc("delete_project_repo_with_token", {
+        p_repo_id: repoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Repository removed",
+        description: "Repository has been unlinked from this project",
+      });
+
+      refetch();
+    } catch (error: any) {
+      console.error("Error deleting repo:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove repository",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleManagePAT = (repoId: string) => {
-    toast({
-      title: "Manage PAT",
-      description: "PAT management coming soon",
-    });
-    // TODO: Open PAT management dialog
+    const repo = repos.find(r => r.id === repoId);
+    if (repo) {
+      setSelectedRepoForPAT({
+        id: repo.id,
+        name: `${repo.organization}/${repo.repo}`
+      });
+      setManagePATDialogOpen(true);
+    }
   };
 
   const handleFileSelect = (path: string) => {
@@ -160,14 +265,20 @@ export default function Repository() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {mockRepos.map((repo) => (
-                      <RepoCard
-                        key={repo.id}
-                        repo={repo}
-                        onDelete={handleDeleteRepo}
-                        onManagePAT={handleManagePAT}
-                      />
-                    ))}
+                    {loading ? (
+                      <p className="text-muted-foreground text-center py-4">Loading repositories...</p>
+                    ) : repos.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">No repositories connected</p>
+                    ) : (
+                      repos.map((repo) => (
+                        <RepoCard
+                          key={repo.id}
+                          repo={repo}
+                          onDelete={handleDeleteRepo}
+                          onManagePAT={handleManagePAT}
+                        />
+                      ))
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -257,6 +368,15 @@ export default function Repository() {
           </div>
         </main>
       </div>
+
+      {selectedRepoForPAT && (
+        <ManagePATDialog
+          repoId={selectedRepoForPAT.id}
+          repoName={selectedRepoForPAT.name}
+          open={managePATDialogOpen}
+          onOpenChange={setManagePATDialogOpen}
+        />
+      )}
     </div>
   );
 }

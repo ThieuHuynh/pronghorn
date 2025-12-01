@@ -1185,6 +1185,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_project_repo_with_token: {
+        Args: {
+          p_branch?: string
+          p_is_default?: boolean
+          p_organization: string
+          p_project_id: string
+          p_repo: string
+          p_token: string
+        }
+        Returns: {
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_artifact_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -1205,6 +1231,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_project_repo_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_project_standard_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -1215,6 +1245,10 @@ export type Database = {
       }
       delete_project_with_token: {
         Args: { p_project_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_repo_pat_with_token: {
+        Args: { p_repo_id: string }
         Returns: undefined
       }
       delete_requirement_standard_with_token: {
@@ -1338,6 +1372,25 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "chat_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_project_repos_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1632,6 +1685,22 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_repo_pat_with_token: {
+        Args: { p_pat: string; p_repo_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          pat: string
+          repo_id: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_pats"
           isOneToOne: true
           isSetofReturn: false
         }
