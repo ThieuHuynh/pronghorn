@@ -1622,15 +1622,25 @@ export type Database = {
           path: string
         }[]
       }
-      agent_search_files_with_token: {
-        Args: { p_keyword: string; p_project_id: string; p_token: string }
-        Returns: {
-          content: string
-          id: string
-          match_type: string
-          path: string
-        }[]
-      }
+      agent_search_files_with_token:
+        | {
+            Args: { p_keyword: string; p_project_id: string; p_token: string }
+            Returns: {
+              content: string
+              id: string
+              match_type: string
+              path: string
+            }[]
+          }
+        | {
+            Args: { p_keyword: string; p_project_id: string; p_token: string }
+            Returns: {
+              content: string
+              id: string
+              match_type: string
+              path: string
+            }[]
+          }
       agent_search_requirements_with_token: {
         Args: { p_project_id: string; p_search_term?: string; p_token: string }
         Returns: {
