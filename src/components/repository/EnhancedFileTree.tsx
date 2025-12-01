@@ -55,6 +55,10 @@ function TreeNode({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
+  if (node.type === "file" && node.name === ".gitkeep") {
+    return null;
+  }
+  
   const isSelected = selectedPath === node.path;
 
   const handleNewFile = () => {

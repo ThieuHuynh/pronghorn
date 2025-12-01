@@ -139,8 +139,8 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
             size="sm"
             onClick={handleSave}
             disabled={saving || loading}
-            variant="ghost"
-            className="h-8 gap-2 text-foreground hover:bg-accent/50"
+            variant="secondary"
+            className="h-8 gap-2"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Save"}
