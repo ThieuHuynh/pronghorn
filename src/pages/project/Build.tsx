@@ -297,7 +297,7 @@ export default function Build() {
                   />
                 </TabsContent>
 
-                <TabsContent value="chat" className="flex-1 overflow-auto mt-0 p-3">
+                <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
                   <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
                 </TabsContent>
 
@@ -319,7 +319,8 @@ export default function Build() {
             </div>
 
             {/* Desktop Layout (>= md) - Resizable Panels */}
-            <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1 overflow-hidden">
+            <div className="hidden md:flex flex-1 overflow-hidden">
+              <ResizablePanelGroup direction="horizontal" className="w-full h-full">
               {/* Left: File Tree */}
               <ResizablePanel defaultSize={20} minSize={15}>
                 <div className="h-full border-r">
@@ -390,7 +391,7 @@ export default function Build() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-4">
+                  <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-4 flex flex-col">
                     <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
                   </TabsContent>
 
@@ -411,6 +412,7 @@ export default function Build() {
                 </Tabs>
               </ResizablePanel>
             </ResizablePanelGroup>
+            </div>
           </div>
         </main>
       </div>

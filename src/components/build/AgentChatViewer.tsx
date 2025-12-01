@@ -26,7 +26,7 @@ export function AgentChatViewer({ sessionId, shareToken }: AgentChatViewerProps)
   };
 
   return (
-    <Card className="h-full">
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
@@ -36,8 +36,8 @@ export function AgentChatViewer({ sessionId, shareToken }: AgentChatViewerProps)
           Full interaction history with the coding agent
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[600px] w-full pr-4">
+      <CardContent className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full w-full pr-4">
           {loading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">Loading conversation...</p>
