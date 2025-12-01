@@ -97,11 +97,29 @@ Deno.serve(async (req) => {
     }
 
     // Get files to push
-    const { data: files, error: filesError } = await supabaseClient
-      .from('repo_files')
-      .select('path, content')
-      .eq('repo_id', repoId)
-      .in('path', filePaths || []);
+    let filesToPush;
+    let filesError;
+    
+    if (filePaths && filePaths.length > 0) {
+      // Get specific files
+      const result = await supabaseClient
+        .from('repo_files')
+        .select('path, content')
+        .eq('repo_id', repoId)
+        .in('path', filePaths);
+      
+      filesToPush = result.data;
+      filesError = result.error;
+    } else {
+      // Get all files
+      const result = await supabaseClient
+        .from('repo_files')
+        .select('path, content')
+        .eq('repo_id', repoId);
+      
+      filesToPush = result.data;
+      filesError = result.error;
+    }
 
     if (filesError) {
       console.error('Error fetching files:', filesError);
@@ -110,14 +128,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    // If no specific files, get all files
-    const filesToPush = filePaths
-      ? files
-      : (await supabaseClient
-          .from('repo_files')
-          .select('path, content')
-          .eq('repo_id', repoId)).data || [];
 
     if (!filesToPush || filesToPush.length === 0) {
       return new Response(JSON.stringify({ error: 'No files to push' }), {
