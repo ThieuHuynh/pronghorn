@@ -16,7 +16,7 @@ interface CodeEditorProps {
   showDiff?: boolean;
   diffOldContent?: string;
   onClose: () => void;
-  onSave: () => void;
+  onSave?: () => void;
   onAutoSync?: () => void;
 }
 
@@ -174,7 +174,7 @@ export function CodeEditor({
         description:
           "File changes staged successfully. Commit from Build page to persist.",
       });
-      onSave();
+      onSave?.();
     } catch (error) {
       console.error("Error staging file:", error);
       toast({
