@@ -346,13 +346,33 @@ export default function Build() {
                           </Button>
                         )}
                       </div>
-                      <div className="flex-1 min-h-0 overflow-hidden">
+                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                         {selectedDiff ? (
-                          <DiffViewer
-                            oldContent={selectedDiff.old}
-                            newContent={selectedDiff.new}
-                            filePath={selectedDiff.path}
-                          />
+                          <>
+                            <div className="flex-1 min-h-0 overflow-hidden">
+                              <CodeEditor
+                                fileId={selectedFileId!}
+                                filePath={selectedFilePath || ""}
+                                repoId={defaultRepo?.id || ""}
+                                onClose={() => {
+                                  setSelectedFileId(null);
+                                  setSelectedFilePath(null);
+                                  setSelectedDiff(null);
+                                }}
+                                onSave={() => {
+                                  loadFiles();
+                                }}
+                                isStaged={false}
+                              />
+                            </div>
+                            <div className="flex-1 min-h-0 overflow-hidden border-t">
+                              <DiffViewer
+                                oldContent={selectedDiff.old}
+                                newContent={selectedDiff.new}
+                                filePath={selectedDiff.path}
+                              />
+                            </div>
+                          </>
                         ) : (
                           <CodeEditor
                             fileId={selectedFileId}
