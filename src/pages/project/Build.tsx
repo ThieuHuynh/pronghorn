@@ -100,6 +100,8 @@ export default function Build() {
       });
 
       if (stagedError) throw stagedError;
+      
+      setStagedChanges(staged || []);
 
       // Build comprehensive file list including all staged changes
       const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
@@ -267,26 +269,94 @@ export default function Build() {
                   <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="files" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full flex flex-col">
-                    <div className="px-3 py-2 border-b">
-                      <h3 className="text-sm font-semibold">Repository Files</h3>
+                <TabsContent value="files" className="flex-1 overflow-hidden mt-0 flex flex-col">
+                  {selectedFileId || selectedDiff ? (
+                    <div className="h-full flex flex-col">
+                      <div className="px-3 py-2 border-b flex items-center justify-between">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedFileId(null);
+                            setSelectedFilePath(null);
+                            setSelectedDiff(null);
+                          }}
+                        >
+                          ← Back to Files
+                        </Button>
+                        {selectedFileId && !selectedDiff && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Find staged change for this file
+                              const stagedChange = stagedChanges.find(
+                                (c: any) => c.file_path === selectedFilePath
+                              );
+                              if (stagedChange) {
+                                handleViewDiff(stagedChange);
+                              }
+                            }}
+                          >
+                            View Diff
+                          </Button>
+                        )}
+                        {selectedDiff && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedDiff(null);
+                            }}
+                          >
+                            View Code
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        {selectedDiff ? (
+                          <DiffViewer
+                            oldContent={selectedDiff.old}
+                            newContent={selectedDiff.new}
+                            filePath={selectedDiff.path}
+                          />
+                        ) : (
+                          <CodeEditor
+                            fileId={selectedFileId}
+                            filePath={selectedFilePath}
+                            repoId={defaultRepo?.id || ""}
+                            isStaged={selectedFileIsStaged}
+                            onClose={() => {
+                              setSelectedFileId(null);
+                              setSelectedFilePath(null);
+                              setSelectedFileIsStaged(false);
+                            }}
+                            onSave={loadFiles}
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 overflow-auto">
-                      <AgentFileTree
-                        files={files}
-                        selectedFileId={selectedFileId}
-                        onSelectFile={handleSelectFile}
-                        onAttachToPrompt={handleAttachToPrompt}
-                        onReviewFile={handleReviewFile}
-                        onEditFile={handleEditFile}
-                        onAuditFile={handleAuditFile}
-                      />
+                  ) : (
+                    <div className="h-full flex flex-col">
+                      <div className="px-3 py-2 border-b">
+                        <h3 className="text-sm font-semibold">Repository Files</h3>
+                      </div>
+                      <div className="flex-1 overflow-auto">
+                        <AgentFileTree
+                          files={files}
+                          selectedFileId={selectedFileId}
+                          onSelectFile={handleSelectFile}
+                          onAttachToPrompt={handleAttachToPrompt}
+                          onReviewFile={handleReviewFile}
+                          onEditFile={handleEditFile}
+                          onAuditFile={handleAuditFile}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </TabsContent>
 
-                <TabsContent value="agent" className="flex-1 overflow-auto mt-0 p-3">
+                <TabsContent value="agent" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
                   <AgentPromptPanel
                     attachedFiles={attachedFiles}
                     onRemoveFile={handleRemoveAttachedFile}
@@ -301,18 +371,18 @@ export default function Build() {
                   <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
                 </TabsContent>
 
-                <TabsContent value="progress" className="flex-1 overflow-auto mt-0 p-3">
+                <TabsContent value="progress" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
                   <AgentProgressMonitor 
                     sessionId={activeSessionId}
                     shareToken={shareToken}
                   />
                 </TabsContent>
 
-                <TabsContent value="staging" className="flex-1 overflow-auto mt-0 p-3">
+                <TabsContent value="staging" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
                   <StagingPanel projectId={projectId} onViewDiff={handleViewDiff} />
                 </TabsContent>
 
-                <TabsContent value="history" className="flex-1 overflow-auto mt-0 p-3">
+                <TabsContent value="history" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
                   <CommitHistory projectId={projectId} />
                 </TabsContent>
               </Tabs>
