@@ -2210,10 +2210,18 @@ export type Database = {
           content: string
           created_at: string
           id: string
-          last_commit_sha: string
+          last_commit_sha: string | null
           path: string
+          project_id: string
+          repo_id: string
           updated_at: string
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "repo_files"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       upsert_files_batch_with_token: {
         Args: { p_files: Json; p_repo_id: string; p_token: string }
