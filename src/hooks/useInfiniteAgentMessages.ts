@@ -31,7 +31,13 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
   // Real-time subscription for new messages across all sessions
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !shareToken) return;
+
+    // Set the share token in the session for RLS validation
+    const setToken = async () => {
+      await supabase.rpc('set_share_token', { token: shareToken });
+    };
+    setToken();
 
     const channel = supabase
       .channel(`agent-messages-project-${projectId}`)
@@ -43,9 +49,14 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
           table: "agent_messages",
         },
         (payload) => {
+          console.log("New agent message received:", payload);
           const newMessage = payload.new as AgentMessage;
-          // Add to top of list if it belongs to this project
-          setMessages((prev) => [newMessage, ...prev]);
+          // Add to top of list (newest first)
+          setMessages((prev) => {
+            // Prevent duplicates
+            if (prev.some(m => m.id === newMessage.id)) return prev;
+            return [newMessage, ...prev];
+          });
         }
       )
       .subscribe();
@@ -53,7 +64,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId]);
+  }, [projectId, shareToken]);
 
   const loadInitialMessages = async () => {
     if (!projectId) return;

@@ -41,7 +41,15 @@ export default function Build() {
 
   // Real-time subscription for file and staging changes
   useEffect(() => {
-    if (!projectId || !defaultRepo) return;
+    if (!projectId || !defaultRepo || !shareToken) return;
+
+    // Set the share token in the session for RLS validation
+    const setToken = async () => {
+      await supabase.rpc('set_share_token', { token: shareToken });
+    };
+    setToken();
+
+    console.log("Setting up file tree real-time subscriptions for project:", projectId);
 
     const channel = supabase
       .channel(`repo-changes-${projectId}`)
@@ -53,7 +61,8 @@ export default function Build() {
           table: "repo_files",
           filter: `project_id=eq.${projectId}`,
         },
-        () => {
+        (payload) => {
+          console.log("File change detected:", payload);
           loadFiles();
         }
       )
@@ -65,7 +74,8 @@ export default function Build() {
           table: "repo_staging",
           filter: `repo_id=eq.${defaultRepo.id}`,
         },
-        () => {
+        (payload) => {
+          console.log("Staging change detected:", payload);
           loadFiles();
         }
       )
@@ -74,7 +84,7 @@ export default function Build() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId, defaultRepo]);
+  }, [projectId, defaultRepo, shareToken]);
 
   const loadFiles = async () => {
     if (!defaultRepo || !projectId) return;
