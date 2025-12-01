@@ -576,21 +576,13 @@ Think step-by-step and continue until the task is complete.`;
                 const baseLines = baseContent.split('\n');
                 const totalBaseLines = baseLines.length;
                 const startIdx = op.params.start_line - 1;
-                const endIdx = op.params.end_line - 1;
+                // Cap end line to actual file length (allows agent to be less precise)
+                const endIdx = Math.min(op.params.end_line - 1, totalBaseLines - 1);
                 
-                if (startIdx < 0 || endIdx >= totalBaseLines || startIdx > endIdx) {
-                  // Provide helpful context about what lines exist
-                  const linePreview = baseLines.slice(Math.max(0, startIdx - 2), Math.min(totalBaseLines, endIdx + 3))
-                    .map((line: string, idx: number) => {
-                      const lineNum = Math.max(1, op.params.start_line - 2) + idx;
-                      return `${lineNum}: ${line.slice(0, 80)}${line.length > 80 ? '...' : ''}`;
-                    })
-                    .join('\n');
-                  
+                if (startIdx < 0 || startIdx >= totalBaseLines || startIdx > endIdx) {
                   throw new Error(
-                    `Invalid line range: start_line=${op.params.start_line}, end_line=${op.params.end_line}. ` +
-                    `File has ${totalBaseLines} lines (valid range: 1-${totalBaseLines}). ` +
-                    `Lines near your range:\n${linePreview}`
+                    `Invalid start line: start_line=${op.params.start_line}. ` +
+                    `File has ${totalBaseLines} lines (valid range: 1-${totalBaseLines}).`
                   );
                 }
                 
