@@ -655,7 +655,8 @@ Think step-by-step and continue until the task is complete.`;
               break;
               
             case "delete_file":
-              const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
+              // Use agent_read_file_with_token which queries both repo_files AND repo_staging
+              const { data: deleteFileData } = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
@@ -673,10 +674,13 @@ Think step-by-step and continue until the task is complete.`;
                 
                 if (newlyCreated) {
                   // Just unstage the add operation instead of staging a delete
+                  // FIX: Use correct parameters - repo_id and file_path, not staging_id
                   result = await supabase.rpc("unstage_file_with_token", {
-                    p_staging_id: newlyCreated.id,
+                    p_repo_id: repoId,
+                    p_file_path: newlyCreated.file_path,
                     p_token: shareToken,
                   });
+                  console.log(`[AGENT] Unstaged newly created file: ${newlyCreated.file_path}`);
                 } else {
                   // Stage the delete for a committed file
                   result = await supabase.rpc("stage_file_change_with_token", {
@@ -686,7 +690,10 @@ Think step-by-step and continue until the task is complete.`;
                     p_file_path: deleteFileData[0].path,
                     p_old_content: deleteFileData[0].content,
                   });
+                  console.log(`[AGENT] Staged delete for committed file: ${deleteFileData[0].path}`);
                 }
+              } else {
+                throw new Error(`File not found with ID: ${op.params.file_id}`);
               }
               break;
               
