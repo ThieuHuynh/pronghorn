@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X } from "lucide-react";
+import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft } from "lucide-react";
+import { DiffViewer } from "./DiffViewer";
+import { CodeEditor } from "../repository/CodeEditor";
 
 interface StagedChange {
   id: string;
@@ -37,6 +39,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [viewingDiff, setViewingDiff] = useState<StagedChange | null>(null);
 
   useEffect(() => {
     loadRepoAndStagedChanges();
@@ -273,6 +276,42 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
     );
   }
 
+  // Show diff viewer if a diff is being viewed
+  if (viewingDiff) {
+    return (
+      <div className="h-full flex flex-col space-y-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setViewingDiff(null)}
+          className="self-start"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Staging
+        </Button>
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <CodeEditor
+              fileId={viewingDiff.id}
+              filePath={viewingDiff.file_path}
+              repoId={repoId || ""}
+              isStaged={true}
+              onClose={() => setViewingDiff(null)}
+              onSave={loadRepoAndStagedChanges}
+            />
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden border-t">
+            <DiffViewer
+              oldContent={viewingDiff.old_content || ""}
+              newContent={viewingDiff.new_content || ""}
+              filePath={viewingDiff.file_path}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -337,11 +376,11 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                     </div>
                     {getOperationBadge(change.operation_type)}
                     <div className="flex items-center gap-1">
-                      {onViewDiff && (change.operation_type === 'edit' || change.operation_type === 'add') && (
+                      {(change.operation_type === 'edit' || change.operation_type === 'add') && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onViewDiff(change)}
+                          onClick={() => setViewingDiff(change)}
                         >
                           Diff
                         </Button>
