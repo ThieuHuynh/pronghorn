@@ -469,18 +469,18 @@ export function UnifiedAgentInterface({
               </div>
             ) : (
               <>
-                {timeline.map((item, index) => renderTimelineItem(item, index))}
-                
-                {/* Load more triggers */}
+                {/* Load more triggers at TOP for scrolling up */}
                 {(hasMoreMessages || hasMoreOperations) && (
                   <div ref={messageLoadMoreTriggerRef} className="flex items-center justify-center py-4">
                     {(messagesLoading || operationsLoading) ? (
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     ) : (
-                      <p className="text-xs text-muted-foreground">Scroll for more...</p>
+                      <p className="text-xs text-muted-foreground">Scroll up for older messages...</p>
                     )}
                   </div>
                 )}
+                
+                {timeline.map((item, index) => renderTimelineItem(item, index))}
               </>
             )}
             <div ref={messagesEndRef} />
