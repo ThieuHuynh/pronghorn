@@ -168,6 +168,24 @@ Deno.serve(async (req) => {
     const commitData = await commitResponse.json();
     const baseTreeSha = commitData.tree.sha;
 
+    // Get the current tree to identify deletions
+    const currentTreeUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/trees/${baseTreeSha}?recursive=1`;
+    const currentTreeResponse = await fetch(currentTreeUrl, {
+      headers: {
+        'Authorization': `token ${pat}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Pronghorn-Sync',
+      },
+    });
+
+    if (!currentTreeResponse.ok) {
+      console.error('Failed to get current tree:', await currentTreeResponse.text());
+    }
+
+    const currentTreeData = await currentTreeResponse.json();
+    const currentFiles = new Set(currentTreeData.tree?.map((item: any) => item.path) || []);
+    const dbFilePaths = new Set(filesToPush.map((f: RepoFile) => f.path));
+
     // Create blobs for each file
     const tree = await Promise.all(
       filesToPush.map(async (file: RepoFile) => {
@@ -199,6 +217,21 @@ Deno.serve(async (req) => {
         };
       })
     );
+
+    // Handle deletions: mark files that are in GitHub but not in DB for removal
+    const deletions = Array.from(currentFiles).filter(path => !dbFilePaths.has(path as string));
+    deletions.forEach(path => {
+      tree.push({
+        path: path as string,
+        mode: '100644',
+        type: 'blob',
+        sha: null, // null sha means delete this file
+      });
+    });
+
+    if (deletions.length > 0) {
+      console.log(`Deleting ${deletions.length} files from GitHub:`, deletions);
+    }
 
     // Create new tree
     const treeUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/trees`;

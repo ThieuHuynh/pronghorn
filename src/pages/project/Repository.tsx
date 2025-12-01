@@ -654,7 +654,7 @@ export default function Repository() {
                         Full-Screen IDE
                       </Button>
                     </div>
-                    <ResizablePanelGroup direction="horizontal" className="h-[600px]">
+                    <ResizablePanelGroup direction="horizontal" className="min-h-[700px]">
                       <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
                         <div className="h-full border-r border-border bg-muted/5">
                           {loadingFiles ? (
