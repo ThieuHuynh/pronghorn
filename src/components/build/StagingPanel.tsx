@@ -15,14 +15,17 @@ interface StagedChange {
   operation_type: 'add' | 'edit' | 'delete' | 'rename';
   file_path: string;
   old_path?: string;
+  old_content?: string;
+  new_content?: string;
   created_at: string;
 }
 
 interface StagingPanelProps {
   projectId: string;
+  onViewDiff?: (change: any) => void;
 }
 
-export function StagingPanel({ projectId }: StagingPanelProps) {
+export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
   const { toast } = useToast();
@@ -231,6 +234,15 @@ export function StagingPanel({ projectId }: StagingPanelProps) {
                       )}
                     </div>
                     {getOperationBadge(change.operation_type)}
+                    {onViewDiff && (change.operation_type === 'edit' || change.operation_type === 'add') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onViewDiff(change)}
+                      >
+                        Diff
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
