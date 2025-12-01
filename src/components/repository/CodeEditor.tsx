@@ -55,25 +55,32 @@ export function CodeEditor({
   }, [fileId, isStaged, filePath, initialContent]);
 
   const loadFileContent = async () => {
-    if (!fileId) return;
+    if (!fileId && !filePath) return;
     
     setLoading(true);
     try {
-      if (isStaged) {
-        // Load from repo_staging for staged files
+      if (isStaged && filePath) {
+        // Prefer loading latest staged content for this file path
         const { data, error } = await supabase
           .from("repo_staging")
           .select("*")
-          .eq("id", fileId)
-          .single();
+          .eq("repo_id", repoId)
+          .eq("file_path", filePath)
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
-        if (data) {
-          const content = data.new_content || "";
+
+        if (data && data.length > 0) {
+          const staged = data[0];
+          const content = staged.new_content || "";
           setContent(content);
           setOriginalContent(content);
+          return;
         }
-      } else {
+        // If no staged row found, fall through to committed file load
+      }
+
+      if (fileId) {
         // Load from repo_files for committed files
         const { data, error } = await supabase.rpc("get_file_content_with_token", {
           p_file_id: fileId,

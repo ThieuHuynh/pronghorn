@@ -14,6 +14,7 @@ import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
 import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
 import { AgentChatViewer } from "@/components/build/AgentChatViewer";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -38,6 +39,7 @@ export default function Build() {
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<{ old: string; new: string; path: string } | null>(null);
+  const [diffEnabled, setDiffEnabled] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -182,6 +184,7 @@ export default function Build() {
     setSelectedFilePath(path);
     setSelectedFileIsStaged(isStaged || false);
     setSelectedDiff(null);
+    setDiffEnabled(false);
   };
 
   const handleAttachToPrompt = (fileId: string, path: string) => {
@@ -236,8 +239,9 @@ export default function Build() {
       new: change.new_content || "",
       path: change.file_path,
     });
-    // Keep file selected so "View Code" can return to editor
-    const fileInfo = files.find(f => f.path === change.file_path);
+    setDiffEnabled(true);
+    // Keep file selected so diff toggle can return to editor
+    const fileInfo = files.find((f) => f.path === change.file_path);
     if (fileInfo) {
       setSelectedFileId(fileInfo.id);
       setSelectedFilePath(fileInfo.path);
@@ -320,36 +324,35 @@ export default function Build() {
                             setSelectedFileId(null);
                             setSelectedFilePath(null);
                             setSelectedDiff(null);
+                            setDiffEnabled(false);
                           }}
                         >
                           ← Back to Files
                         </Button>
-                        {selectedFileId && !selectedDiff && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const stagedChange = stagedChanges.find(
-                                (c: any) => c.file_path === selectedFilePath,
-                              );
-                              if (stagedChange) {
-                                handleViewDiff(stagedChange);
-                              }
-                            }}
-                          >
-                            View Diff
-                          </Button>
-                        )}
-                        {selectedDiff && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedDiff(null);
-                            }}
-                          >
-                            View Code
-                          </Button>
+                        {selectedFileId && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox
+                              id="mobile-diff-toggle"
+                              checked={diffEnabled}
+                              onCheckedChange={(checked) => {
+                                const enabled = Boolean(checked);
+                                setDiffEnabled(enabled);
+                                if (enabled) {
+                                  const stagedChange = stagedChanges.find(
+                                    (c: any) => c.file_path === selectedFilePath,
+                                  );
+                                  if (stagedChange) {
+                                    handleViewDiff(stagedChange);
+                                  }
+                                } else {
+                                  setSelectedDiff(null);
+                                }
+                              }}
+                            />
+                            <label htmlFor="mobile-diff-toggle" className="cursor-pointer">
+                              Show diff
+                            </label>
+                          </div>
                         )}
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
