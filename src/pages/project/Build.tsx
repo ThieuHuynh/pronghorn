@@ -180,6 +180,7 @@ export default function Build() {
                     onRemoveFile={handleRemoveAttachedFile}
                     onSubmitTask={handleSubmitTask}
                     projectId={projectId}
+                    repoId={defaultRepo?.id || ""}
                     shareToken={shareToken}
                   />
                 </TabsContent>
@@ -265,6 +266,7 @@ export default function Build() {
                       onRemoveFile={handleRemoveAttachedFile}
                       onSubmitTask={handleSubmitTask}
                       projectId={projectId}
+                      repoId={defaultRepo?.id || ""}
                       shareToken={shareToken}
                     />
                   </TabsContent>

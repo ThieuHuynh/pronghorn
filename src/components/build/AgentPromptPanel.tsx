@@ -22,6 +22,7 @@ interface AgentPromptPanelProps {
   onRemoveFile: (fileId: string) => void;
   onSubmitTask: (sessionId: string) => void;
   projectId: string;
+  repoId: string;
   shareToken: string | null;
 }
 
@@ -30,6 +31,7 @@ export function AgentPromptPanel({
   onRemoveFile,
   onSubmitTask,
   projectId,
+  repoId,
   shareToken,
 }: AgentPromptPanelProps) {
   const [prompt, setPrompt] = useState("");
@@ -78,8 +80,9 @@ export function AgentPromptPanel({
       const { data, error } = await supabase.functions.invoke("coding-agent-orchestrator", {
         body: {
           projectId,
+          repoId,
           taskDescription: prompt,
-          attachedFileIds: attachedFiles.map(f => f.id),
+          attachedFileIds: attachedFiles.map((f) => f.id),
           projectContext: attachedContext || {},
           shareToken,
           mode: "task",

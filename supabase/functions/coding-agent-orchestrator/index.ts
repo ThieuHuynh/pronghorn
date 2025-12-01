@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface TaskRequest {
   projectId: string;
+  repoId: string;
   taskDescription: string;
   attachedFileIds: string[];
   projectContext: any;
@@ -34,6 +35,7 @@ serve(async (req) => {
 
     const {
       projectId,
+      repoId,
       taskDescription,
       attachedFileIds,
       projectContext,
@@ -336,7 +338,7 @@ Execute file operations carefully and document your reasoning.`;
             
           case "create_file":
             result = await supabase.rpc("create_file_with_token", {
-              p_repo_id: op.params.repo_id,
+              p_repo_id: repoId,
               p_path: op.params.path,
               p_content: op.params.content,
               p_token: shareToken,
