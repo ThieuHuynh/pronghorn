@@ -15,7 +15,8 @@ import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface"
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus } from "lucide-react";
+import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 
 export default function Build() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -37,6 +38,9 @@ export default function Build() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectSidebarOpen, setIsProjectSidebarOpen] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createType, setCreateType] = useState<"file" | "folder">("file");
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
 
   // Load files from default repo
   useEffect(() => {
@@ -167,6 +171,16 @@ export default function Build() {
   };
 
   const handleSelectFile = async (fileId: string, path: string, isStaged?: boolean) => {
+    // Track folder selection for context-aware file/folder creation
+    const file = files.find(f => f.path === path);
+    if (file && path.includes('/')) {
+      // Extract parent folder path
+      const folderPath = path.substring(0, path.lastIndexOf('/'));
+      setSelectedFolderPath(folderPath);
+    } else {
+      setSelectedFolderPath(null);
+    }
+
     // For staged-only files (newly created by agent), we need to load content from staging
     if (isStaged) {
       const stagedFile = stagedChanges.find(
@@ -186,6 +200,39 @@ export default function Build() {
     }
     
     setSelectedFile({ id: fileId, path, isStaged });
+  };
+
+  const handleCreateFile = async (name: string) => {
+    if (!defaultRepo || !projectId) return;
+
+    try {
+      const fullPath = selectedFolderPath 
+        ? `${selectedFolderPath}/${name}` 
+        : name;
+
+      if (createType === "folder") {
+        // Create .gitkeep file in folder
+        await supabase.rpc("create_file_with_token", {
+          p_repo_id: defaultRepo.id,
+          p_path: `${fullPath}/.gitkeep`,
+          p_content: "",
+          p_token: shareToken || null,
+        });
+      } else {
+        await supabase.rpc("create_file_with_token", {
+          p_repo_id: defaultRepo.id,
+          p_path: fullPath,
+          p_content: "",
+          p_token: shareToken || null,
+        });
+      }
+
+      toast.success(`${createType === "folder" ? "Folder" : "File"} created successfully`);
+      loadFiles();
+    } catch (error: any) {
+      console.error("Error creating file/folder:", error);
+      toast.error(error.message || "Failed to create file/folder");
+    }
   };
 
   const handleAttachToPrompt = (fileId: string, path: string) => {
@@ -260,9 +307,35 @@ export default function Build() {
                 <ResizablePanelGroup direction="horizontal" className="flex-1">
                   {/* Left: File Tree */}
                   <ResizablePanel defaultSize={20} minSize={15}>
-                    <div className="h-full flex flex-col border-r">
-                      <div className="p-2 border-b flex items-center justify-between">
-                        <span className="text-sm font-semibold">Files</span>
+                    <div className="h-full flex flex-col border-r bg-[#1e1e1e]">
+                      <div className="p-2 border-b border-[#3e3e42] flex items-center justify-between bg-[#252526]">
+                        <span className="text-sm font-semibold text-[#cccccc]">Files</span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setCreateType("file");
+                              setCreateDialogOpen(true);
+                            }}
+                            className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                            title="New File"
+                          >
+                            <FilePlus className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setCreateType("folder");
+                              setCreateDialogOpen(true);
+                            }}
+                            className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                            title="New Folder"
+                          >
+                            <FolderPlus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
                         <AgentFileTree
@@ -438,6 +511,14 @@ export default function Build() {
           </div>
         </main>
       </div>
+
+      <CreateFileDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        type={createType}
+        onConfirm={handleCreateFile}
+        basePath={selectedFolderPath || undefined}
+      />
     </div>
   );
 }

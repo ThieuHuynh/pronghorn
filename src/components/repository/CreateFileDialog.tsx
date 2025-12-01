@@ -38,16 +38,16 @@ export function CreateFileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="bg-[#1e1e1e] border-[#3e3e42]">
         <DialogHeader>
-          <DialogTitle>Create New {type === "file" ? "File" : "Folder"}</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-[#cccccc]">Create New {type === "file" ? "File" : "Folder"}</DialogTitle>
+          <DialogDescription className="text-[#858585]">
             {basePath ? `Creating in: ${basePath}` : "Creating in root directory"}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="name">{type === "file" ? "File" : "Folder"} Name</Label>
+            <Label htmlFor="name" className="text-[#cccccc]">{type === "file" ? "File" : "Folder"} Name</Label>
             <Input
               id="name"
               placeholder={type === "file" ? "example.ts" : "folder-name"}
@@ -59,14 +59,15 @@ export function CreateFileDialog({
                 }
               }}
               autoFocus
+              className="bg-[#2a2d2e] border-[#3e3e42] text-[#cccccc] placeholder:text-[#858585]"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="bg-[#2a2d2e] text-[#cccccc] border-[#3e3e42] hover:bg-[#313335]">
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={!name.trim()}>
+          <Button onClick={handleConfirm} disabled={!name.trim()} className="bg-[#0e639c] text-white hover:bg-[#1177bb]">
             Create
           </Button>
         </DialogFooter>
