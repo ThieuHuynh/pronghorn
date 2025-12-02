@@ -410,7 +410,8 @@ CRITICAL RULES:
 8. Set status to "completed" ONLY after EXHAUSTIVELY completing the user's request AND performing final validation
 9. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see the full current file content and understand line numbers
 10. For edit_lines: Count lines carefully in the read_file result to determine correct start_line and end_line
-11. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
+11. CRITICAL AFTER EDIT_LINES: The operation result includes a 'verification' object showing the file's actual state after your edit. Always check verification.content_sample to confirm your edit worked as intended. If the result is unexpected, read_file again to see the full current state.
+12. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
 
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
 You have up to 30 iterations available. USE THEM. The typical task requires 20-30 iterations to complete properly.
@@ -832,12 +833,39 @@ Start your response with { and end with }. Nothing else.`;
                   file_path: fileData[0].path,
                 });
                 
+                // CRITICAL: Re-read the file after edit to verify the change was applied correctly
+                // This helps the agent see the actual current state for subsequent operations
+                const { data: verifyData, error: verifyError } = await supabase.rpc(
+                  "agent_read_file_with_token",
+                  {
+                    p_file_id: op.params.file_id,
+                    p_token: shareToken,
+                  }
+                );
+
+                let verificationInfo = null;
+                if (verifyError) {
+                  console.warn(`[AGENT] edit_lines: Could not verify edit:`, verifyError);
+                } else if (verifyData && verifyData.length > 0) {
+                  const verifiedContent = verifyData[0].content;
+                  const verifiedLines = verifiedContent.split('\n');
+                  console.log(`[AGENT] edit_lines: Verified file now has ${verifiedLines.length} lines (was ${totalBaseLines} lines before edit)`);
+                  
+                  // Provide verification info to agent
+                  verificationInfo = {
+                    lines_before: totalBaseLines,
+                    lines_after: verifiedLines.length,
+                    content_sample: verifiedLines.slice(Math.max(0, startIdx - 3), Math.min(verifiedLines.length, endIdx + 4)).join('\n'),
+                  };
+                }
+                
                 // Include the new content in result for agent to verify
                 const finalLines = finalContent.split('\n');
                 result.data = {
                   ...(result.data || {}),
                   new_content_preview: finalLines.slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3)).join('\n'),
                   total_lines: finalLines.length,
+                  verification: verificationInfo,
                 };
                 
                 // Add JSON parse warning if there was one
