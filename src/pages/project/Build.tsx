@@ -43,6 +43,7 @@ export default function Build() {
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
   const [showDeletedFiles, setShowDeletedFiles] = useState(true);
   const [mobileActiveTab, setMobileActiveTab] = useState("files");
+  const [editorRefreshKey, setEditorRefreshKey] = useState(0);
 
   // Load files from default repo
   useEffect(() => {
@@ -83,6 +84,13 @@ export default function Build() {
          (payload) => {
            console.log("Staging change detected:", payload);
            loadFiles();
+           
+           // If the changed file matches the currently open file, trigger editor reload
+           const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
+           if (changedPath && selectedFile?.path === changedPath) {
+             console.log("Refreshing editor for:", changedPath);
+             setEditorRefreshKey(prev => prev + 1);
+           }
          }
        )
        .on(
@@ -98,7 +106,7 @@ export default function Build() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId, defaultRepo, isTokenSet]);
+  }, [projectId, defaultRepo, isTokenSet, selectedFile?.path]);
 
   const loadFiles = async () => {
     if (!defaultRepo || !projectId) return;
@@ -393,7 +401,7 @@ export default function Build() {
                     <div className="h-full">
                       {selectedFile ? (
                         <CodeEditor
-                          key={selectedFile.path}
+                          key={`${selectedFile.path}-${editorRefreshKey}`}
                           fileId={selectedFile.id}
                           filePath={selectedFile.path}
                           repoId={defaultRepo?.id || ""}
@@ -566,6 +574,7 @@ export default function Build() {
                   <TabsContent value="editor" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     {selectedFile ? (
                       <CodeEditor
+                        key={`mobile-${selectedFile.path}-${editorRefreshKey}`}
                         fileId={selectedFile.id}
                         filePath={selectedFile.path}
                         repoId={defaultRepo?.id || ""}
