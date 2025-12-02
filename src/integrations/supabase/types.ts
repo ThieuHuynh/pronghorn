@@ -1848,6 +1848,21 @@ export type Database = {
           session_id: string
         }[]
       }
+      get_agent_messages_for_chat_history_with_token: {
+        Args: {
+          p_limit?: number
+          p_project_id: string
+          p_since?: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          session_id: string
+        }[]
+      }
       get_agent_messages_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
