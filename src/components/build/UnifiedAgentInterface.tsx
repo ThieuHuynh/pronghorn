@@ -587,8 +587,8 @@ export function UnifiedAgentInterface({
       />
       
       {/* Timeline */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
-        <ScrollArea className="h-full" ref={scrollViewportRef}>
+      <div className="flex-1 min-h-0 relative">
+        <ScrollArea className="h-full touch-pan-y" ref={scrollViewportRef}>
           <div className="p-4 space-y-4">
             {timeline.length === 0 && !messagesLoading ? (
               <div className="flex items-center justify-center h-full text-muted-foreground py-8">
