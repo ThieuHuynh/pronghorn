@@ -201,52 +201,38 @@ export function UnifiedAgentInterface({
     if (!chatHistorySettings.includeHistory) return '';
 
     try {
-      // Query agent_messages for this project via RPC to get recent chat history
-      const { data: sessions, error: sessionsError } = await supabase.rpc(
-        'get_agent_sessions_with_token',
-        {
-          p_project_id: projectId,
-          p_token: shareToken || null
-        }
-      );
-
-      if (sessionsError) throw sessionsError;
-      if (!sessions || sessions.length === 0) return '';
-
-      // Get all session IDs for this project and filter out invalid ones
-      const sessionIds = sessions
-        .map((s: any) => s.id)
-        .filter((id: string) => id && id.trim() !== '');
-
-      // Return early if no valid session IDs
-      if (sessionIds.length === 0) return '';
-
-      // Build query for messages from these sessions
-      let query = supabase
-        .from('agent_messages')
-        .select('role, content, created_at')
-        .in('session_id', sessionIds)
-        .order('created_at', { ascending: false });
+      // Build RPC params based on filter type
+      const rpcParams: {
+        p_project_id: string;
+        p_token: string | null;
+        p_limit?: number;
+        p_since?: string;
+      } = {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      };
 
       if (chatHistorySettings.durationType === 'time') {
-        // Filter by time (minutes)
+        // Time-based filtering
         const cutoffTime = new Date();
         cutoffTime.setMinutes(cutoffTime.getMinutes() - chatHistorySettings.durationValue);
-        query = query.gte('created_at', cutoffTime.toISOString());
+        rpcParams.p_since = cutoffTime.toISOString();
       } else {
-        // Filter by message count
-        query = query.limit(chatHistorySettings.durationValue);
+        // Message count filtering
+        rpcParams.p_limit = chatHistorySettings.durationValue;
       }
 
-      const { data: historyMessages, error } = await query;
+      const { data: historyMessages, error } = await supabase.rpc(
+        'get_agent_messages_for_chat_history_with_token',
+        rpcParams
+      );
 
       if (error) throw error;
-
       if (!historyMessages || historyMessages.length === 0) return '';
 
-      // Format chat history as text
+      // Format chat history as text (messages are returned DESC, reverse to oldest first)
       const formattedHistory = historyMessages
-        .reverse() // Oldest first
+        .reverse()
         .map((msg: any) => {
           const timestamp = new Date(msg.created_at).toLocaleString();
           if (msg.role === 'user') {
