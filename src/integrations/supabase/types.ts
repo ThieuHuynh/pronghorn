@@ -200,6 +200,7 @@ export type Database = {
       }
       agent_sessions: {
         Row: {
+          abort_requested: boolean | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -212,6 +213,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          abort_requested?: boolean | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          abort_requested?: boolean | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -1692,6 +1695,7 @@ export type Database = {
           p_token: string
         }
         Returns: {
+          abort_requested: boolean | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -1893,9 +1897,32 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_agent_session_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          abort_requested: boolean | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_agent_sessions_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
+          abort_requested: boolean | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -2696,6 +2723,10 @@ export type Database = {
         }
         Returns: number
       }
+      request_agent_session_abort_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: undefined
+      }
       rollback_to_commit_with_token: {
         Args: { p_commit_id: string; p_repo_id: string; p_token: string }
         Returns: boolean
@@ -2826,6 +2857,7 @@ export type Database = {
           p_token: string
         }
         Returns: {
+          abort_requested: boolean | null
           completed_at: string | null
           created_at: string
           created_by: string | null

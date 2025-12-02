@@ -501,6 +501,26 @@ Start your response with { and end with }. Nothing else.`;
     conversationHistory.push({ role: "user", content: `Task: ${taskDescription}` });
 
     while (iteration < MAX_ITERATIONS) {
+      // Check if abort was requested before starting this iteration
+      const { data: sessionCheck, error: sessionCheckError } = await supabase.rpc(
+        "get_agent_session_with_token",
+        {
+          p_session_id: sessionId,
+          p_token: shareToken,
+        }
+      );
+      
+      if (sessionCheckError) {
+        console.error("Error checking session status:", sessionCheckError);
+      } else if (sessionCheck && sessionCheck.length > 0) {
+        const session = sessionCheck[0];
+        if (session.abort_requested || session.status === 'aborted') {
+          console.log("Abort requested, stopping iteration loop");
+          finalStatus = "aborted";
+          break;
+        }
+      }
+      
       iteration++;
       console.log(`\n=== Iteration ${iteration} ===`);
 
@@ -732,22 +752,23 @@ Start your response with { and end with }. Nothing else.`;
                   );
                 }
                 
-                // If the requested edit range is near the end of the file,
-                // treat it as a tail rewrite and extend to EOF to avoid leaving
-                // behind malformed/duplicate trailing code across iterations.
-                const TAIL_REWRITE_THRESHOLD = 15; // lines from EOF
-                if (endIdx >= totalBaseLines - TAIL_REWRITE_THRESHOLD) {
+                // CRITICAL: Check for "delete to EOF" intent BEFORE pure append detection
+                // When agent specifies start > end AND start is within file bounds,
+                // interpret as "delete from start_line to EOF (and optionally replace with new_content)"
+                // Example: start=67, end=66 on 66-line file → delete line 67 to EOF
+                if (startIdx > endIdx && startIdx < totalBaseLines) {
                   console.log(
-                    `[AGENT] edit_lines: Extending end_line from ${endIdx + 1} to end of file (${totalBaseLines}) for tail rewrite`
+                    `[AGENT] edit_lines: Delete-to-EOF detected (start ${startIdx + 1} > end ${endIdx + 1}), ` +
+                    `extending to delete lines ${startIdx + 1}-${totalBaseLines}`
                   );
-                  endIdx = totalBaseLines - 1;
+                  endIdx = totalBaseLines - 1; // Extend to end of file for deletion
                 }
                 
-                // If startIdx > endIdx after capping, it's a pure append operation
-                // (agent wants to insert after the last line)
-                if (startIdx > endIdx) {
+                // Now check for pure append (when start is BEYOND file length)
+                // This only triggers when startIdx >= totalBaseLines (truly appending after last line)
+                if (startIdx >= totalBaseLines) {
                   console.log(
-                    `[AGENT] edit_lines: Pure append operation detected (start ${startIdx} > end ${endIdx}), appending to end of file`
+                    `[AGENT] edit_lines: Pure append operation detected (start ${startIdx + 1} beyond file length ${totalBaseLines}), appending to end of file`
                   );
                   // Append: splice at totalBaseLines with 0 deletions
                   startIdx = totalBaseLines;

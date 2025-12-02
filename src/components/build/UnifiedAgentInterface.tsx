@@ -362,9 +362,30 @@ export function UnifiedAgentInterface({
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      
+      // Signal the edge function to stop by setting abort flag in database
+      // Get the current session ID from the last message
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.metadata?.session_id) {
+        try {
+          const { error } = await supabase.rpc('request_agent_session_abort_with_token', {
+            p_session_id: lastMessage.metadata.session_id,
+            p_token: shareToken || null,
+          });
+          
+          if (error) {
+            console.error('Error requesting abort:', error);
+          } else {
+            console.log('Abort requested successfully');
+          }
+        } catch (error) {
+          console.error('Failed to request abort:', error);
+        }
+      }
+      
       setIsSubmitting(false);
       abortControllerRef.current = null;
       toast.info('Stopping agent...');
