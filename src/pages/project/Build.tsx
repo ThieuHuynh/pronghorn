@@ -491,7 +491,7 @@ export default function Build() {
                     <TabsTrigger value="staging">Stage</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
+                  <TabsContent value="files" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <div className="h-full flex flex-col bg-[#1e1e1e]">
                       <div className="p-2 border-b border-[#3e3e42] bg-[#252526]">
                         <div className="flex items-center justify-between mb-1">
@@ -563,7 +563,7 @@ export default function Build() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="editor" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
+                  <TabsContent value="editor" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     {selectedFile ? (
                       <CodeEditor
                         fileId={selectedFile.id}
@@ -582,7 +582,7 @@ export default function Build() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="chat" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
+                  <TabsContent value="chat" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <UnifiedAgentInterface
                       projectId={projectId}
                       repoId={defaultRepo?.id || null}
@@ -592,7 +592,7 @@ export default function Build() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="staging" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
+                  <TabsContent value="staging" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <StagingPanel
                       projectId={projectId}
                       onViewDiff={handleViewDiff}
