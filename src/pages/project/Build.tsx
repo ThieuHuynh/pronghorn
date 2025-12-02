@@ -132,6 +132,11 @@ export default function Build() {
 
       if (filesError) throw filesError;
 
+      // Filter to Prime repo files only
+      const primeRepoFiles = (committedFiles || []).filter(
+        (f: any) => f.repo_id === defaultRepo.id
+      );
+
       // Load staged changes
       const { data: staged, error: stagedError } = await supabase.rpc(
         "get_staged_changes_with_token",
@@ -149,8 +154,8 @@ export default function Build() {
       const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
       const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = [];
 
-      // Add all committed files (including those staged for deletion)
-      (committedFiles || []).forEach((f: any) => {
+      // Add all committed files from Prime repo (including those staged for deletion)
+      primeRepoFiles.forEach((f: any) => {
         const stagedChange = stagedMap.get(f.path);
         // Filter out deleted files if toggle is off
         if (!showDeletedFiles && stagedChange?.operation_type === "delete") {
@@ -166,7 +171,7 @@ export default function Build() {
       // Add new staged files
       (staged || []).forEach((change: any) => {
         if (change.operation_type === "add" || change.operation_type === "rename") {
-          const existsInCommitted = (committedFiles || []).some(
+          const existsInCommitted = primeRepoFiles.some(
             (f: any) => f.path === change.file_path
           );
           if (!existsInCommitted) {
