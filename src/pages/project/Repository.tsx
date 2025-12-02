@@ -56,7 +56,21 @@ export default function Repository() {
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
-  // If user is anonymous and no share token is present, block access
+  // CRITICAL: All hooks must be called before any early returns
+  useEffect(() => {
+    if (repos.length > 0 && !selectedRepoId) {
+      const defaultRepo = repos.find(r => r.is_default) || repos[0];
+      setSelectedRepoId(defaultRepo.id);
+    }
+  }, [repos, selectedRepoId]);
+
+  useEffect(() => {
+    if (selectedRepoId) {
+      loadFileStructure();
+    }
+  }, [selectedRepoId]);
+
+  // Early returns AFTER all hooks
   if (!projectId) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -98,19 +112,6 @@ export default function Repository() {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (repos.length > 0 && !selectedRepoId) {
-      const defaultRepo = repos.find(r => r.is_default) || repos[0];
-      setSelectedRepoId(defaultRepo.id);
-    }
-  }, [repos, selectedRepoId]);
-
-  useEffect(() => {
-    if (selectedRepoId) {
-      loadFileStructure();
-    }
-  }, [selectedRepoId]);
 
   const loadFileStructure = async () => {
     if (!selectedRepoId) return;
