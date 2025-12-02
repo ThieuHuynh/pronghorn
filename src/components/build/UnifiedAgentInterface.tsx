@@ -101,6 +101,7 @@ export function UnifiedAgentInterface({
   const operationLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const anchorIdBeforeLoad = useRef<string | null>(null);
+  const anchorOffsetBeforeLoad = useRef<number>(0);
 
   // Detect when component becomes visible (for mobile tab switching)
   useEffect(() => {
@@ -179,6 +180,8 @@ export function UnifiedAgentInterface({
               // Find first item that's at least partially visible in the viewport
               if (itemRect.top >= viewportRect.top && itemRect.top < viewportRect.bottom) {
                 anchorIdBeforeLoad.current = item.getAttribute('data-timeline-id');
+                // Store the offset from viewport top to restore exact position later
+                anchorOffsetBeforeLoad.current = itemRect.top - viewportRect.top;
                 break;
               }
             }
@@ -200,18 +203,27 @@ export function UnifiedAgentInterface({
     };
   }, [messagesLoading, hasMoreMessages, loadMoreMessages]);
 
-  // Restore scroll position after lazy load by scrolling to the anchor element
+  // Restore scroll position after lazy load by scrolling to the anchor element with offset
   useEffect(() => {
     if (anchorIdBeforeLoad.current) {
       const anchorId = anchorIdBeforeLoad.current;
+      const savedOffset = anchorOffsetBeforeLoad.current;
       // Use setTimeout to ensure DOM has fully updated after render
       setTimeout(() => {
+        const viewport = scrollViewportRef.current?.querySelector(
+          '[data-radix-scroll-area-viewport]'
+        ) as HTMLElement;
         const anchorElement = scrollViewportRef.current?.querySelector(
           `[data-timeline-id="${anchorId}"]`
         ) as HTMLElement;
         
-        if (anchorElement) {
-          anchorElement.scrollIntoView({ block: 'start', behavior: 'instant' });
+        if (anchorElement && viewport) {
+          const viewportRect = viewport.getBoundingClientRect();
+          const anchorRect = anchorElement.getBoundingClientRect();
+          // Calculate current offset and adjust to restore original offset
+          const currentOffset = anchorRect.top - viewportRect.top;
+          const adjustment = currentOffset - savedOffset;
+          viewport.scrollTop += adjustment;
         }
         anchorIdBeforeLoad.current = null;
       }, 50);
@@ -584,14 +596,20 @@ export function UnifiedAgentInterface({
           if (index === timelineArray.length - 1) {
             isLastAgentBeforeUserOrEnd = true;
           } else {
+            let foundNextMessage = false;
             for (let i = index + 1; i < timelineArray.length; i++) {
               const nextItem = timelineArray[i];
               if ('role' in nextItem) {
+                foundNextMessage = true;
                 if (nextItem.role === 'user') {
                   isLastAgentBeforeUserOrEnd = true;
                 }
                 break;
               }
+            }
+            // If we searched to end and found no messages, this agent is the last one
+            if (!foundNextMessage) {
+              isLastAgentBeforeUserOrEnd = true;
             }
           }
           
