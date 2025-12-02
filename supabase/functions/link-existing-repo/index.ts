@@ -83,7 +83,8 @@ Deno.serve(async (req) => {
       p_organization: organization,
       p_repo: repo,
       p_branch: branch,
-      p_is_default: false // User repos are not default
+      p_is_default: false, // User repos are not default
+      p_is_prime: false // User-linked repos are not prime by default
     });
 
     if (repoError) {

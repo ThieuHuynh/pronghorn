@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
       p_organization: organization,
       p_repo: finalRepoName,
       p_branch: 'main',
-      p_is_default: true
+      p_is_default: true,
+      p_is_prime: true
     });
 
     if (repoError) {
