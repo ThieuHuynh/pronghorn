@@ -193,7 +193,7 @@ export function CreateRepoDialog({
               <Label htmlFor="clone-org">Source Organization/Owner</Label>
               <Input
                 id="clone-org"
-                placeholder="developmentation"
+                placeholder="pronghorn-red"
                 value={cloneOrg}
                 onChange={(e) => setCloneOrg(e.target.value)}
               />
@@ -202,7 +202,7 @@ export function CreateRepoDialog({
               <Label htmlFor="clone-repo">Source Repository</Label>
               <Input
                 id="clone-repo"
-                placeholder="ai-starter-template"
+                placeholder="vue-template"
                 value={cloneRepo}
                 onChange={(e) => setCloneRepo(e.target.value)}
               />
