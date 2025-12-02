@@ -183,8 +183,20 @@ export default function Build() {
       const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
       const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = [];
 
-      // Add all committed files from Prime repo (including those staged for deletion)
+      // Create a set of old_paths from rename operations to filter out original files
+      const renamedFromPaths = new Set(
+        (staged || [])
+          .filter((s: any) => s.operation_type === "rename" && s.old_path)
+          .map((s: any) => s.old_path)
+      );
+
+      // Add all committed files from Prime repo (excluding those being renamed from)
       primeRepoFiles.forEach((f: any) => {
+        // Skip files that are being renamed (old path)
+        if (renamedFromPaths.has(f.path)) {
+          return;
+        }
+        
         const stagedChange = stagedMap.get(f.path);
         // Filter out deleted files if toggle is off
         if (!showDeletedFiles && stagedChange?.operation_type === "delete") {
@@ -197,7 +209,7 @@ export default function Build() {
         });
       });
 
-      // Add new staged files
+      // Add new staged files (add and rename operations create new paths)
       (staged || []).forEach((change: any) => {
         if (change.operation_type === "add" || change.operation_type === "rename") {
           const existsInCommitted = primeRepoFiles.some(

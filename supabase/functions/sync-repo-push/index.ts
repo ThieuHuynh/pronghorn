@@ -289,8 +289,16 @@ Deno.serve(async (req) => {
     }
 
     // Handle explicit deletions from deletePaths (delta mode)
+    // Only delete files that actually exist in GitHub's current tree
     if (hasDeletions) {
-      deletePaths!.forEach(path => {
+      const validDeletions = deletePaths!.filter(path => currentFiles.has(path));
+      const skippedDeletions = deletePaths!.filter(path => !currentFiles.has(path));
+      
+      if (skippedDeletions.length > 0) {
+        console.log(`Skipping deletion of ${skippedDeletions.length} files not in GitHub:`, skippedDeletions);
+      }
+      
+      validDeletions.forEach(path => {
         tree.push({
           path,
           mode: '100644',
@@ -298,7 +306,10 @@ Deno.serve(async (req) => {
           sha: null, // null sha = delete
         });
       });
-      console.log(`Delta push: explicitly deleting ${deletePaths!.length} files:`, deletePaths);
+      
+      if (validDeletions.length > 0) {
+        console.log(`Delta push: deleting ${validDeletions.length} files from GitHub:`, validDeletions);
+      }
     }
 
     // Handle deletions ONLY when doing a full sync (no filePaths filter)
