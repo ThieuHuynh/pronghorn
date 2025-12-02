@@ -89,6 +89,7 @@ export function UnifiedAgentInterface({
   const messageLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const operationLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const scrollMetricsBeforeLoad = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
 
   // Detect when component becomes visible (for mobile tab switching)
   useEffect(() => {
@@ -156,6 +157,14 @@ export function UnifiedAgentInterface({
     messageObserverRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
+          // Capture scroll metrics BEFORE loading more
+          const viewport = scrollViewportRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+          if (viewport) {
+            scrollMetricsBeforeLoad.current = {
+              scrollTop: viewport.scrollTop,
+              scrollHeight: viewport.scrollHeight,
+            };
+          }
           loadMoreMessages();
         }
       },
@@ -172,6 +181,25 @@ export function UnifiedAgentInterface({
       }
     };
   }, [messagesLoading, hasMoreMessages, loadMoreMessages]);
+
+  // Restore scroll position after lazy load to prevent jump
+  useEffect(() => {
+    if (scrollMetricsBeforeLoad.current) {
+      const viewport = scrollViewportRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+      if (viewport) {
+        // Use requestAnimationFrame to ensure DOM has updated
+        requestAnimationFrame(() => {
+          if (scrollMetricsBeforeLoad.current) {
+            const heightDifference = viewport.scrollHeight - scrollMetricsBeforeLoad.current.scrollHeight;
+            if (heightDifference > 0) {
+              viewport.scrollTop = scrollMetricsBeforeLoad.current.scrollTop + heightDifference;
+            }
+            scrollMetricsBeforeLoad.current = null;
+          }
+        });
+      }
+    }
+  }, [timeline.length]);
 
   // Intersection observer for operations (if needed separately)
   useEffect(() => {
