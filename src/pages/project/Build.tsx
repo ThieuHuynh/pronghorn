@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams } from "react-router-dom";
@@ -15,13 +15,21 @@ import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface"
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
+
+const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
+
+function isBinaryFile(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return BINARY_EXTENSIONS.includes(ext || '');
+}
 
 export default function Build() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId || null);
   const isMobile = useIsMobile();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { repos } = useRealtimeRepos(projectId || null);
   const defaultRepo = repos.find((r) => r.is_default);
@@ -281,6 +289,66 @@ export default function Build() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFiles = event.target.files;
+    if (!uploadedFiles || uploadedFiles.length === 0 || !defaultRepo || !projectId) return;
+
+    for (const file of Array.from(uploadedFiles)) {
+      try {
+        const fullPath = selectedFolderPath && selectedFolderPath !== '/'
+          ? `${selectedFolderPath}/${file.name}`
+          : file.name;
+
+        const isBinary = isBinaryFile(file.name);
+        let content: string;
+
+        if (isBinary) {
+          // Read as base64 for binary files
+          content = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        } else {
+          // Read as text for text files
+          content = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsText(file);
+          });
+        }
+
+        // Stage the file (note: binary detection is based on extension in the editor)
+        const { error } = await supabase.rpc("stage_file_change_with_token", {
+          p_repo_id: defaultRepo.id,
+          p_token: shareToken || null,
+          p_operation_type: "add",
+          p_file_path: fullPath,
+          p_old_content: null,
+          p_new_content: content,
+        });
+
+        if (error) throw error;
+
+        toast.success(`Uploaded and staged: ${file.name}`);
+      } catch (error: any) {
+        console.error("Error uploading file:", error);
+        toast.error(`Failed to upload ${file.name}: ${error.message || "Unknown error"}`);
+      }
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    loadFiles();
+  };
+
   if (!projectId) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -352,6 +420,22 @@ export default function Build() {
                             >
                               <FolderPlus className="h-3.5 w-3.5" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                              title="Upload File"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                            </Button>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={handleFileUpload}
+                            />
                             <Button
                               variant="ghost"
                               size="icon"
@@ -529,6 +613,15 @@ export default function Build() {
                               title="New Folder"
                             >
                               <FolderPlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                              title="Upload File"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
