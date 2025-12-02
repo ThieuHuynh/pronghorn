@@ -58,7 +58,16 @@ export function RepoCard({ repo, onDelete, onManagePAT, onPrimeChange }: RepoCar
           <div className="flex items-center gap-2">
             <Github className="h-5 w-5" />
             <div>
-              <CardTitle className="text-base">{fullName}</CardTitle>
+              <CardTitle className="text-base">
+                <a 
+                  href={`https://github.com/${fullName}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  {fullName}
+                </a>
+              </CardTitle>
               <CardDescription className="flex items-center gap-2 mt-1">
                 <GitBranch className="h-3 w-3" />
                 {repo.branch}
