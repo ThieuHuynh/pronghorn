@@ -99,6 +99,68 @@ function parseAgentResponseText(rawText: string): any {
   };
 }
 
+// Generate Grok/xAI structured output schema for coding agent responses
+function getGrokResponseSchema() {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "coding_agent_response",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          reasoning: {
+            type: "string",
+            description: "Chain-of-thought reasoning about what to do next",
+          },
+          operations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  enum: [
+                    "list_files",
+                    "wildcard_search",
+                    "search",
+                    "read_file",
+                    "edit_lines",
+                    "create_file",
+                    "delete_file",
+                    "move_file",
+                  ],
+                },
+                params: {
+                  type: "object",
+                  description: "Operation-specific parameters",
+                },
+              },
+              required: ["type", "params"],
+            },
+          },
+          blackboard_entry: {
+            type: "object",
+            properties: {
+              entry_type: {
+                type: "string",
+                enum: ["planning", "progress", "decision", "reasoning", "next_steps", "reflection"],
+              },
+              content: { type: "string" },
+            },
+            required: ["entry_type", "content"],
+          },
+          status: {
+            type: "string",
+            enum: ["in_progress", "completed", "requires_commit"],
+          },
+        },
+        required: ["reasoning", "operations", "status"],
+      },
+    },
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -630,7 +692,9 @@ Start your response with { and end with }. Nothing else.`;
           }),
         });
       } else if (selectedModel.startsWith("grok")) {
-        // xAI API
+        // xAI API with structured output enforcement
+        console.log(`Using Grok model ${modelName} with structured output enforcement`);
+        
         const messages = [
           { role: "system", content: systemPrompt },
           ...conversationHistory.map((msg) => ({
@@ -650,6 +714,7 @@ Start your response with { and end with }. Nothing else.`;
             messages,
             max_tokens: maxTokens,
             temperature: 0.7,
+            response_format: getGrokResponseSchema(),
           }),
         });
       }
