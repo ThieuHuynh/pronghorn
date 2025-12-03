@@ -657,23 +657,15 @@ export function UnifiedAgentInterface({
             key={item.id} 
             data-timeline-id={item.id}
             ref={isLastUserMessage ? lastUserMessageRef : null}
-            className="flex gap-3"
           >
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="w-4 h-4 text-primary" />
-              </div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-semibold">You</span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(item.created_at).toLocaleTimeString()}
+              </span>
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-semibold">You</span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(item.created_at).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
-              </div>
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-sm whitespace-pre-wrap">{item.content}</p>
             </div>
           </div>
         );
@@ -724,15 +716,9 @@ export function UnifiedAgentInterface({
         })();
         
         return (
-          <div key={item.id} data-timeline-id={item.id} className="flex gap-3">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
-                <Bot className="w-4 h-4 text-secondary" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-sm font-semibold">Agent</span>
+          <div key={item.id} data-timeline-id={item.id}>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="text-sm font-semibold">Agent</span>
                 {verbosity !== 'minimal' && (
                   <span className="text-xs text-muted-foreground">
                     {new Date(item.created_at).toLocaleTimeString()}
@@ -808,7 +794,6 @@ export function UnifiedAgentInterface({
                 </div>
               )}
             </div>
-          </div>
         );
       }
     }

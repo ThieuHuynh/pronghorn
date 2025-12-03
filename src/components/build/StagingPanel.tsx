@@ -487,8 +487,20 @@ export function StagingPanel({ projectId, onViewDiff, autoCommit, onAutoCommitCh
             Review uncommitted changes before committing to the repository
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto">
-          {stagedChanges.length === 0 ? (
+      <CardContent className="flex-1 overflow-y-auto">
+        {/* Auto-commit checkbox - always visible */}
+        <div className="flex items-center gap-2 mb-4 pb-4 border-b">
+          <Checkbox 
+            id="auto-commit-staging" 
+            checked={autoCommit}
+            onCheckedChange={(checked) => onAutoCommitChange(checked as boolean)}
+          />
+          <Label htmlFor="auto-commit-staging" className="text-sm">
+            Auto-commit and push changes
+          </Label>
+        </div>
+
+        {stagedChanges.length === 0 ? (
             <div className="space-y-6 py-6">
               <div className="text-center text-muted-foreground">
                 <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -652,16 +664,6 @@ export function StagingPanel({ projectId, onViewDiff, autoCommit, onAutoCommitCh
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Checkbox 
-                    id="auto-commit-staging" 
-                    checked={autoCommit}
-                    onCheckedChange={(checked) => onAutoCommitChange(checked as boolean)}
-                  />
-                  <Label htmlFor="auto-commit-staging" className="text-sm">
-                    Auto-commit and push changes
-                  </Label>
-                </div>
 
                 <Button
                   onClick={handleCommit}
