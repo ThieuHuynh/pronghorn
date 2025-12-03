@@ -489,7 +489,7 @@ export default function Build() {
           });
         }
 
-        // Stage the file (note: binary detection is based on extension in the editor)
+        // Stage the file with binary flag
         const { error } = await supabase.rpc("stage_file_change_with_token", {
           p_repo_id: defaultRepo.id,
           p_token: shareToken || null,
@@ -497,6 +497,7 @@ export default function Build() {
           p_file_path: fullPath,
           p_old_content: null,
           p_new_content: content,
+          p_is_binary: isBinary,
         });
 
         if (error) throw error;
