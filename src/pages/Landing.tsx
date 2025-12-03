@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate } from "react-router-dom";
 import { 
   Link, CheckSquare, Layout, FileCheck, Bot, Users, 
   ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle,
-  Rocket, Shield, Award, Zap
+  Rocket, Shield, Award
 } from "lucide-react";
 import pronghornHeroPoster from "@/assets/pronghorn-hero.png";
 
@@ -65,9 +66,7 @@ export default function Landing() {
       <nav className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
           </div>
           
@@ -126,28 +125,28 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Hero Floating Elements */}
-          <div className="relative h-[500px] w-full flex items-center justify-center">
+          {/* Hero Floating Elements - Desktop only */}
+          <div className="relative h-[500px] w-full hidden lg:flex items-center justify-center">
             <div className="relative w-full max-w-md aspect-square">
               {/* Glow background */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rose-100/50 rounded-full blur-3xl" />
               
               {/* Floating shield icon */}
-              <div className="absolute top-0 right-10 animate-float z-20">
+              <div className="absolute top-0 right-10 z-20">
                 <div className="bg-[hsl(350,80%,60%)] p-4 rounded-2xl shadow-xl transform rotate-12">
                   <ShieldCheck className="w-12 h-12 text-white" />
                 </div>
               </div>
               
               {/* Floating git branch icon */}
-              <div className="absolute bottom-20 left-0 animate-float-delayed z-20">
+              <div className="absolute bottom-20 left-0 z-20">
                 <div className="bg-emerald-500 p-4 rounded-2xl shadow-xl transform -rotate-12">
                   <GitBranch className="w-12 h-12 text-white" />
                 </div>
               </div>
 
               {/* Floating check icon */}
-              <div className="absolute top-1/2 right-0 animate-float z-20" style={{ animationDelay: '1.5s' }}>
+              <div className="absolute top-1/2 right-0 z-20">
                 <div className="bg-amber-500 p-3 rounded-full shadow-xl">
                   <CheckCircle className="w-8 h-8 text-white" />
                 </div>
@@ -359,9 +358,7 @@ export default function Landing() {
       <footer className="py-12 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-[hsl(350,80%,60%)] rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-lg font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
           </div>
           <div className="text-sm text-gray-500 text-center md:text-right">
