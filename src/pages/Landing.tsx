@@ -7,7 +7,6 @@ import {
   ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle,
   Rocket, Shield, Award
 } from "lucide-react";
-import pronghornHeroPoster from "@/assets/pronghorn-hero.png";
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -124,21 +123,21 @@ export default function Landing() {
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rose-100/50 rounded-full blur-3xl" />
               
               {/* Floating shield icon */}
-              <div className="absolute top-0 right-10 z-20">
+              <div className="absolute top-0 right-10 z-20 animate-float">
                 <div className="bg-[hsl(350,80%,60%)] p-4 rounded-2xl shadow-xl transform rotate-12">
                   <ShieldCheck className="w-12 h-12 text-white" />
                 </div>
               </div>
               
               {/* Floating git branch icon */}
-              <div className="absolute bottom-20 left-0 z-20">
+              <div className="absolute bottom-20 left-0 z-20 animate-float-delayed">
                 <div className="bg-emerald-500 p-4 rounded-2xl shadow-xl transform -rotate-12">
                   <GitBranch className="w-12 h-12 text-white" />
                 </div>
               </div>
 
               {/* Floating check icon */}
-              <div className="absolute top-1/2 right-0 z-20">
+              <div className="absolute top-1/2 right-0 z-20 animate-float">
                 <div className="bg-amber-500 p-3 rounded-full shadow-xl">
                   <CheckCircle className="w-8 h-8 text-white" />
                 </div>
@@ -294,29 +293,6 @@ export default function Landing() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Video Section */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">See Pronghorn in Action</h2>
-            <p className="text-xl text-gray-600">Watch how standards-driven development transforms your workflow</p>
-          </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
-            <video 
-              autoPlay 
-              loop 
-              muted 
-              playsInline 
-              poster={pronghornHeroPoster} 
-              className="w-full h-auto"
-            >
-              <source src="/pronghorn-hero.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
           </div>
         </div>
       </section>
