@@ -63,6 +63,7 @@ export default function Build() {
     saveCurrentFile,
     saveAllDirty,
     closeFile,
+    reloadCurrentFile,
   } = useFileBuffer({
     repoId: defaultRepo?.id,
     shareToken: shareToken || null,
@@ -233,6 +234,19 @@ export default function Build() {
          (payload) => {
            console.log("Staging change detected:", payload);
            loadFiles();
+           
+           // If the changed file is currently open in the editor, reload it from DB
+           const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
+           if (changedPath && changedPath === currentPathRef.current) {
+             if (!hasDirtyFilesRef.current) {
+               // User has no unsaved changes - safe to reload
+               console.log("Reloading current file due to external change:", changedPath);
+               reloadCurrentFileRef.current?.();
+             } else {
+               // User has unsaved changes - notify them
+               toast.info("File updated externally - save your changes to see updates");
+             }
+           }
          }
        )
        .on(
@@ -257,8 +271,12 @@ export default function Build() {
   // Refs for stable access in effects - prevents re-running effects on every keystroke
   const saveAllDirtyRef = useRef(saveAllDirty);
   const hasDirtyFilesRef = useRef(hasDirtyFiles);
+  const currentPathRef = useRef(currentPath);
+  const reloadCurrentFileRef = useRef(reloadCurrentFile);
   saveAllDirtyRef.current = saveAllDirty;
   hasDirtyFilesRef.current = hasDirtyFiles;
+  currentPathRef.current = currentPath;
+  reloadCurrentFileRef.current = reloadCurrentFile;
 
   // Beforeunload handler for tab/page close - save dirty files
   useEffect(() => {
