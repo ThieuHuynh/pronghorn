@@ -406,27 +406,25 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
           {!isImage && (
             <TooltipProvider>
               <div className="flex items-center gap-1">
-                {/* Show Diff Toggle - only for staged files */}
-                {isStaged && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Toggle
-                        size="sm"
-                        pressed={showDiffMode}
-                        onPressedChange={(pressed) => {
-                          handleShowDiffToggle(pressed);
-                          if (pressed) setShowMarkdown(false);
-                        }}
-                        className="h-8 px-2 border border-[#3e3e42] text-[#cccccc] hover:bg-[#3e3e42] hover:text-white data-[state=on]:bg-blue-600 data-[state=on]:text-white data-[state=on]:border-blue-600"
-                      >
-                        <GitCompare className="h-4 w-4" />
-                      </Toggle>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Show diff view</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                {/* Show Diff Toggle - always visible */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Toggle
+                      size="sm"
+                      pressed={showDiffMode}
+                      onPressedChange={(pressed) => {
+                        handleShowDiffToggle(pressed);
+                        if (pressed) setShowMarkdown(false);
+                      }}
+                      className="h-8 px-2 border border-[#3e3e42] text-[#cccccc] hover:bg-[#3e3e42] hover:text-white data-[state=on]:bg-blue-600 data-[state=on]:text-white data-[state=on]:border-blue-600"
+                    >
+                      <GitCompare className="h-4 w-4" />
+                    </Toggle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Show diff view</p>
+                  </TooltipContent>
+                </Tooltip>
                 
                 {/* Show Markdown Toggle - for all text files */}
                 <Tooltip>
@@ -455,7 +453,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
               <Button
                 size="sm"
                 onClick={handleSave}
-                disabled={saving || loading || !isDirty}
+                disabled={saving || loading}
                 variant="secondary"
                 className="h-8 gap-2"
               >
