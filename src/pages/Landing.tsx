@@ -60,9 +60,9 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)] antialiased overflow-x-hidden">
       {/* Navbar */}
-      <nav className="fixed w-full top-0 z-50 bg-background/90 backdrop-blur-md border-b border-border/50 transition-all duration-300">
+      <nav className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
@@ -73,7 +73,7 @@ export default function Landing() {
           
           <Button 
             onClick={() => navigate('/dashboard')}
-            className="bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+            className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20"
           >
             Get Started
           </Button>
@@ -93,9 +93,9 @@ export default function Landing() {
 
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center relative z-10">
           <div className="space-y-8">
-            <h1 className="text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1]">
+            <h1 className="text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
               Standards Driven <br />
-              <span className="text-accent relative inline-block">
+              <span className="text-[hsl(350,80%,60%)] relative inline-block">
                 AI Development
                 <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
@@ -110,7 +110,7 @@ export default function Landing() {
               <Button 
                 size="lg"
                 onClick={() => navigate('/dashboard')}
-                className="group bg-primary text-primary-foreground px-8 py-4 rounded-xl font-medium text-lg hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
+                className="group bg-[hsl(240,30%,15%)] text-white px-8 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
               >
                 Start Building
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -119,7 +119,7 @@ export default function Landing() {
                 size="lg"
                 variant="outline"
                 onClick={() => navigate('/standards')}
-                className="bg-white border-2 border-border text-foreground px-8 py-4 rounded-xl font-medium text-lg hover:border-primary transition-all duration-300"
+                className="bg-white border-2 border-gray-200 text-[hsl(240,30%,15%)] px-8 py-4 rounded-xl font-medium text-lg hover:border-[hsl(240,30%,15%)] transition-all duration-300"
               >
                 View Standards
               </Button>
@@ -134,7 +134,7 @@ export default function Landing() {
               
               {/* Floating shield icon */}
               <div className="absolute top-0 right-10 animate-float z-20">
-                <div className="bg-accent p-4 rounded-2xl shadow-xl transform rotate-12">
+                <div className="bg-[hsl(350,80%,60%)] p-4 rounded-2xl shadow-xl transform rotate-12">
                   <ShieldCheck className="w-12 h-12 text-white" />
                 </div>
               </div>
@@ -161,9 +161,9 @@ export default function Landing() {
                     <div className="w-3 h-3 rounded-full bg-yellow-400" />
                     <div className="w-3 h-3 rounded-full bg-green-400" />
                   </div>
-                  <div className="flex-1 bg-muted/30 rounded-lg p-4 flex items-center justify-center gap-3">
-                    <FileCheck className="w-8 h-8 text-accent" />
-                    <span className="text-foreground font-semibold text-lg tracking-tight">Compliant</span>
+                  <div className="flex-1 bg-[hsl(240,30%,15%)]/5 rounded-lg p-4 flex items-center justify-center gap-3">
+                    <FileCheck className="w-8 h-8 text-[hsl(350,80%,60%)]" />
+                    <span className="text-[hsl(240,30%,15%)] font-semibold text-lg tracking-tight">Compliant</span>
                   </div>
                   <div className="flex gap-2">
                     <div className="h-2 flex-1 bg-emerald-200 rounded-full" />
@@ -181,8 +181,8 @@ export default function Landing() {
       <section className="py-24 px-6 bg-white/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4">Built for Speed, Quality, Compliance, Traceability & Trust</h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Built for Speed, Quality, Compliance, Traceability & Trust</h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Purpose-built for one mission: generating enterprise applications that are provably compliant 
               with standards and fully traceable to requirements
             </p>
@@ -197,8 +197,8 @@ export default function Landing() {
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-6`}>
                   <feature.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-medium mb-3">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
+                <h3 className="text-xl font-medium mb-3 text-[hsl(240,30%,15%)]">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
               </Card>
             ))}
           </div>
@@ -209,16 +209,16 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4">How Pronghorn Works</h2>
-            <p className="text-xl text-muted-foreground">Three operational modes: Design, Audit, and Build</p>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">How Pronghorn Works</h2>
+            <p className="text-xl text-gray-600">Three operational modes: Design, Audit, and Build</p>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="relative bg-gradient-to-br from-rose-50 to-white p-10 rounded-3xl border border-rose-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-accent rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">1</div>
+              <div className="absolute -top-4 -left-4 w-12 h-12 bg-[hsl(350,80%,60%)] rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">1</div>
               <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4">Design Mode</h3>
-                <p className="text-muted-foreground leading-relaxed">
+                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Design Mode</h3>
+                <p className="text-gray-600 leading-relaxed">
                   Lay down clear architectural, cyber security, and tech stack standards. Build robust architectures 
                   as the foundation for compliant enterprise applications
                 </p>
@@ -228,8 +228,8 @@ export default function Landing() {
             <div className="relative bg-gradient-to-br from-emerald-50 to-white p-10 rounded-3xl border border-emerald-100">
               <div className="absolute -top-4 -left-4 w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">2</div>
               <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4">Audit Mode</h3>
-                <p className="text-muted-foreground leading-relaxed">
+                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Audit Mode</h3>
+                <p className="text-gray-600 leading-relaxed">
                   Continuously validate while building. Automated compliance auditing identifies gaps instantly, 
                   providing proof of compliance with traceable evidence
                 </p>
@@ -239,8 +239,8 @@ export default function Landing() {
             <div className="relative bg-gradient-to-br from-violet-50 to-white p-10 rounded-3xl border border-violet-100">
               <div className="absolute -top-4 -left-4 w-12 h-12 bg-violet-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">3</div>
               <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4">Build Mode</h3>
-                <p className="text-muted-foreground leading-relaxed">
+                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Build Mode</h3>
+                <p className="text-gray-600 leading-relaxed">
                   AI agents build, audit, and automatically fix compliance gaps—all remediation remains fully traceable. 
                   Real-time monitoring ensures system-wide consistency
                 </p>
@@ -254,8 +254,8 @@ export default function Landing() {
       <section className="py-24 px-6 bg-white">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
           <div>
-            <h2 className="text-4xl font-medium tracking-tight mb-6">Why Choose Pronghorn</h2>
-            <p className="text-xl text-muted-foreground leading-relaxed mb-10">
+            <h2 className="text-4xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Why Choose Pronghorn</h2>
+            <p className="text-xl text-gray-600 leading-relaxed mb-10">
               Support your development teams with standards-first, AI-powered, continuously validated development
             </p>
             <ul className="space-y-4">
@@ -264,15 +264,15 @@ export default function Landing() {
                   <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <Check className="w-4 h-4 text-emerald-600" />
                   </div>
-                  <span className="text-muted-foreground">{benefit}</span>
+                  <span className="text-gray-700">{benefit}</span>
                 </li>
               ))}
             </ul>
           </div>
           
           {/* Stats Card */}
-          <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-primary to-primary/90 p-10 flex flex-col justify-center">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-accent/20 rounded-full blur-3xl" />
+          <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] p-10 flex flex-col justify-center">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,60%)]/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
             <div className="relative z-10 space-y-6">
               <div className="flex items-center gap-4">
@@ -311,10 +311,10 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-medium tracking-tight mb-4">See Pronghorn in Action</h2>
-            <p className="text-xl text-muted-foreground">Watch how standards-driven development transforms your workflow</p>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">See Pronghorn in Action</h2>
+            <p className="text-xl text-gray-600">Watch how standards-driven development transforms your workflow</p>
           </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border">
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
             <video 
               autoPlay 
               loop 
@@ -334,18 +334,18 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="bg-gradient-to-br from-rose-100/50 to-rose-50 rounded-3xl p-12 lg:p-16 relative overflow-hidden">
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,60%)]/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h2 className="text-4xl lg:text-5xl font-medium tracking-tight mb-6">Ready to Build with Confidence?</h2>
-              <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+              <h2 className="text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Ready to Build with Confidence?</h2>
+              <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
                 Join the new category of Autonomous Compliance-Driven Development. Deliver enterprise applications 
                 that are provably compliant, fully traceable, and built in a fraction of the time
               </p>
               <Button 
                 size="lg"
                 onClick={() => navigate('/dashboard')}
-                className="group bg-primary text-primary-foreground px-10 py-4 rounded-xl font-medium text-lg hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2 mx-auto"
+                className="group bg-[hsl(240,30%,15%)] text-white px-10 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2 mx-auto"
               >
                 Create Your First Project
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -356,17 +356,17 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t border-border">
+      <footer className="py-12 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-[hsl(350,80%,60%)] rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">Pronghorn</span>
+            <span className="text-lg font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
           </div>
-          <div className="text-sm text-muted-foreground text-center md:text-right">
+          <div className="text-sm text-gray-500 text-center md:text-right">
             <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
-            <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+            <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,60%)] hover:underline">
               pronghorn.red
             </a>
           </div>

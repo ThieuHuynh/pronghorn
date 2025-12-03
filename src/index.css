@@ -8,39 +8,39 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Warm cream palette for modern SaaS */
-    --background: 38 60% 97%;
-    --foreground: 240 20% 15%;
+    /* Sophisticated blue-gray palette for enterprise SaaS */
+    --background: 220 20% 98%;
+    --foreground: 220 15% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 20% 15%;
+    --card-foreground: 220 15% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 20% 15%;
+    --popover-foreground: 220 15% 12%;
 
-    /* Primary: Deep navy for trust */
-    --primary: 240 30% 15%;
+    /* Primary: Deep blue for trust and professionalism */
+    --primary: 215 75% 45%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 240 30% 20%;
+    --primary-hover: 215 75% 40%;
     
-    /* Secondary: Subtle gray */
+    /* Secondary: Subtle gray-blue */
     --secondary: 220 15% 94%;
-    --secondary-foreground: 240 20% 15%;
+    --secondary-foreground: 220 15% 20%;
 
     /* Muted: Light backgrounds */
     --muted: 220 15% 96%;
     --muted-foreground: 220 10% 45%;
 
-    /* Accent: Coral/Rose for highlights */
-    --accent: 350 80% 60%;
+    /* Accent: Vibrant teal for highlights */
+    --accent: 185 70% 48%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 20% 88%;
-    --input: 30 20% 88%;
-    --ring: 350 80% 60%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 215 75% 45%;
 
     --radius: 0.5rem;
     
@@ -55,10 +55,9 @@ All colors MUST be HSL.
     --status-build: 145 65% 45%;
 
     /* Landing page specific */
-    --cream: 38 60% 97%;
-    --brand-accent: 350 80% 60%;
-    --brand-dark: 240 30% 15%;
-    --brand-peach: 0 70% 95%;
+    --landing-cream: 38 60% 97%;
+    --landing-accent: 350 80% 60%;
+    --landing-dark: 240 30% 15%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
