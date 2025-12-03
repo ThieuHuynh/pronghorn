@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { useParams, useBlocker } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -265,44 +265,6 @@ export default function Build() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
-
-  // Block navigation if dirty - use react-router's useBlocker
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      isDirty && currentLocation.pathname !== nextLocation.pathname
-  );
-
-  // Handle blocked navigation
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      const confirmSave = window.confirm(
-        "You have unsaved changes. Save before leaving?"
-      );
-      if (confirmSave && editorRef.current) {
-        editorRef.current.save().then((success) => {
-          if (success) {
-            blocker.proceed();
-          } else {
-            // Save failed, ask if they want to discard
-            if (window.confirm("Save failed. Leave without saving?")) {
-              blocker.proceed();
-            } else {
-              blocker.reset();
-            }
-          }
-        });
-      } else if (!confirmSave) {
-        // User chose not to save, ask if they want to discard
-        if (window.confirm("Discard unsaved changes?")) {
-          blocker.proceed();
-        } else {
-          blocker.reset();
-        }
-      } else {
-        blocker.reset();
-      }
-    }
-  }, [blocker]);
 
   const handleSelectFile = async (fileId: string, path: string, isStaged?: boolean) => {
     // Track folder selection for context-aware file/folder creation
