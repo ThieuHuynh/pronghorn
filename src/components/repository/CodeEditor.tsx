@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
@@ -78,24 +78,13 @@ export function CodeEditor({
 
   // Dirty state tracking
   const isDirty = content !== originalContent;
-  
-  // Debug: Log dirty state changes
-  useEffect(() => {
-    console.log("DIRTY STATE:", { isDirty, contentLen: content.length, originalLen: originalContent.length, filePath });
-  }, [isDirty, content, originalContent, filePath]);
 
-  // Ref to store pending save data from cleanup
-  const pendingSaveRef = useRef<{ filePath: string; content: string; originalContent: string } | null>(null);
+  // Auto-save function
+  const autoSaveFile = useCallback(async () => {
+    if (!filePath || !repoId || isImageFile(filePath)) return;
+    if (!isDirty) return;
 
-  // Auto-save function for when switching files
-  const autoSaveFile = useCallback(async (prevFilePath: string, prevContent: string, prevOriginalContent: string) => {
-    if (!prevFilePath || !repoId || isImageFile(prevFilePath)) return;
-    if (prevContent === prevOriginalContent) {
-      console.log("No changes to auto-save for:", prevFilePath);
-      return;
-    }
-
-    console.log("Auto-saving file:", prevFilePath, "content differs:", prevContent !== prevOriginalContent);
+    console.log("Auto-saving file on blur:", filePath);
     
     try {
       // Check if there's already a staged change for this file
@@ -110,10 +99,10 @@ export function CodeEditor({
       if (stagedError) throw stagedError;
 
       const existing = (staged || []).find(
-        (change: any) => change.file_path === prevFilePath,
+        (change: any) => change.file_path === filePath,
       );
 
-      let oldContentToUse = prevOriginalContent;
+      let oldContentToUse = originalContent;
 
       if (existing) {
         if (existing.old_content !== null && existing.old_content !== undefined) {
@@ -124,7 +113,7 @@ export function CodeEditor({
 
         await supabase.rpc("unstage_file_with_token", {
           p_repo_id: repoId,
-          p_file_path: prevFilePath,
+          p_file_path: filePath,
           p_token: shareToken || null,
         });
       }
@@ -135,48 +124,31 @@ export function CodeEditor({
         p_repo_id: repoId,
         p_token: shareToken || null,
         p_operation_type: operationType,
-        p_file_path: prevFilePath,
+        p_file_path: filePath,
         p_old_content: oldContentToUse,
-        p_new_content: prevContent,
+        p_new_content: content,
       });
 
       toast({
         title: "Auto-saved",
-        description: `Changes to ${prevFilePath.split('/').pop()} staged automatically`,
+        description: `Changes to ${filePath.split('/').pop()} staged automatically`,
       });
       onAutoSync?.();
     } catch (error) {
       console.error("Error auto-saving file:", error);
     }
-  }, [repoId, shareToken, toast, onAutoSync]);
+  }, [filePath, repoId, shareToken, isDirty, content, originalContent, toast, onAutoSync]);
 
-  // Effect with CLEANUP to capture dirty content BEFORE state resets
-  // Cleanup runs with OLD values (captured in closure) before new effect runs
-  useEffect(() => {
-    console.log("EFFECT SETUP for:", filePath, "content:", content.length, "original:", originalContent.length);
-    
-    // Cleanup function runs BEFORE next invocation with values from THIS render
-    return () => {
-      if (content !== originalContent && filePath && !isImageFile(filePath)) {
-        console.log("CLEANUP - storing pending save:", filePath, "dirty content length:", content.length);
-        pendingSaveRef.current = { filePath, content, originalContent };
-      } else {
-        console.log("CLEANUP - no dirty content for:", filePath);
+  // onBlur handler - saves when focus leaves the editor area
+  const handleEditorBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    // Only save if focus is leaving the editor entirely (not just moving within it)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (isDirty && filePath && !isImageFile(filePath)) {
+        console.log("BLUR - auto-saving:", filePath);
+        autoSaveFile();
       }
-    };
-  }, [content, originalContent, filePath]); // All deps so cleanup captures latest values
-
-  // Process pending save when filePath changes
-  useEffect(() => {
-    const pending = pendingSaveRef.current;
-    console.log("PENDING SAVE CHECK:", { pending: pending?.filePath, currentFile: filePath });
-    
-    if (pending && pending.filePath !== filePath) {
-      console.log("PROCESSING pending save for:", pending.filePath);
-      autoSaveFile(pending.filePath, pending.content, pending.originalContent);
-      pendingSaveRef.current = null;
     }
-  }, [filePath, autoSaveFile]);
+  }, [isDirty, filePath, autoSaveFile]);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -506,7 +478,11 @@ export function CodeEditor({
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div 
+        tabIndex={-1} 
+        onBlur={handleEditorBlur} 
+        className="flex-1 overflow-hidden focus:outline-none"
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
