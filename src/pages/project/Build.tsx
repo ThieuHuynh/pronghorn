@@ -714,7 +714,7 @@ export default function Build() {
                           onSave={loadFiles}
                         />
                       ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                        <div className="flex items-center justify-center h-full bg-[#1e1e1e] text-gray-400">
                           <p>Select a file to view or edit</p>
                         </div>
                       )}
