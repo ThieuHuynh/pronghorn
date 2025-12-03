@@ -2,52 +2,69 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate } from "react-router-dom";
-import { 
-  FileText, Library, Layout, Bot, Code, Users, 
-  ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle,
-  Rocket, Shield, Award
+import {
+  FileText,
+  Library,
+  Layout,
+  Bot,
+  Code,
+  Users,
+  ArrowRight,
+  Check,
+  ShieldCheck,
+  GitBranch,
+  CheckCircle,
+  Rocket,
+  Shield,
+  Award,
 } from "lucide-react";
 
 export default function Landing() {
   const navigate = useNavigate();
-  
+
   const features = [
     {
       icon: FileText,
       title: "AI-Powered Requirements",
-      description: "Transform unstructured ideas into structured Epics, Features, and Stories. AI decomposes and expands requirements while linking them to organizational standards for complete traceability.",
-      color: "bg-blue-100 text-blue-600"
+      description:
+        "Transform unstructured ideas into structured Epics, Features, and Stories. AI decomposes and expands requirements while linking them to organizational standards for complete traceability.",
+      color: "bg-blue-100 text-blue-600",
     },
     {
       icon: Library,
       title: "Global Standards Library",
-      description: "Build your organization's compliance foundation once, use everywhere. Create reusable standards categories and tech stack templates that automatically link to all your projects.",
-      color: "bg-violet-100 text-violet-600"
+      description:
+        "Build your organization's compliance foundation once, use everywhere. Create reusable standards categories and tech stack templates that automatically link to all your projects.",
+      color: "bg-violet-100 text-violet-600",
     },
     {
       icon: Layout,
       title: "Visual Architecture Design",
-      description: "Design complex architectures with an interactive canvas. Drag-and-drop nodes for pages, APIs, databases, and security layers. Real-time sync keeps your whole team aligned.",
-      color: "bg-emerald-100 text-emerald-600"
+      description:
+        "Design complex architectures with an interactive canvas. Drag-and-drop nodes for pages, APIs, databases, and security layers. Real-time sync keeps your whole team aligned.",
+      color: "bg-emerald-100 text-emerald-600",
     },
     {
       icon: Bot,
       title: "Multi-Agent AI Teams",
-      description: "Orchestrate teams of AI agents—Architects, Developers, DBAs, Security, QA—that iteratively refine your architecture. Watch agents collaborate on a shared blackboard until designs stabilize.",
-      color: "bg-rose-100 text-rose-600"
+      description:
+        "Orchestrate teams of AI agents—Architects, Developers, DBAs, Security, QA—that iteratively refine your architecture. Watch agents collaborate on a shared blackboard until designs stabilize.",
+      color: "bg-rose-100 text-rose-600",
     },
     {
       icon: Code,
       title: "AI Coding Agent",
-      description: "An autonomous coding agent that reads your requirements, searches your codebase, and makes changes—all with full audit trail. Stage changes, review diffs, and push to GitHub when ready.",
-      color: "bg-amber-100 text-amber-600"
+      description:
+        "An autonomous coding agent that reads your requirements, searches your codebase, and makes changes—all with full audit trail. Stage changes, review diffs, and push to GitHub when ready.",
+      color: "bg-amber-100 text-amber-600",
     },
     {
       icon: Users,
       title: "Instant Collaboration",
-      description: "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
-      color: "bg-cyan-100 text-cyan-600"
-    }
+      description:
+        "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
+      color: "bg-cyan-100 text-cyan-600",
+    },
   ];
 
   const benefits = [
@@ -56,7 +73,7 @@ export default function Landing() {
     "No account required to start—instant collaboration",
     "Built-in code editor with GitHub sync",
     "Multi-model AI support (Gemini, Claude, Grok)",
-    "13+ specification templates for any audience"
+    "13+ specification templates for any audience",
   ];
 
   return (
@@ -68,9 +85,9 @@ export default function Landing() {
             <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
           </div>
-          
-          <Button 
-            onClick={() => navigate('/dashboard')}
+
+          <Button
+            onClick={() => navigate("/dashboard")}
             className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20"
           >
             Get Started
@@ -79,10 +96,13 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 px-6 overflow-hidden">
+      <section className="relative pt-32 pb-20 lg:pt-32 lg:pb-32 px-6 overflow-hidden">
         {/* Background decorations */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-          <svg className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 text-muted-foreground/30" viewBox="0 0 100 100">
+          <svg
+            className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 text-muted-foreground/30"
+            viewBox="0 0 100 100"
+          >
             <path d="M0,50 Q25,25 50,50 T100,50" fill="none" stroke="currentColor" strokeWidth="0.5" />
             <path d="M0,60 Q25,35 50,60 T100,60" fill="none" stroke="currentColor" strokeWidth="0.5" />
           </svg>
@@ -95,18 +115,24 @@ export default function Landing() {
               Build Software with <br />
               <span className="text-[hsl(350,80%,60%)] relative inline-block">
                 AI-Powered
-                <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
+                <svg
+                  className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10"
+                  viewBox="0 0 100 10"
+                  preserveAspectRatio="none"
+                >
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
                 </svg>
-              </span> Precision
+              </span>{" "}
+              Precision
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-lg leading-relaxed mx-auto lg:mx-0">
-              Transform requirements into production code with AI agents that understand your standards, design your architecture, and write compliant code—all with complete traceability.
+              Transform requirements into production code with AI agents that understand your standards, design your
+              architecture, and write compliant code—all with complete traceability.
             </p>
             <div className="flex justify-center lg:justify-start">
-              <Button 
+              <Button
                 size="lg"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate("/dashboard")}
                 className="group bg-[hsl(240,30%,15%)] text-white px-8 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
               >
                 Start Building
@@ -120,14 +146,14 @@ export default function Landing() {
             <div className="relative w-full max-w-md aspect-square">
               {/* Glow background */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rose-100/50 rounded-full blur-3xl" />
-              
+
               {/* Floating shield icon */}
               <div className="absolute top-0 right-10 z-20 animate-float">
                 <div className="bg-[hsl(350,80%,60%)] p-4 rounded-2xl shadow-xl transform rotate-12">
                   <ShieldCheck className="w-12 h-12 text-white" />
                 </div>
               </div>
-              
+
               {/* Floating git branch icon */}
               <div className="absolute bottom-20 left-0 z-20 animate-float-delayed">
                 <div className="bg-emerald-500 p-4 rounded-2xl shadow-xl transform -rotate-12">
@@ -179,16 +205,19 @@ export default function Landing() {
       <section className="py-24 px-6 bg-white/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Everything You Need to Build Better Software</h2>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+              Everything You Need to Build Better Software
+            </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              From requirements to production code, Pronghorn provides the complete toolkit for standards-driven development with AI assistance at every step.
+              From requirements to production code, Pronghorn provides the complete toolkit for standards-driven
+              development with AI assistance at every step.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
-              <Card 
-                key={index} 
+              <Card
+                key={index}
                 className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl hover:-translate-y-2 transition-all duration-300"
               >
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-6`}>
@@ -212,31 +241,40 @@ export default function Landing() {
 
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="relative bg-gradient-to-br from-blue-50 to-white p-10 rounded-3xl border border-blue-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">1</div>
+              <div className="absolute -top-4 -left-4 w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
+                1
+              </div>
               <div className="pt-4">
                 <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Design</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Define standards, requirements, and architecture on an interactive canvas. AI helps decompose ideas into structured specifications.
+                  Define standards, requirements, and architecture on an interactive canvas. AI helps decompose ideas
+                  into structured specifications.
                 </p>
               </div>
             </div>
 
             <div className="relative bg-gradient-to-br from-rose-50 to-white p-10 rounded-3xl border border-rose-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-[hsl(350,80%,55%)] rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">2</div>
+              <div className="absolute -top-4 -left-4 w-12 h-12 bg-[hsl(350,80%,55%)] rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
+                2
+              </div>
               <div className="pt-4">
                 <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Build</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  AI agents generate code, audit compliance, and fix gaps autonomously. Review changes in a built-in editor with Git integration.
+                  AI agents generate code, audit compliance, and fix gaps autonomously. Review changes in a built-in
+                  editor with Git integration.
                 </p>
               </div>
             </div>
 
             <div className="relative bg-gradient-to-br from-emerald-50 to-white p-10 rounded-3xl border border-emerald-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">3</div>
+              <div className="absolute -top-4 -left-4 w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
+                3
+              </div>
               <div className="pt-4">
                 <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Ship</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Generate comprehensive specs for any audience—technical docs, executive summaries, RFPs, or cloud architecture guides. Export and share with confidence.
+                  Generate comprehensive specs for any audience—technical docs, executive summaries, RFPs, or cloud
+                  architecture guides. Export and share with confidence.
                 </p>
               </div>
             </div>
@@ -250,7 +288,8 @@ export default function Landing() {
           <div>
             <h2 className="text-4xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Why Choose Pronghorn?</h2>
             <p className="text-xl text-gray-600 leading-relaxed mb-10">
-              Built for teams who refuse to compromise on quality. Every feature designed to maintain traceability from concept to deployment.
+              Built for teams who refuse to compromise on quality. Every feature designed to maintain traceability from
+              concept to deployment.
             </p>
             <ul className="space-y-4">
               {benefits.map((benefit, index) => (
@@ -263,7 +302,7 @@ export default function Landing() {
               ))}
             </ul>
           </div>
-          
+
           {/* Stats Card */}
           <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] p-10 flex flex-col justify-center">
             <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,60%)]/20 rounded-full blur-3xl" />
@@ -308,13 +347,16 @@ export default function Landing() {
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,60%)]/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Ready to Build with AI Precision?</h2>
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">
+                Ready to Build with AI Precision?
+              </h2>
               <p className="text-lg md:text-xl text-gray-600 mb-8 md:mb-10 max-w-2xl mx-auto">
-                Join teams who are shipping better software, faster, with complete traceability from requirements to code.
+                Join teams who are shipping better software, faster, with complete traceability from requirements to
+                code.
               </p>
-              <Button 
+              <Button
                 size="lg"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate("/dashboard")}
                 className="group bg-[hsl(240,30%,15%)] text-white px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2"
               >
                 <span>Create Your First Project</span>
@@ -334,7 +376,12 @@ export default function Landing() {
           </div>
           <div className="text-sm text-gray-500 text-center md:text-right">
             <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
-            <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,60%)] hover:underline">
+            <a
+              href="https://pronghorn.red"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[hsl(350,80%,60%)] hover:underline"
+            >
               pronghorn.red
             </a>
           </div>
