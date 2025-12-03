@@ -115,8 +115,6 @@ export default {
         "slide-out-left": "slide-out-left 0.3s ease-out",
         "slide-in-right": "slide-in-right 0.3s ease-out",
         "slide-out-right": "slide-out-right 0.3s ease-out",
-        "float": "float 6s ease-in-out infinite",
-        "float-delayed": "float 6s ease-in-out 3s infinite",
       },
     },
   },

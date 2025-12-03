@@ -90,9 +90,9 @@ export default function Landing() {
           <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-rose-100/30 to-transparent blur-3xl" />
         </div>
 
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center relative z-10">
-          <div className="space-y-8">
-            <h1 className="text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
+          <div className="space-y-8 text-center lg:text-left">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
               Standards Driven <br />
               <span className="text-[hsl(350,80%,60%)] relative inline-block">
                 AI Development
@@ -101,11 +101,11 @@ export default function Landing() {
                 </svg>
               </span>
             </h1>
-            <p className="text-xl text-muted-foreground max-w-lg leading-relaxed">
+            <p className="text-lg md:text-xl text-muted-foreground max-w-lg leading-relaxed mx-auto lg:mx-0">
               The alternative to unclear "vibe" coding. Build enterprise applications that are provably compliant 
               with standards and fully traceable to requirements—from clear architectural foundations to production-ready code.
             </p>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex justify-center lg:justify-start">
               <Button 
                 size="lg"
                 onClick={() => navigate('/dashboard')}
@@ -113,14 +113,6 @@ export default function Landing() {
               >
                 Start Building
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button 
-                size="lg"
-                variant="outline"
-                onClick={() => navigate('/standards')}
-                className="bg-white border-2 border-gray-200 text-[hsl(240,30%,15%)] px-8 py-4 rounded-xl font-medium text-lg hover:border-[hsl(240,30%,15%)] transition-all duration-300"
-              >
-                View Standards
               </Button>
             </div>
           </div>
@@ -330,23 +322,23 @@ export default function Landing() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-6">
+      <section className="py-16 md:py-24 px-4 md:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-gradient-to-br from-rose-100/50 to-rose-50 rounded-3xl p-12 lg:p-16 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-rose-100/50 to-rose-50 rounded-3xl p-8 md:p-12 lg:p-16 relative overflow-hidden">
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,60%)]/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h2 className="text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Ready to Build with Confidence?</h2>
-              <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Ready to Build with Confidence?</h2>
+              <p className="text-lg md:text-xl text-gray-600 mb-8 md:mb-10 max-w-2xl mx-auto">
                 Join the new category of Autonomous Compliance-Driven Development. Deliver enterprise applications 
                 that are provably compliant, fully traceable, and built in a fraction of the time
               </p>
               <Button 
                 size="lg"
                 onClick={() => navigate('/dashboard')}
-                className="group bg-[hsl(240,30%,15%)] text-white px-10 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2 mx-auto"
+                className="group bg-[hsl(240,30%,15%)] text-white px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2"
               >
-                Create Your First Project
+                <span>Create Your First Project</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
