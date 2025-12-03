@@ -140,7 +140,10 @@ export function CodeEditor({
   useEffect(() => {
     // Auto-save previous file if switching to a different file
     const prev = previousFileRef.current;
+    console.log("File switch detected - prev:", prev?.filePath, "new:", filePath);
+    console.log("Prev content differs from original:", prev ? prev.content !== prev.originalContent : "no prev");
     if (prev && prev.filePath && prev.filePath !== filePath && prev.content !== prev.originalContent) {
+      console.log("Auto-saving previous file:", prev.filePath);
       autoSaveFile(prev.filePath, prev.content, prev.originalContent);
     }
 
@@ -173,6 +176,7 @@ export function CodeEditor({
   useEffect(() => {
     if (previousFileRef.current && previousFileRef.current.filePath === filePath) {
       previousFileRef.current.content = content;
+      console.log("Updated ref content for:", filePath, "content length:", content.length);
     }
   }, [content, filePath]);
 
