@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ export const useRealtimeArtifacts = (
 ) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadArtifacts = async () => {
     if (!projectId || !enabled) return;
@@ -58,24 +59,36 @@ export const useRealtimeArtifacts = (
           table: "artifacts",
           filter: `project_id=eq.${projectId}`,
         },
-        () => {
+        (payload) => {
+          console.log("Artifacts postgres_changes:", payload);
           loadArtifacts();
         }
       )
-      .on("broadcast", { event: "artifact_refresh" }, () => {
+      .on("broadcast", { event: "artifact_refresh" }, (payload) => {
+        console.log("Received artifacts refresh broadcast:", payload);
         loadArtifacts();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Artifacts channel status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Artifacts realtime connected");
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error("❌ Artifacts realtime connection failed:", status);
+          loadArtifacts();
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [projectId, enabled, shareToken]);
 
   const addArtifact = async (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => {
     if (!projectId) return;
 
-    // Generate temporary ID for optimistic update
     const tempId = `temp-${Date.now()}`;
     const optimisticArtifact: Artifact = {
       id: tempId,
@@ -91,7 +104,6 @@ export const useRealtimeArtifacts = (
       created_by: null,
     };
 
-    // Optimistically add to UI
     setArtifacts((prev) => [...prev, optimisticArtifact]);
 
     try {
@@ -106,24 +118,24 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
 
-      // Replace temporary artifact with real database artifact
       if (data) {
         setArtifacts((prev) =>
           prev.map((artifact) => (artifact.id === tempId ? data : artifact))
         );
       }
 
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`artifacts-${projectId}`).send({
-        type: 'broadcast',
-        event: 'artifact_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel instance
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'insert', id: data?.id }
+        });
+      }
 
       toast.success("Artifact created successfully");
       return data;
     } catch (error) {
-      // Rollback on error
       setArtifacts((prev) => prev.filter((artifact) => artifact.id !== tempId));
       console.error("Error creating artifact:", error);
       toast.error("Failed to create artifact");
@@ -138,11 +150,9 @@ export const useRealtimeArtifacts = (
     aiSummary?: string,
     imageUrl?: string
   ) => {
-    // Store original for rollback
     const originalArtifacts = artifacts;
 
     try {
-      // Optimistically update UI
       setArtifacts((prev) =>
         prev.map((artifact) =>
           artifact.id === id
@@ -169,17 +179,18 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`artifacts-${projectId}`).send({
-        type: 'broadcast',
-        event: 'artifact_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel instance
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'update', id }
+        });
+      }
       
       toast.success("Artifact updated successfully");
       return data;
     } catch (error) {
-      // Rollback on error
       setArtifacts(originalArtifacts);
       console.error("Error updating artifact:", error);
       toast.error("Failed to update artifact");
@@ -188,11 +199,9 @@ export const useRealtimeArtifacts = (
   };
 
   const deleteArtifact = async (id: string) => {
-    // Store original for rollback
     const originalArtifacts = artifacts;
 
     try {
-      // Optimistically remove from UI
       setArtifacts((prev) => prev.filter((artifact) => artifact.id !== id));
 
       const { error } = await supabase.rpc("delete_artifact_with_token", {
@@ -202,16 +211,17 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`artifacts-${projectId}`).send({
-        type: 'broadcast',
-        event: 'artifact_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel instance
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'delete', id }
+        });
+      }
       
       toast.success("Artifact deleted successfully");
     } catch (error) {
-      // Rollback on error
       setArtifacts(originalArtifacts);
       console.error("Error deleting artifact:", error);
       toast.error("Failed to delete artifact");
