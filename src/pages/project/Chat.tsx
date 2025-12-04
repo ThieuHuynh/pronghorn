@@ -921,9 +921,9 @@ export default function Chat() {
                               </Button>
                             </div>
                           </div>
-                          <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:break-all [&_code]:whitespace-pre-wrap">
+                          <div className={`prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:break-all [&_code]:whitespace-pre-wrap ${message.role === "user" ? "text-primary-foreground" : ""}`}>
                             {message.role === "user" ? (
-                              <div className="whitespace-pre-wrap break-words overflow-hidden">{message.content}</div>
+                              <div className="whitespace-pre-wrap break-words overflow-hidden text-primary-foreground">{message.content}</div>
                             ) : (
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                             )}
