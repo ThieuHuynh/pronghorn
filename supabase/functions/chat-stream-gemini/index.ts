@@ -56,6 +56,9 @@ serve(async (req) => {
       if (attachedContext.canvasLayers?.length) {
         contextParts.push(`CANVAS LAYERS: ${attachedContext.canvasLayers.length} layers attached`);
       }
+      if (attachedContext.files?.length) {
+        contextParts.push(`REPOSITORY FILES: ${attachedContext.files.length} files attached`);
+      }
 
       if (contextParts.length > 0) {
         const jsonString = JSON.stringify(attachedContext, null, 2);
