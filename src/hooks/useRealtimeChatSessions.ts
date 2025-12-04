@@ -76,7 +76,7 @@ export const useRealtimeChatSessions = (
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId, enabled, shareToken]);
+  }, [projectId, enabled]);
 
   const createSession = async (title: string = "New Chat") => {
     if (!projectId) return;
@@ -253,7 +253,7 @@ export const useRealtimeChatMessages = (
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [chatSessionId, enabled, shareToken]);
+  }, [chatSessionId, enabled]);
 
   const addMessage = async (role: string, content: string) => {
     if (!chatSessionId) return;

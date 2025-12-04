@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
+import { useAuth } from "@/contexts/AuthContext";
 import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -49,10 +50,12 @@ import { useQuery } from "@tanstack/react-query";
 export default function Artifacts() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { user } = useAuth();
+  const hasAccessToken = !!shareToken || !!user;
   const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact } = useRealtimeArtifacts(
     projectId,
     shareToken,
-    isTokenSet
+    hasAccessToken && isTokenSet
   );
 
   const [searchQuery, setSearchQuery] = useState("");

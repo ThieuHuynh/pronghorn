@@ -84,7 +84,7 @@ export const useRealtimeArtifacts = (
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [projectId, enabled, shareToken]);
+  }, [projectId, enabled]);
 
   const addArtifact = async (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => {
     if (!projectId) return;
