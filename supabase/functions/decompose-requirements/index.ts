@@ -17,9 +17,26 @@ serve(async (req) => {
     
     const { text, projectId, shareToken, attachedContext } = body;
     
-    if (!text || !projectId) {
-      console.error("Missing parameters - text:", !!text, "projectId:", !!projectId);
-      throw new Error("Missing required parameters: text and projectId");
+    // Check if we have either text or attachedContext with content
+    const hasAttachedContext = attachedContext && (
+      attachedContext.projectMetadata ||
+      attachedContext.artifacts?.length ||
+      attachedContext.requirements?.length ||
+      attachedContext.standards?.length ||
+      attachedContext.techStacks?.length ||
+      attachedContext.canvasNodes?.length ||
+      attachedContext.chatSessions?.length ||
+      attachedContext.files?.length
+    );
+    
+    if (!projectId) {
+      console.error("Missing projectId");
+      throw new Error("Missing required parameter: projectId");
+    }
+    
+    if (!text && !hasAttachedContext) {
+      console.error("Missing both text and attachedContext");
+      throw new Error("Please provide either text to decompose or project context");
     }
 
     // Validate projectId is a valid UUID format
