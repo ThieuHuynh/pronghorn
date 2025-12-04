@@ -22,7 +22,8 @@ import {
   Info,
   CheckSquare,
   Square,
-  Loader2
+  Loader2,
+  FileCode
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ import { RequirementsTreeSelector } from "./RequirementsTreeSelector";
 import { ArtifactsListSelector } from "./ArtifactsListSelector";
 import { ChatSessionsListSelector } from "./ChatSessionsListSelector";
 import { CanvasItemsSelector } from "./CanvasItemsSelector";
+import { RepositoryFilesSelector } from "./RepositoryFilesSelector";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface ProjectSelectionResult {
@@ -44,6 +46,7 @@ export interface ProjectSelectionResult {
   canvasNodes: any[];
   canvasEdges: any[];
   canvasLayers: any[];
+  files: Array<{ path: string; content: string }>;
 }
 
 interface ProjectSelectorProps {
@@ -62,7 +65,8 @@ type CategoryType =
   | "requirements" 
   | "standards" 
   | "techStacks" 
-  | "canvas";
+  | "canvas"
+  | "files";
 
 interface Category {
   id: CategoryType;
@@ -113,6 +117,12 @@ const CATEGORIES: Category[] = [
     label: "Canvas",
     icon: <Network className="h-4 w-4" />,
     description: "Architecture nodes, edges, layers"
+  },
+  {
+    id: "files",
+    label: "Repository Files",
+    icon: <FileCode className="h-4 w-4" />,
+    description: "Source code and project files"
   }
 ];
 
@@ -152,6 +162,7 @@ export function ProjectSelector({
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(
     new Set(initialSelection?.canvasLayers ?? [])
   );
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   // Load project-linked standards & tech stacks
   const [standardCategories, setStandardCategories] = useState<any[]>([]);
@@ -428,6 +439,56 @@ export function ProjectSelector({
         }
       }
 
+      // Fetch repository files content
+      const files: Array<{ path: string; content: string }> = [];
+      if (selectedFiles.size > 0) {
+        // Get Prime repo
+        const { data: repos } = await supabase.rpc("get_project_repos_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken
+        });
+        const primeRepo = repos?.find((r: any) => r.is_prime) || repos?.[0];
+        
+        if (primeRepo) {
+          // Get committed files
+          const { data: committedFiles } = await supabase.rpc("get_project_files_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken
+          });
+
+          // Get staged changes
+          const { data: stagedChanges } = await supabase.rpc("get_staged_changes_with_token", {
+            p_repo_id: primeRepo.id,
+            p_token: shareToken
+          });
+
+          // Build effective content map (staged takes precedence)
+          const fileContentMap = new Map<string, string>();
+          
+          (committedFiles || []).forEach((f: any) => {
+            if (f.repo_id === primeRepo.id) {
+              fileContentMap.set(f.path, f.content || '');
+            }
+          });
+
+          (stagedChanges || []).forEach((s: any) => {
+            if (s.operation_type === 'delete') {
+              fileContentMap.delete(s.file_path);
+            } else if (s.new_content !== null) {
+              fileContentMap.set(s.file_path, s.new_content);
+            }
+          });
+
+          // Add selected files to result
+          for (const path of selectedFiles) {
+            const content = fileContentMap.get(path);
+            if (content !== undefined) {
+              files.push({ path, content });
+            }
+          }
+        }
+      }
+
       const result: ProjectSelectionResult = {
         projectMetadata,
         artifacts,
@@ -437,7 +498,8 @@ export function ProjectSelector({
         techStacks: techStacksData,
         canvasNodes,
         canvasEdges,
-        canvasLayers
+        canvasLayers,
+        files
       };
 
       onConfirm(result);
@@ -468,6 +530,7 @@ export function ProjectSelector({
     setSelectedNodes(new Set());
     setSelectedEdges(new Set());
     setSelectedLayers(new Set());
+    setSelectedFiles(new Set());
   };
 
   const getTotalSelected = () => {
@@ -480,7 +543,8 @@ export function ProjectSelector({
       selectedTechStacks.size +
       selectedNodes.size +
       selectedEdges.size +
-      selectedLayers.size
+      selectedLayers.size +
+      selectedFiles.size
     );
   };
 
@@ -567,6 +631,16 @@ export function ProjectSelector({
             onNodesChange={setSelectedNodes}
             onEdgesChange={setSelectedEdges}
             onLayersChange={setSelectedLayers}
+          />
+        );
+
+      case "files":
+        return (
+          <RepositoryFilesSelector
+            projectId={projectId}
+            shareToken={shareToken}
+            selectedFiles={selectedFiles}
+            onSelectionChange={setSelectedFiles}
           />
         );
 
