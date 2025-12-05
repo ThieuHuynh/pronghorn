@@ -31,7 +31,8 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['projects', user?.id],
     queryFn: async () => {
-      if (!user) {
+      // Guard against empty or invalid user.id
+      if (!user?.id) {
         return [];
       }
       const {
