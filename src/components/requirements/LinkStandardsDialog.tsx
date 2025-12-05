@@ -7,13 +7,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronRight, ChevronDown, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router-dom";
 
 interface LinkStandardsDialogProps {
   open: boolean;
   onClose: () => void;
   requirementId: string;
   requirementTitle: string;
+  shareToken: string | null;
 }
 
 interface Standard {
@@ -30,9 +30,7 @@ interface Category {
   standards: Standard[];
 }
 
-export function LinkStandardsDialog({ open, onClose, requirementId, requirementTitle }: LinkStandardsDialogProps) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+export function LinkStandardsDialog({ open, onClose, requirementId, requirementTitle, shareToken }: LinkStandardsDialogProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());

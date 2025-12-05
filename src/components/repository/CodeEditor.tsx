@@ -8,7 +8,6 @@ import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useSearchParams } from "react-router-dom";
 import { Save, X, FileText, ImageIcon, GitCompare, Eye } from "lucide-react";
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif', 'tiff', 'tif'];
@@ -43,6 +42,7 @@ interface CodeEditorProps {
   fileId: string | null;
   filePath: string | null;
   repoId: string;
+  shareToken?: string | null;
   isStaged?: boolean;
   isBinary?: boolean;
   // Buffer-based props (new pattern)
@@ -64,6 +64,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   fileId, 
   filePath, 
   repoId, 
+  shareToken,
   isStaged,
   isBinary, 
   bufferContent,
@@ -90,8 +91,6 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     onShowDiffChange?.(checked);
   };
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
 
   // Resolved content values
   const content = isBufferMode ? bufferContent : internalContent;

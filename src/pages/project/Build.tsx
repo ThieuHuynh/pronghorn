@@ -33,7 +33,7 @@ export default function Build() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
 
-  const { repos } = useRealtimeRepos(projectId || null);
+  const { repos } = useRealtimeRepos(projectId || null, shareToken);
   // Use Prime repo for file operations (source of truth), fallback to default
   const defaultRepo = repos.find((r) => r.is_prime) || repos.find((r) => r.is_default);
 
@@ -818,6 +818,7 @@ export default function Build() {
                             <TabsContent value="staging" className="flex-1 overflow-hidden mt-0">
                               <StagingPanel
                                 projectId={projectId}
+                                shareToken={shareToken}
                                 onViewDiff={handleViewDiff}
                                 autoCommit={autoCommit}
                                 onAutoCommitChange={setAutoCommit}
@@ -827,6 +828,7 @@ export default function Build() {
                             <TabsContent value="history" className="flex-1 overflow-hidden mt-0 h-full">
                               <CommitHistory
                                 projectId={projectId}
+                                shareToken={shareToken}
                               />
                             </TabsContent>
                           </Tabs>
@@ -992,6 +994,7 @@ export default function Build() {
                   <TabsContent value="staging" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <StagingPanel
                       projectId={projectId}
+                      shareToken={shareToken}
                       onViewDiff={handleViewDiff}
                       autoCommit={autoCommit}
                       onAutoCommitChange={setAutoCommit}

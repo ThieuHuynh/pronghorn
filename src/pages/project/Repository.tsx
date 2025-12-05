@@ -59,7 +59,7 @@ export default function Repository() {
   const [zipUploadProgress, setZipUploadProgress] = useState<{ current: number; total: number; currentFile: string }>({ current: 0, total: 0, currentFile: '' });
   const zipInputRef = useRef<HTMLInputElement>(null);
 
-  const { repos, loading, refetch } = useRealtimeRepos(projectId);
+  const { repos, loading, refetch } = useRealtimeRepos(projectId, shareToken);
 
   // Binary file detection helper
   const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
@@ -933,6 +933,7 @@ export default function Repository() {
                           <div key={repo.id} className="space-y-2">
                             <RepoCard
                               repo={repo}
+                              shareToken={shareToken}
                               onDelete={handleDeleteRepo}
                               onManagePAT={handleManagePAT}
                               onPrimeChange={refetch}
@@ -1138,7 +1139,7 @@ export default function Repository() {
                       ) : (
                         <div className="space-y-4">
                           {repos.map(repo => (
-                            <CommitLog key={repo.id} repoId={repo.id} />
+                            <CommitLog key={repo.id} repoId={repo.id} shareToken={shareToken} />
                           ))}
                         </div>
                       )}

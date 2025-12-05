@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { ListChecks } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
 
 interface RequirementStandardsBadgesProps {
   requirementId: string;
+  shareToken: string | null;
 }
 
-export function RequirementStandardsBadges({ requirementId }: RequirementStandardsBadgesProps) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+export function RequirementStandardsBadges({ requirementId, shareToken }: RequirementStandardsBadgesProps) {
   const [standards, setStandards] = useState<any[]>([]);
 
   useEffect(() => {

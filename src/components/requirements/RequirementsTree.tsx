@@ -188,7 +188,7 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
                   </Badge>
                 )}
                 
-                <RequirementStandardsBadges requirementId={requirement.id} />
+                <RequirementStandardsBadges requirementId={requirement.id} shareToken={shareToken} />
                 
                 {fileCount > 0 && (
                   <Badge 

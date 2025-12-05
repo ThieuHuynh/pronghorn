@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,14 +23,13 @@ interface StagedChange {
 
 interface StagingPanelProps {
   projectId: string;
+  shareToken: string | null;
   onViewDiff?: (change: any) => void;
   autoCommit: boolean;
   onAutoCommitChange: (checked: boolean) => void;
 }
 
-export function StagingPanel({ projectId, onViewDiff, autoCommit, onAutoCommitChange }: StagingPanelProps) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, onAutoCommitChange }: StagingPanelProps) {
   const { toast } = useToast();
 
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,11 +20,10 @@ interface Commit {
 
 interface CommitHistoryProps {
   projectId: string;
+  shareToken: string | null;
 }
 
-export function CommitHistory({ projectId }: CommitHistoryProps) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+export function CommitHistory({ projectId, shareToken }: CommitHistoryProps) {
   const { toast } = useToast();
 
   const [commits, setCommits] = useState<Commit[]>([]);

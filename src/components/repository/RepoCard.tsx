@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, Github, Trash2, Key, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 interface RepoCardProps {
@@ -15,15 +14,14 @@ interface RepoCardProps {
     is_default: boolean;
     is_prime?: boolean;
   };
+  shareToken: string | null;
   onDelete?: (repoId: string) => void;
   onManagePAT?: (repoId: string) => void;
   onPrimeChange?: () => void;
 }
 
-export function RepoCard({ repo, onDelete, onManagePAT, onPrimeChange }: RepoCardProps) {
+export function RepoCard({ repo, shareToken, onDelete, onManagePAT, onPrimeChange }: RepoCardProps) {
   const fullName = `${repo.organization}/${repo.repo}`;
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
   const { toast } = useToast();
 
   const handleSetAsPrime = async () => {

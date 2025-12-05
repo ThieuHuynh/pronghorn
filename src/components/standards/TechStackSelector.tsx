@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
 
 interface TechStack {
   id: string;
@@ -15,9 +14,14 @@ interface TechStack {
   icon?: string;
 }
 
-export function TechStackSelector({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+interface TechStackSelectorProps {
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+  shareToken: string | null;
+}
+
+export function TechStackSelector({ projectId, open, onClose, shareToken }: TechStackSelectorProps) {
   const [stacks, setStacks] = useState<TechStack[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);

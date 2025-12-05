@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
 import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
+import { useShareToken } from "@/hooks/useShareToken";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Standard {
   id: string;
@@ -38,8 +40,9 @@ interface TechStack {
 
 export default function Standards() {
   const { projectId } = useParams();
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { user } = useAuth();
+  const hasAccessToken = !!shareToken || !!user;
   const [categories, setCategories] = useState<Category[]>([]);
   const [techStacks, setTechStacks] = useState<TechStack[]>([]);
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
@@ -49,10 +52,10 @@ export default function Standards() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (projectId) {
+    if (projectId && isTokenSet) {
       loadData();
     }
-  }, [projectId]);
+  }, [projectId, isTokenSet]);
 
   const loadData = async () => {
     setLoading(true);

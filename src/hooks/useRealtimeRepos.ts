@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useSearchParams } from "react-router-dom";
 
 interface ProjectRepo {
   id: string;
@@ -14,11 +13,9 @@ interface ProjectRepo {
   updated_at: string;
 }
 
-export function useRealtimeRepos(projectId: string | undefined) {
+export function useRealtimeRepos(projectId: string | undefined | null, shareToken?: string | null) {
   const [repos, setRepos] = useState<ProjectRepo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
 
   const loadRepos = async () => {
     if (!projectId) return;

@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { GitCommit, Calendar, FileCode } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
 
 interface Commit {
   id: string;
@@ -17,11 +16,10 @@ interface Commit {
 interface CommitLogProps {
   repoId: string;
   selectedBranch?: string;
+  shareToken: string | null;
 }
 
-export function CommitLog({ repoId, selectedBranch }: CommitLogProps) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+export function CommitLog({ repoId, selectedBranch, shareToken }: CommitLogProps) {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(false);
 
