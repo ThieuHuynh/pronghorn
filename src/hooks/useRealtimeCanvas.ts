@@ -1,13 +1,14 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Node, Edge, useNodesState, useEdgesState } from "reactflow";
-import { useSearchParams } from "react-router-dom";
-import { useShareToken } from "@/hooks/useShareToken";
 
-export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initialEdges: Edge[]) {
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
-  const { isTokenSet } = useShareToken(projectId);
+export function useRealtimeCanvas(
+  projectId: string,
+  shareToken: string | null,
+  isTokenSet: boolean,
+  initialNodes: Node[],
+  initialEdges: Edge[]
+) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const draggedNodeRef = useRef<string | null>(null);
@@ -20,11 +21,11 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       const [nodesResult, edgesResult] = await Promise.all([
         supabase.rpc("get_canvas_nodes_with_token", {
           p_project_id: projectId,
-          p_token: shareToken || null,
+          p_token: shareToken,
         }),
         supabase.rpc("get_canvas_edges_with_token", {
           p_project_id: projectId,
-          p_token: shareToken || null,
+          p_token: shareToken,
         }),
       ]);
 
@@ -58,6 +59,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   }, [projectId, shareToken, setNodes, setEdges]);
   
   useEffect(() => {
+    // Wait for token to be ready before making RPC calls
     if (!projectId || !isTokenSet) {
       return;
     }
@@ -232,7 +234,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         const { error } = await supabase.rpc("upsert_canvas_node_with_token", {
           p_id: node.id,
           p_project_id: projectId,
-          p_token: shareToken || null,
+          p_token: shareToken,
           p_type: node.data.type,
           p_position: node.position as any,
           p_data: node.data as any
@@ -270,21 +272,11 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   const saveEdge = async (edge: Edge) => {
     try {
       console.log("Saving edge:", edge);
-      
-      const edgeData = {
-        id: edge.id,
-        project_id: projectId,
-        source_id: edge.source,
-        target_id: edge.target,
-        label: (edge.label as string) || null,
-        edge_type: edge.type || 'default',
-        style: edge.style || {},
-      };
 
       const { data, error } = await supabase.rpc("upsert_canvas_edge_with_token", {
         p_id: edge.id,
         p_project_id: projectId,
-        p_token: shareToken || null,
+        p_token: shareToken,
         p_source_id: edge.source,
         p_target_id: edge.target,
         p_label: (edge.label as string) || null,

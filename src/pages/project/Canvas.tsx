@@ -51,7 +51,7 @@ const ALL_NODE_TYPES: NodeType[] = [
 
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token } = useShareToken(projectId);
+  const { token, isTokenSet } = useShareToken(projectId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -84,7 +84,7 @@ function CanvasFlow() {
     saveNode,
     saveEdge,
     loadCanvasData,
-  } = useRealtimeCanvas(projectId!, initialNodes, initialEdges);
+  } = useRealtimeCanvas(projectId!, token, isTokenSet, initialNodes, initialEdges);
 
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
