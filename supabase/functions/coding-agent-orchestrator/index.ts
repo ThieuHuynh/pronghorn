@@ -442,11 +442,18 @@ serve(async (req) => {
 
       if (projectContext.files?.length > 0) {
         const files = projectContext.files as any[];
-        const preview = files
-          .slice(0, 10)
-          .map((f) => `- ${f.path}: ${f.content?.slice(0, 100) || ''}...`)
-          .join("\n");
-        parts.push(`Repository Files (${files.length} total, showing up to 10):\n${preview}`);
+        // Show FULL content for first 5 files, then paths only for the rest
+        const fullContentFiles = files.slice(0, 5).map((f: any) => 
+          `### FILE: ${f.path}\n\`\`\`\n${f.content || ''}\n\`\`\``
+        ).join("\n\n");
+        
+        const remainingPaths = files.slice(5).map((f: any) => `- ${f.path}`).join("\n");
+        
+        let section = `Repository Files (${files.length} attached by user):\n\n${fullContentFiles}`;
+        if (remainingPaths) {
+          section += `\n\nAdditional files (paths only, use read_file to access):\n${remainingPaths}`;
+        }
+        parts.push(section);
       }
 
       contextSummary = parts.join("\n\n");
@@ -1101,23 +1108,27 @@ Start your response with { and end with }. Nothing else.`;
                     `[AGENT] edit_lines: Verified file now has ${verifiedLines.length} lines (was ${totalBaseLines} lines before edit)`,
                   );
 
-                  // Provide verification info to agent
+                // Return ENTIRE file content after edit so agent can verify the complete result
+                  const numberedVerifiedContent = verifiedLines
+                    .map((line: string, idx: number) => `<<${idx + 1}>> ${line}`)
+                    .join("\n");
+
                   verificationInfo = {
                     lines_before: totalBaseLines,
                     lines_after: verifiedLines.length,
-                    content_sample: verifiedLines
-                      .slice(Math.max(0, startIdx - 3), Math.min(verifiedLines.length, endIdx + 4))
-                      .join("\n"),
+                    full_content: numberedVerifiedContent,
                   };
                 }
 
-                // Include the new content in result for agent to verify
+                // Return ENTIRE file content so agent sees exactly what was staged
                 const finalLines = finalContent.split("\n");
+                const numberedFinalContent = finalLines
+                  .map((line: string, idx: number) => `<<${idx + 1}>> ${line}`)
+                  .join("\n");
+
                 result.data = {
                   ...(result.data || {}),
-                  new_content_preview: finalLines
-                    .slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3))
-                    .join("\n"),
+                  full_content: numberedFinalContent,
                   total_lines: finalLines.length,
                   verification: verificationInfo,
                 };
