@@ -85,29 +85,24 @@ export function CreateProjectDialog() {
       // Invalidate projects query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
-      // Handle navigation based on authentication state
-      if (user) {
-        // Authenticated user: navigate without token (uses auth.uid() for RLS)
-        navigate({ pathname: `/project/${project.id}/canvas` });
-      } else {
-        // Anonymous user: store token and navigate with token in URL
-        const shareToken = project.share_token;
-        if (shareToken) {
-          addProject({
-            id: project.id,
-            shareToken: shareToken,
-            name: name.trim(),
-            createdAt: new Date().toISOString()
-          });
-          navigate({ pathname: `/project/${project.id}/canvas/t/${shareToken}` });
-          
-          // Show warning modal about saving the URL
-          toast.warning(
-            "Save this URL to access your project later. Anonymous projects will be lost if you close the tab.",
-            { duration: 10000 }
-          );
-        }
+      // Always include token in URL for consistency
+      const shareToken = project.share_token;
+      if (!user && shareToken) {
+        // Anonymous user: store token in session
+        addProject({
+          id: project.id,
+          shareToken: shareToken,
+          name: name.trim(),
+          createdAt: new Date().toISOString()
+        });
+        // Show warning modal about saving the URL
+        toast.warning(
+          "Save this URL to access your project later. Anonymous projects will be lost if you close the tab.",
+          { duration: 10000 }
+        );
       }
+      // Navigate with token for all users
+      navigate({ pathname: `/project/${project.id}/canvas/t/${shareToken}` });
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create project");

@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Copy, Share2 } from "lucide-react";
+import { RefreshCw, Copy, Share2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
+import { setProjectToken } from "@/lib/tokenCache";
 import { useAuth } from "@/contexts/AuthContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
 
@@ -40,6 +41,7 @@ export default function ProjectSettings() {
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [thinkingBudget, setThinkingBudget] = useState(-1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showToken, setShowToken] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -130,11 +132,17 @@ export default function ProjectSettings() {
       });
 
       if (error) throw error;
-      return { share_token: newToken };
+      return newToken as string;
     },
-    onSuccess: () => {
+    onSuccess: (newToken) => {
+      // Update token cache with new token
+      if (projectId && newToken) {
+        setProjectToken(projectId, newToken);
+      }
+      // Update URL to use new token
+      navigate(`/project/${projectId}/settings/t/${newToken}`, { replace: true });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast.success("New share token generated - previous links are now invalid");
+      toast.success("New share token generated - URL has been updated");
     },
     onError: () => {
       toast.error("Failed to generate new token");
@@ -193,7 +201,21 @@ export default function ProjectSettings() {
                     <div className="space-y-2">
                       <Label>Current Token</Label>
                       <div className="flex gap-2">
-                        <Input value={project?.share_token || "Loading..."} readOnly className="font-mono text-sm" />
+                        <div className="relative flex-1">
+                          <Input 
+                            value={showToken ? (project?.share_token || "Loading...") : "••••••••••••••••••••••••••••••••••••"} 
+                            readOnly 
+                            className="font-mono text-sm pr-10" 
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                            onClick={() => setShowToken(!showToken)}
+                          >
+                            {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
                         <Button onClick={copyFullUrl} disabled={!project?.share_token} className="shrink-0">
                           <Copy className="h-4 w-4" />
                           Copy Full URL
