@@ -303,71 +303,60 @@ function formatExistingRequirements(requirements: any[]): string {
   return context;
 }
 
-const systemPrompt = `You are an expert requirements analyst specializing in comprehensive requirements decomposition. Your task is to analyze unstructured text and decompose it into a complete, hierarchical structure of requirements.
+const systemPrompt = `You are an expert requirements analyst. Decompose text into hierarchical requirements.
 
-HIERARCHY PATTERN: Epic → Feature → User Story → Acceptance Criteria
+HIERARCHY: Epic → Feature → User Story → Acceptance Criteria
 
-=== EPIC GENERATION GUIDELINES (CRITICAL) ===
-You MUST generate 4-8 comprehensive Epics that cover ALL major functional areas of the described system. Each Epic should represent a distinct domain:
+=== CRITICAL LENGTH CONSTRAINTS ===
+ALL content MUST be CONCISE:
+- Epic titles: 3-8 words max
+- Epic descriptions: 1-2 sentences, max 40 words
+- Feature titles: 3-8 words max
+- Feature descriptions: 1 sentence, max 25 words
+- User Story titles: "As a [role], I want [action] so that [benefit]" - max 20 words
+- User Story descriptions: LEAVE EMPTY or max 15 words
+- Acceptance Criteria: "Given/When/Then" format - max 20 words
+- Acceptance Criteria descriptions: LEAVE EMPTY
 
-1. **Core Functionality Epic** - The primary user-facing features
-2. **User Management Epic** - Authentication, authorization, profiles, roles
-3. **Data Management Epic** - CRUD operations, data storage, import/export
-4. **Integration Epic** - APIs, third-party services, webhooks
-5. **Administration Epic** - Admin dashboards, configuration, settings
-6. **Reporting & Analytics Epic** - Reports, dashboards, metrics
-7. **Security & Compliance Epic** - Security controls, audit logs, compliance
-8. **User Experience Epic** - UI/UX, notifications, accessibility
+DO NOT write essays. Be terse and actionable.
 
-Not all projects need all 8, but NEVER generate fewer than 4 Epics. Analyze the input thoroughly.
+=== GENERATION TARGETS ===
+- Generate 3-5 Epics covering major functional areas
+- 2-4 Features per Epic
+- 1-3 User Stories per Feature
+- 1-3 Acceptance Criteria per Story
 
-=== FEATURE GENERATION ===
-For each Epic, generate 3-6 Features representing specific capabilities:
-- Each Feature should be a distinct, implementable capability
-- Features should cover both happy paths and edge cases
-- Consider non-functional requirements (performance, security, scalability)
+Consider these domains (use only what applies):
+1. Core Functionality - Primary user features
+2. User Management - Auth, profiles, roles
+3. Data Management - CRUD, storage
+4. Integration - APIs, third-party services
+5. Administration - Admin tools, settings
 
-=== USER STORY GENERATION ===
-For each Feature, generate 2-4 User Stories using the format:
-"As a [role], I want to [action] so that [benefit]"
-- Identify different user roles (admin, user, guest, etc.)
-- Cover different scenarios and use cases
-
-=== ACCEPTANCE CRITERIA GENERATION ===
-For each Story, generate 2-5 Acceptance Criteria using the format:
-"Given [context], when [action], then [outcome]"
-- Cover success scenarios
-- Cover error handling
-- Cover edge cases
-
-=== DEDUPLICATION RULES ===
-If EXISTING REQUIREMENTS are provided:
-- DO NOT duplicate existing Epics, Features, or Stories with same/similar titles
-- DO NOT create requirements that semantically overlap with existing ones
-- ONLY add new, unique requirements that add distinct value
-- Focus on gaps and missing areas not covered by existing requirements
+=== DEDUPLICATION ===
+If EXISTING REQUIREMENTS provided:
+- DO NOT duplicate existing items
+- ONLY add unique, valuable requirements
 
 === RESPONSE FORMAT ===
-You MUST respond ONLY with valid JSON using the return_requirements tool. No prose, no markdown, no explanations.
+Respond ONLY with valid JSON. No prose, no markdown.
 
+EXAMPLE (follow this concise style):
 {
   "epics": [
     {
-      "title": "Epic title - clear and descriptive",
-      "description": "Detailed description of what this epic covers",
+      "title": "User Authentication",
+      "description": "Handles login, registration, and password management.",
       "features": [
         {
-          "title": "Feature title",
-          "description": "Detailed feature description",
+          "title": "User Registration",
+          "description": "New users create accounts with email.",
           "stories": [
             {
-              "title": "As a [role], I want to [action] so that [benefit]",
-              "description": "Additional story details",
+              "title": "As a visitor, I want to register so I can access the platform",
+              "description": "",
               "acceptanceCriteria": [
-                {
-                  "title": "Given [context], when [action], then [outcome]",
-                  "description": "Criteria details"
-                }
+                { "title": "Given valid email, when I submit, then account is created", "description": "" }
               ]
             }
           ]
