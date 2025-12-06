@@ -17,6 +17,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { setProjectToken } from "@/lib/tokenCache";
 import { useAuth } from "@/contexts/AuthContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
+import { TokenManagement } from "@/components/project/TokenManagement";
 
 import { Switch } from "@/components/ui/switch";
 
@@ -244,6 +245,9 @@ export default function ProjectSettings() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Access Tokens Management - visible to owners */}
+                <TokenManagement projectId={projectId!} shareToken={shareToken} />
 
                 {/* Project Details */}
                 <Card>
