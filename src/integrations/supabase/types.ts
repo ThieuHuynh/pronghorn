@@ -1646,57 +1646,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      agent_get_artifacts_with_token: {
-        Args: { p_project_id: string; p_search_term?: string; p_token: string }
-        Returns: {
-          ai_summary: string
-          ai_title: string
-          content: string
-          created_at: string
-          id: string
-          source_type: string
-        }[]
-      }
-      agent_get_canvas_summary_with_token: {
-        Args: { p_project_id: string; p_token: string }
-        Returns: {
-          edges: Json
-          edges_count: number
-          layers_count: number
-          node_types: Json
-          nodes: Json
-          nodes_count: number
-        }[]
-      }
-      agent_get_project_metadata_with_token: {
-        Args: { p_project_id: string; p_token: string }
-        Returns: {
-          budget: number
-          description: string
-          id: string
-          max_tokens: number
-          name: string
-          organization: string
-          priority: string
-          scope: string
-          selected_model: string
-          status: string
-          thinking_budget: number
-          thinking_enabled: boolean
-          timeline_end: string
-          timeline_start: string
-        }[]
-      }
-      agent_get_tech_stacks_with_token: {
-        Args: { p_project_id: string; p_token: string }
-        Returns: {
-          description: string
-          id: string
-          name: string
-          parent_id: string
-          type: string
-        }[]
-      }
       agent_list_files_by_path_with_token: {
         Args: { p_path_prefix?: string; p_repo_id: string; p_token: string }
         Returns: {
@@ -2105,28 +2054,55 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_artifacts_with_token: {
-        Args: { p_project_id: string; p_token: string }
-        Returns: {
-          ai_summary: string | null
-          ai_title: string | null
-          content: string
-          created_at: string
-          created_by: string | null
-          id: string
-          image_url: string | null
-          project_id: string
-          source_id: string | null
-          source_type: string | null
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "artifacts"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      get_artifacts_with_token:
+        | {
+            Args: { p_project_id: string; p_token: string }
+            Returns: {
+              ai_summary: string | null
+              ai_title: string | null
+              content: string
+              created_at: string
+              created_by: string | null
+              id: string
+              image_url: string | null
+              project_id: string
+              source_id: string | null
+              source_type: string | null
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "artifacts"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: {
+              p_project_id: string
+              p_search_term?: string
+              p_token?: string
+            }
+            Returns: {
+              ai_summary: string | null
+              ai_title: string | null
+              content: string
+              created_at: string
+              created_by: string | null
+              id: string
+              image_url: string | null
+              project_id: string
+              source_id: string | null
+              source_type: string | null
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "artifacts"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       get_blackboard_entries_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -2198,6 +2174,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_canvas_summary_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          edges: Json
+          node_types: Json
+          nodes: Json
+          total_edges: number
+          total_nodes: number
+        }[]
       }
       get_chat_messages_with_token: {
         Args: { p_chat_session_id: string; p_token: string }
@@ -2291,6 +2277,16 @@ export type Database = {
           role: Database["public"]["Enums"]["project_token_role"]
         }[]
       }
+      get_multiple_files_with_token: {
+        Args: { p_paths: string[]; p_repo_id: string; p_token?: string }
+        Returns: {
+          content: string
+          id: string
+          is_binary: boolean
+          is_staged: boolean
+          path: string
+        }[]
+      }
       get_prime_repo_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -2328,6 +2324,26 @@ export type Database = {
       get_project_id_from_session: {
         Args: { p_session_id: string }
         Returns: string
+      }
+      get_project_metadata_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          budget: number
+          description: string
+          github_branch: string
+          github_repo: string
+          id: string
+          max_tokens: number
+          name: string
+          organization: string
+          priority: string
+          scope: string
+          selected_model: string
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[]
+          thinking_budget: number
+          thinking_enabled: boolean
+        }[]
       }
       get_project_repos_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -2381,6 +2397,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_project_tech_stacks_detail_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          color: string
+          description: string
+          icon: string
+          id: string
+          metadata: Json
+          name: string
+          type: string
+        }[]
       }
       get_project_tech_stacks_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -2513,6 +2541,22 @@ export type Database = {
               isOneToOne: false
               isSetofReturn: true
             }
+          }
+        | {
+            Args: {
+              p_path_prefix?: string
+              p_repo_id: string
+              p_token?: string
+            }
+            Returns: {
+              content: string
+              id: string
+              is_binary: boolean
+              is_staged: boolean
+              last_commit_sha: string
+              path: string
+              updated_at: string
+            }[]
           }
         | {
             Args: {
@@ -3023,6 +3067,48 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      search_file_content_with_token: {
+        Args: { p_repo_id: string; p_search_term: string; p_token?: string }
+        Returns: {
+          content: string
+          id: string
+          is_staged: boolean
+          match_count: number
+          path: string
+        }[]
+      }
+      search_requirements_with_token: {
+        Args: { p_project_id: string; p_search_term: string; p_token?: string }
+        Returns: {
+          code: string | null
+          content: string | null
+          created_at: string
+          id: string
+          order_index: number
+          parent_id: string | null
+          project_id: string
+          title: string
+          type: Database["public"]["Enums"]["requirement_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "requirements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_standards_with_token: {
+        Args: { p_project_id: string; p_search_term: string; p_token?: string }
+        Returns: {
+          category_name: string
+          code: string
+          content: string
+          description: string
+          id: string
+          title: string
+        }[]
       }
       set_repo_prime_with_token: {
         Args: { p_repo_id: string; p_token: string }
@@ -3542,6 +3628,17 @@ export type Database = {
       validate_session_access: {
         Args: { p_session_id: string; p_token: string }
         Returns: boolean
+      }
+      wildcard_search_files_with_token: {
+        Args: { p_query: string; p_repo_id: string; p_token?: string }
+        Returns: {
+          content: string
+          id: string
+          is_staged: boolean
+          match_count: number
+          matched_terms: string[]
+          path: string
+        }[]
       }
     }
     Enums: {

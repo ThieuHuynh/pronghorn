@@ -884,7 +884,7 @@ Start your response with { and end with }. Nothing else.`;
 
           switch (op.type) {
             case "list_files":
-              result = await supabase.rpc("agent_list_files_by_path_with_token", {
+              result = await supabase.rpc("get_repo_files_with_token", {
                 p_repo_id: repoId,
                 p_token: shareToken,
                 p_path_prefix: op.params.path_prefix || null,
@@ -892,33 +892,23 @@ Start your response with { and end with }. Nothing else.`;
               break;
 
             case "search":
-              result = await supabase.rpc("agent_search_files_with_token", {
-                p_project_id: projectId,
-                p_keyword: op.params.keyword,
+              result = await supabase.rpc("search_file_content_with_token", {
+                p_repo_id: repoId,
+                p_search_term: op.params.keyword,
                 p_token: shareToken,
               });
               break;
 
             case "wildcard_search":
-              // Split query into search terms (filter out very short terms)
-              const searchTerms = (op.params.query || "")
-                .toLowerCase()
-                .split(/\s+/)
-                .filter((term: string) => term.length > 2);
-
-              if (searchTerms.length === 0) {
-                result = { data: [], error: null };
-              } else {
-                result = await supabase.rpc("agent_wildcard_search_with_token", {
-                  p_project_id: projectId,
-                  p_token: shareToken,
-                  p_search_terms: searchTerms,
-                });
-              }
+              result = await supabase.rpc("wildcard_search_files_with_token", {
+                p_repo_id: repoId,
+                p_query: op.params.query || "",
+                p_token: shareToken,
+              });
               break;
 
             case "read_file":
-              result = await supabase.rpc("agent_read_file_with_token", {
+              result = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
@@ -936,9 +926,9 @@ Start your response with { and end with }. Nothing else.`;
               break;
 
             case "edit_lines":
-              // Read file using agent function that checks both repo_files and repo_staging
+              // Read file using function that checks both repo_files and repo_staging
               console.log(`[AGENT] edit_lines: Reading file ${op.params.file_id}`);
-              const { data: fileData, error: readError } = await supabase.rpc("agent_read_file_with_token", {
+              const { data: fileData, error: readError } = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
@@ -1087,7 +1077,7 @@ Start your response with { and end with }. Nothing else.`;
 
                 // CRITICAL: Re-read the file after edit to verify the change was applied correctly
                 // This helps the agent see the actual current state for subsequent operations
-                const { data: verifyData, error: verifyError } = await supabase.rpc("agent_read_file_with_token", {
+                const { data: verifyData, error: verifyError } = await supabase.rpc("get_file_content_with_token", {
                   p_file_id: op.params.file_id,
                   p_token: shareToken,
                 });
@@ -1146,8 +1136,8 @@ Start your response with { and end with }. Nothing else.`;
               break;
 
             case "delete_file":
-              // Use agent_read_file_with_token which queries both repo_files AND repo_staging
-              const { data: deleteFileData } = await supabase.rpc("agent_read_file_with_token", {
+              // Use get_file_content_with_token which queries both repo_files AND repo_staging
+              const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
@@ -1190,7 +1180,7 @@ Start your response with { and end with }. Nothing else.`;
 
             case "move_file":
               // First, get file info (works for both repo_files and repo_staging)
-              const { data: moveFileData } = await supabase.rpc("agent_read_file_with_token", {
+              const { data: moveFileData } = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });

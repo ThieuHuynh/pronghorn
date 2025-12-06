@@ -15,14 +15,14 @@
   
   "file_operations": {
     "search": {
-      "rpc_function": "agent_search_files_with_token",
+      "rpc_function": "search_file_content_with_token",
       "description": "Search file paths and content by keyword",
       "parameters": {
-        "p_project_id": "UUID of the project",
-        "p_keyword": "Search term to find in paths or content",
+        "p_repo_id": "UUID of the repository",
+        "p_search_term": "Search term to find in paths or content",
         "p_token": "Share token for authorization"
       },
-      "returns": "Array of matching files with id, path, and content snippets",
+      "returns": "Array of matching files with id, path, content, match_count, is_staged",
       "use_cases": [
         "Find files containing specific functions or classes",
         "Locate configuration files",
@@ -30,43 +30,43 @@
       ]
     },
     
-    "get_file_tree": {
-      "rpc_function": "agent_get_file_tree_with_token",
-      "description": "Retrieve complete file structure with metadata",
+    "wildcard_search": {
+      "rpc_function": "wildcard_search_files_with_token",
+      "description": "Search files using multiple terms/concepts",
       "parameters": {
         "p_repo_id": "UUID of the repository",
+        "p_query": "Space-separated search terms (e.g., 'weather API fetch')",
         "p_token": "Share token for authorization"
       },
-      "returns": "Array of all files with id, path, updated_at, size",
+      "returns": "Array of matching files with id, path, content, match_count, matched_terms, is_staged",
       "use_cases": [
-        "Understand project structure",
-        "Plan multi-file operations",
-        "Identify file organization patterns"
+        "Find files by concept using multiple keywords",
+        "Discover related functionality across codebase",
+        "Search for implementation patterns"
       ]
     },
     
-    "list_by_path": {
-      "rpc_function": "agent_list_files_by_path_with_token",
-      "description": "List all files in repository with metadata (id, path, updated_at). Call this at the START of every task to load complete file structure.",
+    "list_files": {
+      "rpc_function": "get_repo_files_with_token",
+      "description": "List all files in repository with metadata. Call this at the START of every task to load complete file structure.",
       "parameters": {
         "p_repo_id": "UUID of the repository",
-        "p_path_prefix": "Optional directory path filter (e.g., 'src/components/'). Leave null to get all files.",
-        "p_token": "Share token for authorization"
+        "p_token": "Share token for authorization",
+        "p_path_prefix": "Optional directory path filter (e.g., 'src/components/'). Leave null to get all files."
       },
-      "returns": "Array of all files with id, path, repo_id, updated_at metadata",
+      "returns": "Array of all files with id, path, content, is_binary, last_commit_sha, updated_at, is_staged",
       "use_cases": [
         "CRITICAL: Call at task start to understand project structure",
         "Load complete file inventory before making changes",
         "Map file paths to file IDs for subsequent operations",
         "List all files in a specific directory",
-        "Find all components in src/components/",
-        "Locate test files in specific folder"
+        "Find all components in src/components/"
       ],
       "important": "ALWAYS call this as first operation to understand where files are located. This is mandatory for successful task execution."
     },
     
     "read_file": {
-      "rpc_function": "agent_read_file_with_token",
+      "rpc_function": "get_file_content_with_token",
       "description": "Read complete content of a single file",
       "parameters": {
         "p_file_id": "UUID of the file to read",
@@ -81,13 +81,14 @@
     },
     
     "read_multiple": {
-      "rpc_function": "agent_read_multiple_files_with_token",
+      "rpc_function": "get_multiple_files_with_token",
       "description": "Read content of multiple files in batch",
       "parameters": {
-        "p_file_ids": "Array of file UUIDs to read",
+        "p_repo_id": "UUID of the repository",
+        "p_paths": "Array of file paths to read",
         "p_token": "Share token for authorization"
       },
-      "returns": "Array of file contents with paths",
+      "returns": "Array of file contents with paths, is_binary, is_staged",
       "use_cases": [
         "Load related files together",
         "Analyze multi-file features",
@@ -132,12 +133,13 @@
     },
     
     "create_file": {
-      "rpc_function": "agent_create_file_with_token",
+      "rpc_function": "stage_file_change_with_token",
       "description": "Create new file and stage as add operation",
       "parameters": {
         "p_repo_id": "UUID of the repository",
-        "p_path": "Full path for new file (e.g., 'src/components/NewComponent.tsx')",
-        "p_content": "Initial file content",
+        "p_operation_type": "'add'",
+        "p_file_path": "Full path for new file (e.g., 'src/components/NewComponent.tsx')",
+        "p_new_content": "Initial file content",
         "p_token": "Share token for authorization"
       },
       "returns": "Staged add operation record",
@@ -150,10 +152,13 @@
     },
     
     "delete_file": {
-      "rpc_function": "agent_delete_file_with_token",
+      "rpc_function": "stage_file_change_with_token",
       "description": "Delete file and stage as delete operation",
       "parameters": {
-        "p_file_id": "UUID of the file to delete",
+        "p_repo_id": "UUID of the repository",
+        "p_operation_type": "'delete'",
+        "p_file_path": "Path of the file to delete",
+        "p_old_content": "Current file content",
         "p_token": "Share token for authorization"
       },
       "returns": "Staged delete operation record",
@@ -385,7 +390,7 @@
     "description": "Agent can access complete ProjectSelector data to inform decisions",
     
     "project_metadata": {
-      "rpc_function": "agent_get_project_metadata_with_token",
+      "rpc_function": "get_project_metadata_with_token",
       "returns": {
         "id": "Project UUID",
         "name": "Project name",
@@ -397,8 +402,8 @@
         "selected_model": "Configured LLM model",
         "max_tokens": "Token limit",
         "thinking_enabled": "Extended thinking mode",
-        "timeline_start": "Project start date",
-        "timeline_end": "Project end date"
+        "github_repo": "GitHub repository",
+        "github_branch": "GitHub branch"
       },
       "use_cases": [
         "Understand project constraints",
@@ -408,10 +413,10 @@
     },
     
     "requirements": {
-      "rpc_function": "agent_search_requirements_with_token",
+      "rpc_function": "search_requirements_with_token",
       "parameters": {
         "p_project_id": "Project UUID",
-        "p_search_term": "Optional keyword search",
+        "p_search_term": "Keyword search term",
         "p_token": "Share token"
       },
       "returns": {
@@ -431,10 +436,10 @@
     },
     
     "standards": {
-      "rpc_function": "agent_search_standards_with_token",
+      "rpc_function": "search_standards_with_token",
       "parameters": {
         "p_project_id": "Project UUID",
-        "p_search_term": "Optional keyword search",
+        "p_search_term": "Keyword search term",
         "p_token": "Share token"
       },
       "returns": {
@@ -443,7 +448,6 @@
         "title": "Standard title",
         "description": "Standard description",
         "content": "Detailed content",
-        "category_id": "Category UUID",
         "category_name": "Category name (e.g., 'Cyber Security', 'Accessibility')"
       },
       "use_cases": [
@@ -454,7 +458,7 @@
     },
     
     "tech_stacks": {
-      "rpc_function": "agent_get_tech_stacks_with_token",
+      "rpc_function": "get_project_tech_stacks_detail_with_token",
       "parameters": {
         "p_project_id": "Project UUID",
         "p_token": "Share token"
@@ -464,7 +468,9 @@
         "name": "Technology name",
         "description": "Description",
         "type": "Type (framework, library, tool, etc.)",
-        "parent_id": "Parent tech stack UUID"
+        "icon": "Icon identifier",
+        "color": "Color code",
+        "metadata": "Additional metadata"
       },
       "use_cases": [
         "Know which technologies to use",
@@ -474,18 +480,17 @@
     },
     
     "canvas_summary": {
-      "rpc_function": "agent_get_canvas_summary_with_token",
+      "rpc_function": "get_canvas_summary_with_token",
       "parameters": {
         "p_project_id": "Project UUID",
         "p_token": "Share token"
       },
       "returns": {
-        "nodes_count": "Total nodes",
-        "edges_count": "Total edges",
-        "layers_count": "Total layers",
-        "nodes": "Array of node objects with type, label, data",
-        "edges": "Array of edge connections",
-        "node_types": "Summary of node types (PAGE, COMPONENT, API, DATABASE, etc.)"
+        "total_nodes": "Total nodes count",
+        "total_edges": "Total edges count",
+        "node_types": "Summary of node types (PAGE, COMPONENT, API, DATABASE, etc.)",
+        "nodes": "Array of node objects with id, type, label, description",
+        "edges": "Array of edge connections with id, source, target, label"
       },
       "use_cases": [
         "Understand system architecture",
@@ -495,11 +500,11 @@
     },
     
     "artifacts": {
-      "rpc_function": "agent_get_artifacts_with_token",
+      "rpc_function": "get_artifacts_with_token",
       "parameters": {
         "p_project_id": "Project UUID",
-        "p_search_term": "Optional keyword search",
-        "p_token": "Share token"
+        "p_token": "Share token",
+        "p_search_term": "Optional keyword search"
       },
       "returns": {
         "id": "Artifact UUID",
