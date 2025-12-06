@@ -2903,66 +2903,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      rename_file_with_token:
-        | {
-            Args: { p_file_id: string; p_new_path: string; p_token?: string }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { p_file_id: string; p_new_path: string; p_token: string }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-      rename_folder_with_token:
-        | {
-            Args: {
-              p_new_folder_path: string
-              p_old_folder_path: string
-              p_repo_id: string
-              p_token?: string
-            }
-            Returns: number
-          }
-        | {
-            Args: {
-              p_new_path: string
-              p_old_path: string
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: number
-          }
+      rename_file_with_token: {
+        Args: { p_file_id: string; p_new_path: string; p_token?: string }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          is_binary: boolean
+          last_commit_sha: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_files"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      rename_folder_with_token: {
+        Args: {
+          p_new_folder_path: string
+          p_old_folder_path: string
+          p_repo_id: string
+          p_token?: string
+        }
+        Returns: number
+      }
       request_agent_session_abort_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -3295,16 +3264,17 @@ export type Database = {
             Args: {
               p_budget?: number
               p_description?: string
+              p_end_date?: string
               p_github_repo?: string
-              p_name: string
+              p_name?: string
               p_organization?: string
               p_priority?: string
               p_project_id: string
               p_scope?: string
+              p_start_date?: string
+              p_status?: Database["public"]["Enums"]["project_status"]
               p_tags?: string[]
-              p_timeline_end?: string
-              p_timeline_start?: string
-              p_token: string
+              p_token?: string
             }
             Returns: {
               budget: number | null
@@ -3523,59 +3493,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      upsert_file_with_token:
-        | {
-            Args: {
-              p_content: string
-              p_is_binary?: boolean
-              p_path: string
-              p_repo_id: string
-              p_token?: string
-            }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_commit_sha?: string
-              p_content: string
-              p_path: string
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
+      upsert_file_with_token: {
+        Args: {
+          p_commit_sha?: string
+          p_content: string
+          p_is_binary?: boolean
+          p_path: string
+          p_repo_id: string
+          p_token?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          is_binary: boolean
+          last_commit_sha: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_files"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_files_batch_with_token: {
         Args: { p_files: Json; p_repo_id: string; p_token: string }
         Returns: {
