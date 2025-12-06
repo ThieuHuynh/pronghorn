@@ -46,8 +46,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Pull requires at least viewer role (anyone with access can pull)
-    // No additional role check needed - authorize_project_access already validates access
+    // Pull requires editor role since it overwrites repo_files
+    const roleHierarchy = { 'viewer': 1, 'editor': 2, 'owner': 3 };
+    if (roleHierarchy[accessRole as keyof typeof roleHierarchy] < roleHierarchy['editor']) {
+      return new Response(JSON.stringify({ error: 'Editor role required for pull operations' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get repo details using RPC with token validation
     const { data: repoData, error: repoError } = await supabaseClient.rpc('get_repo_by_id_with_token', {
