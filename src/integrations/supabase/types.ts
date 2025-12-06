@@ -1763,64 +1763,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_project_repo_with_token:
-        | {
-            Args: {
-              p_branch?: string
-              p_is_default?: boolean
-              p_organization: string
-              p_project_id: string
-              p_repo: string
-              p_token: string
-            }
-            Returns: {
-              auto_commit: boolean | null
-              branch: string
-              created_at: string
-              id: string
-              is_default: boolean
-              is_prime: boolean | null
-              organization: string
-              project_id: string
-              repo: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_repos"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_branch?: string
-              p_is_default?: boolean
-              p_is_prime?: boolean
-              p_organization: string
-              p_project_id: string
-              p_repo: string
-              p_token: string
-            }
-            Returns: {
-              auto_commit: boolean | null
-              branch: string
-              created_at: string
-              id: string
-              is_default: boolean
-              is_prime: boolean | null
-              organization: string
-              project_id: string
-              repo: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_repos"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      create_project_repo_with_token: {
+        Args: {
+          p_branch?: string
+          p_is_default?: boolean
+          p_is_prime?: boolean
+          p_organization: string
+          p_project_id: string
+          p_repo: string
+          p_token: string
+        }
+        Returns: {
+          auto_commit: boolean | null
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_prime: boolean | null
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_artifact_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -2678,62 +2649,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      log_agent_operation_with_token:
-        | {
-            Args: {
-              p_details?: Json
-              p_error_message?: string
-              p_file_path: string
-              p_operation_type: string
-              p_session_id: string
-              p_status: string
-              p_token?: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_details?: Json
-              p_file_path?: string
-              p_operation_type: string
-              p_session_id: string
-              p_status?: string
-              p_token: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      log_agent_operation_with_token: {
+        Args: {
+          p_details?: Json
+          p_error_message?: string
+          p_file_path: string
+          p_operation_type: string
+          p_session_id: string
+          p_status: string
+          p_token?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       log_repo_commit_with_token: {
         Args: {
           p_branch: string
@@ -2790,35 +2733,66 @@ export type Database = {
         Args: { p_project_id: string; p_token: string }
         Returns: string
       }
-      rename_file_with_token: {
-        Args: { p_file_id: string; p_new_path: string; p_token?: string }
-        Returns: {
-          content: string
-          created_at: string
-          id: string
-          is_binary: boolean
-          last_commit_sha: string | null
-          path: string
-          project_id: string
-          repo_id: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "repo_files"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      rename_folder_with_token: {
-        Args: {
-          p_new_folder_path: string
-          p_old_folder_path: string
-          p_repo_id: string
-          p_token?: string
-        }
-        Returns: number
-      }
+      rename_file_with_token:
+        | {
+            Args: { p_file_id: string; p_new_path: string; p_token: string }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              is_binary: boolean
+              last_commit_sha: string | null
+              path: string
+              project_id: string
+              repo_id: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "repo_files"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { p_file_id: string; p_new_path: string; p_token?: string }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              is_binary: boolean
+              last_commit_sha: string | null
+              path: string
+              project_id: string
+              repo_id: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "repo_files"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      rename_folder_with_token:
+        | {
+            Args: {
+              p_new_folder_path: string
+              p_old_folder_path: string
+              p_repo_id: string
+              p_token?: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_new_path: string
+              p_old_path: string
+              p_repo_id: string
+              p_token: string
+            }
+            Returns: number
+          }
       request_agent_session_abort_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -2965,57 +2939,31 @@ export type Database = {
         Args: { p_file_paths: string[]; p_repo_id: string; p_token: string }
         Returns: number
       }
-      update_agent_operation_status_with_token:
-        | {
-            Args: {
-              p_error_message?: string
-              p_operation_id: string
-              p_status: string
-              p_token: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_error_message?: string
-              p_operation_id: string
-              p_status: string
-              p_token?: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      update_agent_operation_status_with_token: {
+        Args: {
+          p_error_message?: string
+          p_operation_id: string
+          p_status: string
+          p_token?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_agent_session_status_with_token: {
         Args: {
           p_completed_at?: string
@@ -3043,64 +2991,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_artifact_with_token:
-        | {
-            Args: {
-              p_ai_summary?: string
-              p_ai_title?: string
-              p_content?: string
-              p_id: string
-              p_token: string
-            }
-            Returns: {
-              ai_summary: string | null
-              ai_title: string | null
-              content: string
-              created_at: string
-              created_by: string | null
-              id: string
-              image_url: string | null
-              project_id: string
-              source_id: string | null
-              source_type: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "artifacts"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_ai_summary?: string
-              p_ai_title?: string
-              p_content?: string
-              p_id: string
-              p_image_url?: string
-              p_token: string
-            }
-            Returns: {
-              ai_summary: string | null
-              ai_title: string | null
-              content: string
-              created_at: string
-              created_by: string | null
-              id: string
-              image_url: string | null
-              project_id: string
-              source_id: string | null
-              source_type: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "artifacts"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      update_artifact_with_token: {
+        Args: {
+          p_ai_summary?: string
+          p_ai_title?: string
+          p_content?: string
+          p_id: string
+          p_image_url?: string
+          p_token: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_chat_session_with_token: {
         Args: {
           p_ai_summary?: string
@@ -3166,92 +3085,52 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_project_with_token:
-        | {
-            Args: {
-              p_budget?: number
-              p_description?: string
-              p_github_repo?: string
-              p_name: string
-              p_organization?: string
-              p_priority?: string
-              p_project_id: string
-              p_scope?: string
-              p_tags?: string[]
-              p_timeline_end?: string
-              p_timeline_start?: string
-              p_token: string
-            }
-            Returns: {
-              budget: number | null
-              created_at: string
-              created_by: string | null
-              description: string | null
-              github_branch: string | null
-              github_repo: string | null
-              id: string
-              max_tokens: number | null
-              name: string
-              org_id: string
-              organization: string | null
-              priority: string | null
-              scope: string | null
-              selected_model: string | null
-              share_token: string | null
-              status: Database["public"]["Enums"]["project_status"]
-              tags: string[] | null
-              thinking_budget: number | null
-              thinking_enabled: boolean | null
-              timeline_end: string | null
-              timeline_start: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "projects"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_description: string
-              p_github_repo: string
-              p_name: string
-              p_project_id: string
-              p_token: string
-            }
-            Returns: {
-              budget: number | null
-              created_at: string
-              created_by: string | null
-              description: string | null
-              github_branch: string | null
-              github_repo: string | null
-              id: string
-              max_tokens: number | null
-              name: string
-              org_id: string
-              organization: string | null
-              priority: string | null
-              scope: string | null
-              selected_model: string | null
-              share_token: string | null
-              status: Database["public"]["Enums"]["project_status"]
-              tags: string[] | null
-              thinking_budget: number | null
-              thinking_enabled: boolean | null
-              timeline_end: string | null
-              timeline_start: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "projects"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      update_project_with_token: {
+        Args: {
+          p_budget?: number
+          p_description?: string
+          p_github_repo?: string
+          p_name: string
+          p_organization?: string
+          p_priority?: string
+          p_project_id: string
+          p_scope?: string
+          p_tags?: string[]
+          p_timeline_end?: string
+          p_timeline_start?: string
+          p_token: string
+        }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          max_tokens: number | null
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          selected_model: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_requirement_standard_with_token: {
         Args: { p_id: string; p_notes: string; p_token: string }
         Returns: {
@@ -3316,61 +3195,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      upsert_canvas_edge_with_token:
-        | {
-            Args: {
-              p_id: string
-              p_label: string
-              p_project_id: string
-              p_source_id: string
-              p_target_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string
-              edge_type: string | null
-              id: string
-              label: string | null
-              project_id: string
-              source_id: string
-              style: Json | null
-              target_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "canvas_edges"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_edge_type?: string
-              p_id: string
-              p_label: string
-              p_project_id: string
-              p_source_id: string
-              p_style?: Json
-              p_target_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string
-              edge_type: string | null
-              id: string
-              label: string | null
-              project_id: string
-              source_id: string
-              style: Json | null
-              target_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "canvas_edges"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      upsert_canvas_edge_with_token: {
+        Args: {
+          p_edge_type?: string
+          p_id: string
+          p_label: string
+          p_project_id: string
+          p_source_id: string
+          p_style?: Json
+          p_target_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          edge_type: string | null
+          id: string
+          label: string | null
+          project_id: string
+          source_id: string
+          style: Json | null
+          target_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "canvas_edges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_canvas_layer_with_token: {
         Args: {
           p_id: string
@@ -3453,6 +3305,10 @@ export type Database = {
           files_updated: number
           success: boolean
         }[]
+      }
+      validate_file_access: {
+        Args: { p_file_id: string; p_token: string }
+        Returns: boolean
       }
       validate_project_access: {
         Args: { p_project_id: string; p_token: string }

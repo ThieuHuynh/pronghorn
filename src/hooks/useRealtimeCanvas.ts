@@ -281,7 +281,7 @@ export function useRealtimeCanvas(
         p_target_id: edge.target,
         p_label: (edge.label as string) || null,
         p_edge_type: edge.type || 'default',
-        p_style: edge.style || {}
+        p_style: JSON.parse(JSON.stringify(edge.style || {}))
       });
 
       if (error) {
