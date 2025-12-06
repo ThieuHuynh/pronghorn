@@ -34,7 +34,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newTokenLabel, setNewTokenLabel] = useState("");
-  const [newTokenRole, setNewTokenRole] = useState<"editor" | "viewer">("editor");
+  const [newTokenRole, setNewTokenRole] = useState<"owner" | "editor" | "viewer">("editor");
   const [newTokenExpiry, setNewTokenExpiry] = useState("");
   const [visibleTokens, setVisibleTokens] = useState<Set<string>>(new Set());
 
@@ -180,17 +180,18 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="token-role">Role</Label>
-                  <Select value={newTokenRole} onValueChange={(v) => setNewTokenRole(v as "editor" | "viewer")}>
+                  <Select value={newTokenRole} onValueChange={(v) => setNewTokenRole(v as "owner" | "editor" | "viewer")}>
                     <SelectTrigger id="token-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="editor">Editor - Can view and edit</SelectItem>
+                      <SelectItem value="owner">Owner - Full access including token management</SelectItem>
+                      <SelectItem value="editor">Editor - Can view and edit project content</SelectItem>
                       <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Owner tokens cannot be created - only the project creator has owner access.
+                    Owners can create and manage tokens. Editors can modify content. Viewers have read-only access.
                   </p>
                 </div>
                 <div className="space-y-2">

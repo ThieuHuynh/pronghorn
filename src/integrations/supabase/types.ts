@@ -905,7 +905,6 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
-          share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -929,7 +928,6 @@ export type Database = {
           priority?: string | null
           scope?: string | null
           selected_model?: string | null
-          share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           thinking_budget?: number | null
@@ -953,7 +951,6 @@ export type Database = {
           priority?: string | null
           scope?: string | null
           selected_model?: string | null
-          share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           thinking_budget?: number | null
@@ -2376,7 +2373,6 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
-          share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -2683,36 +2679,7 @@ export type Database = {
           p_scope?: string
           p_status?: Database["public"]["Enums"]["project_status"]
         }
-        Returns: {
-          budget: number | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          github_branch: string | null
-          github_repo: string | null
-          id: string
-          max_tokens: number | null
-          name: string
-          org_id: string
-          organization: string | null
-          priority: string | null
-          scope: string | null
-          selected_model: string | null
-          share_token: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          tags: string[] | null
-          thinking_budget: number | null
-          thinking_enabled: boolean | null
-          timeline_end: string | null
-          timeline_start: string | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: Json
       }
       insert_repo_pat_with_token: {
         Args: { p_pat: string; p_repo_id: string }
@@ -2977,7 +2944,6 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
-          share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -3206,7 +3172,6 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
-          share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -3278,7 +3243,6 @@ export type Database = {
               priority: string | null
               scope: string | null
               selected_model: string | null
-              share_token: string | null
               status: Database["public"]["Enums"]["project_status"]
               tags: string[] | null
               thinking_budget: number | null
@@ -3324,7 +3288,6 @@ export type Database = {
               priority: string | null
               scope: string | null
               selected_model: string | null
-              share_token: string | null
               status: Database["public"]["Enums"]["project_status"]
               tags: string[] | null
               thinking_budget: number | null

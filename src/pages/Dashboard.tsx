@@ -55,7 +55,7 @@ export default function Dashboard() {
         organization: p.organization,
         budget: p.budget,
         scope: p.scope,
-        shareToken: p.share_token
+        shareToken: null as string | null // No longer stored on projects table - use project_tokens
       }));
     },
     enabled: !!user,

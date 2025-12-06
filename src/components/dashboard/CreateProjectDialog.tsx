@@ -85,12 +85,12 @@ export function CreateProjectDialog() {
       // Invalidate projects query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
-      // Always include token in URL for consistency
-      const shareToken = project.share_token;
+      // RPC now returns jsonb with share_token (the auto-created owner token)
+      const shareToken = (project as any).share_token;
       if (!user && shareToken) {
         // Anonymous user: store token in session
         addProject({
-          id: project.id,
+          id: (project as any).id,
           shareToken: shareToken,
           name: name.trim(),
           createdAt: new Date().toISOString()
@@ -102,7 +102,7 @@ export function CreateProjectDialog() {
         );
       }
       // Navigate with token for all users
-      navigate({ pathname: `/project/${project.id}/canvas/t/${shareToken}` });
+      navigate({ pathname: `/project/${(project as any).id}/canvas/t/${shareToken}` });
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create project");

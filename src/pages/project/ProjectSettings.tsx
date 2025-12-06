@@ -9,12 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Copy, Share2, Eye, EyeOff } from "lucide-react";
+import { Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
-import { setProjectToken } from "@/lib/tokenCache";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
 import { TokenManagement } from "@/components/project/TokenManagement";
@@ -42,7 +42,6 @@ export default function ProjectSettings() {
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [thinkingBudget, setThinkingBudget] = useState(-1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showToken, setShowToken] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -124,54 +123,10 @@ export default function ProjectSettings() {
     },
   });
 
-  const generateTokenMutation = useMutation({
-    mutationFn: async () => {
-      // CRITICAL: Use token-based RPC for token regeneration
-      const { data: newToken, error } = await supabase.rpc("regenerate_share_token", {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-      });
-
-      if (error) throw error;
-      return newToken as string;
-    },
-    onSuccess: (newToken) => {
-      // Update token cache with new token
-      if (projectId && newToken) {
-        setProjectToken(projectId, newToken);
-      }
-      // Update URL to use new token
-      navigate(`/project/${projectId}/settings/t/${newToken}`, { replace: true });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast.success("New share token generated - URL has been updated");
-    },
-    onError: () => {
-      toast.error("Failed to generate new token");
-    },
-  });
-
-  const copyShareLink = () => {
-    const token = project?.share_token;
-    if (!token) {
-      toast.error("No share token available");
-      return;
-    }
-
-    const url = `https://pronghorn.red/project/${projectId}/requirements/t/${token}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Share link copied to clipboard");
-  };
-
-  const copyFullUrl = () => {
-    const token = project?.share_token;
-    if (!token) {
-      toast.error("No share token available");
-      return;
-    }
-
-    const url = `https://pronghorn.red/project/${projectId}/settings/t/${token}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Full URL copied to clipboard");
+  // Copy current URL for sharing
+  const copyCurrentUrl = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("URL copied to clipboard");
   };
 
   return (
@@ -187,65 +142,6 @@ export default function ProjectSettings() {
               onMenuClick={() => setIsSidebarOpen(true)}
             />
             <div className="space-y-6">
-                {/* Share Token Management */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Share2 className="h-5 w-5" />
-                      Share Token
-                    </CardTitle>
-                    <CardDescription>
-                      Manage your project's sharing token. Anyone with this link can view and edit this project.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Current Token</Label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Input 
-                            value={showToken ? (project?.share_token || "Loading...") : "••••••••••••••••••••••••••••••••••••"} 
-                            readOnly 
-                            className="font-mono text-sm pr-10" 
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                            onClick={() => setShowToken(!showToken)}
-                          >
-                            {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                        <Button onClick={copyFullUrl} disabled={!project?.share_token} className="shrink-0">
-                          <Copy className="h-4 w-4" />
-                          Copy Full URL
-                        </Button>
-                      </div>
-                    </div>
-
-                    {user && project?.created_by === user.id && (
-                      <div className="flex items-start gap-3 p-3 rounded-md bg-muted">
-                        <RefreshCw className="h-5 w-5 text-muted-foreground mt-0.5" />
-                        <div className="flex-1 space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                            Regenerating the token will invalidate all previous share links. Anyone using old links will
-                            lose access.
-                          </p>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => generateTokenMutation.mutate()}
-                            disabled={generateTokenMutation.isPending}
-                          >
-                            {generateTokenMutation.isPending ? "Generating..." : "Regenerate Token"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
                 {/* Access Tokens Management - visible to owners */}
                 <TokenManagement projectId={projectId!} shareToken={shareToken} />
 
