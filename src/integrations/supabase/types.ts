@@ -2804,6 +2804,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      is_project_owner: { Args: { p_project_id: string }; Returns: boolean }
+      is_valid_token_for_project: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       link_shared_project: {
         Args: { p_project_id: string; p_token: string }
         Returns: Json
