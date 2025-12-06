@@ -203,7 +203,8 @@ export function EnhancedCreateProjectDialog() {
             org_id: orgId,
             status: 'DESIGN',
           },
-          techStackIds: selectedTechStacks,
+          techStackIds: Array.from(selectedTechStacks),
+          standardIds: Array.from(selectedStandards),
           requirementsText: requirements.trim() || null,
         }
       });
