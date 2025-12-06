@@ -117,8 +117,26 @@ serve(async (req) => {
       console.log('[create-project] Standards linked:', standardIds.length);
     }
 
-    // Step 5: Process requirements if provided (pass share_token to AI decomposition)
+    // Step 5: Process requirements if provided
     if (requirementsText && requirementsText.trim()) {
+      // Step 5a: Save raw requirements text as artifact for record-keeping
+      console.log('[create-project] Saving raw requirements text as artifact...');
+      const { data: artifact, error: artifactError } = await supabase.rpc('insert_artifact_with_token', {
+        p_project_id: project.id,
+        p_token: shareToken,
+        p_content: requirementsText.trim(),
+        p_source_type: 'ai_decompose_input',
+        p_source_id: null,
+        p_image_url: null
+      });
+      
+      if (artifactError) {
+        console.error('[create-project] Warning: Failed to save input as artifact:', artifactError);
+      } else {
+        console.log('[create-project] Raw requirements text saved as artifact:', artifact?.id);
+      }
+
+      // Step 5b: Invoke requirements decomposition with share token
       console.log('[create-project] Invoking requirements decomposition with share token');
       
       const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
