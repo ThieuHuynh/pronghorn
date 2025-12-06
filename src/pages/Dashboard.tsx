@@ -193,15 +193,11 @@ export default function Dashboard() {
 
         {!user && anonymousProjectCards.length === 0 ? (
           <div className="text-center py-12 space-y-4">
-            <p className="text-muted-foreground">Sign in to see your projects</p>
+            <p className="text-muted-foreground">Sign in to see your projects, or create a new project above</p>
             <Button onClick={() => navigate("/auth")}>
               <LogIn className="h-4 w-4 mr-2" />
               Sign In or Create Account
             </Button>
-            <div className="mt-4">
-              <p className="text-sm text-muted-foreground mb-2">Or continue without an account:</p>
-              <EnhancedCreateProjectDialog />
-            </div>
           </div>
         ) : isLoading ? (
           <p className="text-center py-12 text-muted-foreground">Loading projects...</p>
