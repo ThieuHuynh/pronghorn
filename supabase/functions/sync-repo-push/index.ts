@@ -45,15 +45,24 @@ Deno.serve(async (req) => {
 
     console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', deletePaths: deletePaths?.length || 0, forcePush, sourceRepoId: sourceRepoId || 'same as target' });
 
-    // Validate project access
-    const { error: accessError } = await supabaseClient.rpc('validate_project_access', {
+    // Validate project access using new RBAC pattern - requires editor role for push
+    const { data: accessRole, error: accessError } = await supabaseClient.rpc('authorize_project_access', {
       p_project_id: projectId,
-      p_token: shareToken,
+      p_token: shareToken || null,
     });
 
-    if (accessError) {
+    if (accessError || !accessRole) {
       console.error('Access validation error:', accessError);
       return new Response(JSON.stringify({ error: 'Access denied' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Push requires at least editor role
+    const roleHierarchy = { 'viewer': 1, 'editor': 2, 'owner': 3 };
+    if (roleHierarchy[accessRole as keyof typeof roleHierarchy] < roleHierarchy['editor']) {
+      return new Response(JSON.stringify({ error: 'Editor role required for push operations' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
