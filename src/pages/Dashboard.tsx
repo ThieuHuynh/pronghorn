@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Search, LogIn, AlertTriangle, Users } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search, LogIn, AlertTriangle, Users, FolderOpen } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { projects: anonymousProjects, removeProject } = useAnonymousProjects();
   const [searchQuery, setSearchQuery] = useState("");
-
+  const [activeTab, setActiveTab] = useState("my-projects");
   // Fetch user's own projects
   const { data: projects = [], isLoading, refetch } = useQuery({
     queryKey: ['projects', user?.id],
@@ -240,67 +241,80 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* My Projects Section */}
-            {projects.length > 0 && (
-              <div className="mb-8">
-                {(anonymousProjectCards.length > 0 || linkedProjects.length > 0) && (
-                  <h2 className="text-lg font-semibold mb-4">My Projects</h2>
-                )}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {projects.map(p => (
-                    <ProjectCard
-                      key={p.projectId}
-                      {...p}
-                      onClick={id => navigate({ pathname: `/project/${id}/settings` })}
-                      onUpdate={refetch}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Shared With Me Section */}
+            {/* Tabbed Projects Section */}
             {user && (
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Shared With Me
-                    {linkedProjects.length > 0 && (
-                      <Badge variant="secondary" className="text-xs">{linkedProjects.length}</Badge>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="mb-6">
+                  <TabsTrigger value="my-projects" className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4" />
+                    My Projects
+                    {projects.length > 0 && (
+                      <Badge variant="secondary" className="text-xs ml-1">{projects.length}</Badge>
                     )}
-                  </h2>
-                  <AddSharedProjectDialog onSuccess={refetchLinked} />
-                </div>
-                
-                {linkedProjects.length > 0 ? (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {linkedProjects.map((p: any) => (
-                      <LinkedProjectCard
-                        key={p.id}
-                        projectId={p.projectId}
-                        projectName={p.projectName}
-                        projectStatus={p.projectStatus}
-                        projectUpdatedAt={p.projectUpdatedAt}
-                        role={p.role}
-                        isValid={p.isValid}
-                        token={p.token}
-                        onClick={handleLinkedProjectClick}
-                        onUnlink={refetchLinked}
-                      />
-                    ))}
+                  </TabsTrigger>
+                  <TabsTrigger value="shared-projects" className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Shared Projects
+                    {linkedProjects.length > 0 && (
+                      <Badge variant="secondary" className="text-xs ml-1">{linkedProjects.length}</Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="my-projects">
+                  {projects.length > 0 ? (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {projects.map(p => (
+                        <ProjectCard
+                          key={p.projectId}
+                          {...p}
+                          onClick={id => navigate({ pathname: `/project/${id}/settings` })}
+                          onUpdate={refetch}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed rounded-lg p-8 text-center text-muted-foreground">
+                      <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No projects yet</p>
+                      <p className="text-xs mt-1">Create your first project to get started</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="shared-projects">
+                  <div className="flex justify-end mb-4">
+                    <AddSharedProjectDialog onSuccess={refetchLinked} />
                   </div>
-                ) : (
-                  <div className="border border-dashed rounded-lg p-8 text-center text-muted-foreground">
-                    <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No shared projects yet</p>
-                    <p className="text-xs mt-1">When someone shares a project with you, add it here to access it from your dashboard</p>
-                  </div>
-                )}
-              </div>
+                  {linkedProjects.length > 0 ? (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {linkedProjects.map((p: any) => (
+                        <LinkedProjectCard
+                          key={p.id}
+                          projectId={p.projectId}
+                          projectName={p.projectName}
+                          projectStatus={p.projectStatus}
+                          projectUpdatedAt={p.projectUpdatedAt}
+                          role={p.role}
+                          isValid={p.isValid}
+                          token={p.token}
+                          onClick={handleLinkedProjectClick}
+                          onUnlink={refetchLinked}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed rounded-lg p-8 text-center text-muted-foreground">
+                      <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No shared projects yet</p>
+                      <p className="text-xs mt-1">When someone shares a project with you, add it here to access it from your dashboard</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             )}
 
-            {projects.length === 0 && anonymousProjectCards.length === 0 && linkedProjects.length === 0 && (
+            {!user && projects.length === 0 && anonymousProjectCards.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No projects yet. Create your first project to get started.</p>
               </div>
