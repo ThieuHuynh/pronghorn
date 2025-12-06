@@ -16,13 +16,21 @@ serve(async (req) => {
     const { standardId, useGemini = true } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const geminiKey = Deno.env.get('GEMINI_API_KEY');
     const grokKey = Deno.env.get('GROK_API_KEY');
     
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Get auth header for authenticated users
+    const authHeader = req.headers.get('Authorization');
+    
+    // Create client with anon key (respects RLS)
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
+    });
 
-    // Fetch the standard and its context
+    // Fetch the standard and its context (standards table doesn't require project token)
     const { data: standard, error: stdError } = await supabase
       .from('standards')
       .select('*, category_id')
@@ -154,9 +162,11 @@ IMPORTANT: Return ONLY the JSON array, no additional text or explanation.`;
       content: suggestion.content || null,
       code: `${standard.code}-${String(index + 1).padStart(3, '0')}`,
       order_index: index,
+      org_id: standard.org_id,
+      is_system: false,
     }));
 
-    // Insert the new standards
+    // Insert the new standards (standards table is org-wide, not project-specific)
     const { data: insertedStandards, error: insertError } = await supabase
       .from('standards')
       .insert(newStandards)

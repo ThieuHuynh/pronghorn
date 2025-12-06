@@ -32,19 +32,22 @@ Deno.serve(async (req) => {
 
     console.log('Pull request:', { repoId, projectId, commitSha: commitSha || 'latest' });
 
-    // Validate project access
-    const { error: accessError } = await supabaseClient.rpc('validate_project_access', {
+    // Validate project access using new RBAC pattern - requires viewer role for pull
+    const { data: accessRole, error: accessError } = await supabaseClient.rpc('authorize_project_access', {
       p_project_id: projectId,
-      p_token: shareToken,
+      p_token: shareToken || null,
     });
 
-    if (accessError) {
+    if (accessError || !accessRole) {
       console.error('Access validation error:', accessError);
       return new Response(JSON.stringify({ error: 'Access denied' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Pull requires at least viewer role (anyone with access can pull)
+    // No additional role check needed - authorize_project_access already validates access
 
     // Get repo details using RPC with token validation
     const { data: repoData, error: repoError } = await supabaseClient.rpc('get_repo_by_id_with_token', {
