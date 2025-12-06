@@ -34,23 +34,13 @@ serve(async (req) => {
       },
     });
 
-    // Step 1: Get the project's share token (for authenticated users who don't have it in URL)
-    let shareToken = clientToken;
-    if (!shareToken && authHeader) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('share_token')
-        .eq('id', projectId)
-        .single();
-      
-      if (project?.share_token) {
-        shareToken = project.share_token;
-      }
-    }
+    // Use client-provided token (required from client)
+    const shareToken = clientToken;
 
-    // Validate share token is present
-    if (!shareToken) {
-      throw new Error('Share token is required for requirement expansion');
+    // For authenticated users without token, they can still access if they own the project
+    // The RPC functions will handle auth.uid() validation
+    if (!shareToken && !authHeader) {
+      throw new Error('Share token is required for unauthenticated users');
     }
 
     // Step 2: Fetch all project requirements using token-based RPC

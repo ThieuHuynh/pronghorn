@@ -653,6 +653,38 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_linked_projects: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_linked_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2230,6 +2262,20 @@ export type Database = {
         Args: { p_repo_id: string; p_token: string }
         Returns: Json
       }
+      get_linked_projects: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          is_valid: boolean
+          project_description: string
+          project_id: string
+          project_name: string
+          project_status: Database["public"]["Enums"]["project_status"]
+          project_updated_at: string
+          role: Database["public"]["Enums"]["project_token_role"]
+        }[]
+      }
       get_prime_repo_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -2758,6 +2804,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      link_shared_project: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: Json
+      }
       log_agent_operation_with_token: {
         Args: {
           p_details?: Json
@@ -2837,10 +2887,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      regenerate_share_token: {
-        Args: { p_project_id: string; p_token: string }
-        Returns: string
       }
       rename_file_with_token:
         | {
@@ -3046,6 +3092,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      unlink_shared_project: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       unstage_file_with_token: {
         Args: { p_file_path: string; p_repo_id: string; p_token: string }
