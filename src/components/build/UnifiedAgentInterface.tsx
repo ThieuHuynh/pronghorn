@@ -1078,18 +1078,8 @@ export function UnifiedAgentInterface({
         <div className="flex flex-col gap-2">
           {/* Top row: All buttons */}
           <div className="flex justify-between items-center">
-            {/* Left buttons: Attach, History, Config */}
+            {/* Left buttons: History, Attach, Config */}
             <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setIsProjectSelectorOpen(true)}
-                disabled={isSubmitting}
-                title="Attach Context"
-                className="h-8 w-8"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
               <Button
                 variant="outline"
                 size="icon"
@@ -1099,6 +1089,16 @@ export function UnifiedAgentInterface({
                 className={`h-8 w-8 ${chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}`}
               >
                 <BookOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsProjectSelectorOpen(true)}
+                disabled={isSubmitting}
+                title="Attach Context"
+                className="h-8 w-8"
+              >
+                <Paperclip className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
