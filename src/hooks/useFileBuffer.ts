@@ -239,7 +239,8 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
   const switchFile = useCallback(async (
     fileId: string,
     filePath: string,
-    isStaged?: boolean
+    isStaged?: boolean,
+    forceReload?: boolean
   ): Promise<void> => {
     if (!repoId) return;
 
@@ -253,11 +254,13 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
       });
     }
 
-    // Check if file is already in buffer
-    const existingFile = buffer.get(filePath);
-    if (existingFile) {
-      setCurrentPath(filePath);
-      return;
+    // Check if file is already in buffer - skip cache if forceReload
+    if (!forceReload) {
+      const existingFile = buffer.get(filePath);
+      if (existingFile) {
+        setCurrentPath(filePath);
+        return;
+      }
     }
 
     // Load file content

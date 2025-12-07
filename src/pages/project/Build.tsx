@@ -323,7 +323,8 @@ export default function Build() {
     }
 
     // Instant switch - buffer handles dirty file saving in background
-    switchFile(fileId, path, isStaged);
+    // Force reload for staged files to ensure fresh content from DB
+    switchFile(fileId, path, isStaged, isStaged);
     
     // On mobile, switch to editor tab when a file is selected
     if (isMobile) {
@@ -503,7 +504,7 @@ export default function Build() {
   const handleViewDiff = (change: any) => {
     const fileInfo = files.find((f) => f.path === change.file_path);
     if (fileInfo) {
-      switchFile(fileInfo.id, fileInfo.path, true);
+      switchFile(fileInfo.id, fileInfo.path, true, true); // Force reload for staged file
     }
   };
 
