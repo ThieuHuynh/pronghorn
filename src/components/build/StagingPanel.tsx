@@ -481,13 +481,13 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
   return (
     <div className="h-full w-full flex flex-col overflow-hidden min-w-0">
       <Card className="h-full w-full flex flex-col overflow-hidden min-w-0">
-        <CardHeader className="shrink-0">
-          <CardTitle className="truncate">Staged Changes</CardTitle>
-          <CardDescription className="truncate">
+        <CardHeader className="shrink-0 pb-2">
+          <CardTitle>Staged Changes</CardTitle>
+          <CardDescription>
             Review uncommitted changes before committing
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
+        <CardContent className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-3">
         {/* Auto-commit checkbox - always visible */}
         <div className="flex items-center gap-2 mb-4 pb-4 border-b">
           <Checkbox 
@@ -604,35 +604,39 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
                 {stagedChanges.map((change) => (
                   <div
                     key={change.id}
-                    className="flex items-center gap-2 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors overflow-hidden"
+                    className="p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                   >
-                    <Checkbox
-                      checked={selectedFiles.has(change.file_path)}
-                      onCheckedChange={(checked) => {
-                        const newSelected = new Set(selectedFiles);
-                        if (checked) {
-                          newSelected.add(change.file_path);
-                        } else {
-                          newSelected.delete(change.file_path);
-                        }
-                        setSelectedFiles(newSelected);
-                      }}
-                    />
-                    {getOperationIcon(change.operation_type)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{change.file_path}</p>
-                      {change.operation_type === "rename" && change.old_path && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          from: {change.old_path}
-                        </p>
-                      )}
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        className="mt-0.5 shrink-0"
+                        checked={selectedFiles.has(change.file_path)}
+                        onCheckedChange={(checked) => {
+                          const newSelected = new Set(selectedFiles);
+                          if (checked) {
+                            newSelected.add(change.file_path);
+                          } else {
+                            newSelected.delete(change.file_path);
+                          }
+                          setSelectedFiles(newSelected);
+                        }}
+                      />
+                      <div className="shrink-0">{getOperationIcon(change.operation_type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium break-all">{change.file_path}</p>
+                        {change.operation_type === "rename" && change.old_path && (
+                          <p className="text-xs text-muted-foreground break-all">
+                            from: {change.old_path}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {getOperationBadge(change.operation_type)}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-end gap-1 mt-1">
+                      {getOperationBadge(change.operation_type)}
                       {(change.operation_type === 'edit' || change.operation_type === 'add' || change.operation_type === 'delete') && (
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="h-7 px-2"
                           onClick={() => setViewingDiff(change)}
                         >
                           {change.operation_type === 'delete' ? 'View' : 'Diff'}
@@ -641,6 +645,7 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-7 px-2"
                         onClick={() => handleUnstageFile(change.file_path)}
                       >
                         <X className="w-4 h-4" />
