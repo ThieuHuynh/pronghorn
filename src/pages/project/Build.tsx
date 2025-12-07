@@ -236,26 +236,25 @@ export default function Build() {
           (payload) => {
             console.log("Staging change detected:", payload);
             
-            // Clear buffer for changed file so it reloads fresh from DB
             const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
+            
             if (changedPath) {
-              // Clear from buffer to force fresh load on next access
-              clearFileRef.current?.(changedPath);
-            }
-            
-            loadFiles();
-            
-            // If the changed file is currently open in the editor, reload it from DB
-            if (changedPath && changedPath === currentPathRef.current) {
-              if (!hasDirtyFilesRef.current) {
-                // User has no unsaved changes - safe to reload
-                console.log("Reloading current file due to external change:", changedPath);
-                reloadCurrentFileRef.current?.(true); // Force check staging since this is a staging change
+              // If this is the currently open file, reload it directly instead of clearing
+              if (changedPath === currentPathRef.current) {
+                if (!hasDirtyFilesRef.current) {
+                  console.log("Reloading current file due to external change:", changedPath);
+                  reloadCurrentFileRef.current?.(true); // Force check staging
+                } else {
+                  toast.info("File updated externally - save your changes to see updates");
+                }
               } else {
-                // User has unsaved changes - notify them
-                toast.info("File updated externally - save your changes to see updates");
+                // Clear buffer for non-current files so they reload fresh on next access
+                clearFileRef.current?.(changedPath);
               }
             }
+            
+            // Always reload the file list to update staged status indicators
+            loadFiles();
           }
         )
        .on(
