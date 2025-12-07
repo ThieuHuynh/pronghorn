@@ -56,6 +56,7 @@ interface ChatHistorySettings {
   durationType: 'time' | 'messages';
   durationValue: number; // minutes if 'time', message count if 'messages'
   verbosity: 'minimal' | 'standard' | 'detailed';
+  showBlackboard: boolean;
 }
 
 export function UnifiedAgentInterface({ 
@@ -88,6 +89,7 @@ export function UnifiedAgentInterface({
     durationType: 'time',
     durationValue: 20, // Default 20 minutes
     verbosity: 'standard',
+    showBlackboard: false,
   });
   
   // Helper function to resolve file IDs to paths
@@ -739,9 +741,10 @@ export function UnifiedAgentInterface({
         reasoning: parsed.reasoning || '',
         operations: parsed.operations || [],
         status: parsed.status || '',
+        blackboardEntry: parsed.blackboard_entry || null,
       };
     } catch {
-      return { reasoning: content, operations: [], status: '' };
+      return { reasoning: content, operations: [], status: '', blackboardEntry: null };
     }
   };
 
@@ -865,6 +868,21 @@ export function UnifiedAgentInterface({
                     <div className="mb-3">
                       <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
                       <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
+                    </div>
+                  )}
+                  
+                  {/* BLACKBOARD ENTRY: Show when enabled and entry exists */}
+                  {chatHistorySettings.showBlackboard && parsed.blackboardEntry && (
+                    <div className="mb-3 p-2 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700">
+                          {parsed.blackboardEntry.entry_type}
+                        </Badge>
+                        <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300">Blackboard</p>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap text-yellow-900 dark:text-yellow-100">
+                        {parsed.blackboardEntry.content}
+                      </p>
                     </div>
                   )}
                   
@@ -1243,6 +1261,20 @@ export function UnifiedAgentInterface({
             <p className="text-xs text-muted-foreground">
               Controls how much detail is shown in agent response messages
             </p>
+            
+            {/* Show Blackboard Entries Toggle */}
+            <div className="flex items-center gap-2 mt-4">
+              <Checkbox 
+                id="show-blackboard" 
+                checked={chatHistorySettings.showBlackboard}
+                onCheckedChange={(checked) => 
+                  setChatHistorySettings(prev => ({ ...prev, showBlackboard: checked as boolean }))
+                }
+              />
+              <Label htmlFor="show-blackboard" className="text-sm font-normal cursor-pointer">
+                Show agent blackboard entries (memory/planning notes)
+              </Label>
+            </div>
           </div>
 
           {/* Download Chat History Section */}
