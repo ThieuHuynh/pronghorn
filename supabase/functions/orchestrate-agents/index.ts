@@ -46,14 +46,26 @@ const FLOW_ORDER: Record<string, number> = {
   'REQUIREMENT': 1,
   'STANDARD': 1,
   'TECH_STACK': 1,
+  'SECURITY': 1,
   'PAGE': 2,
+  'WEB_COMPONENT': 3,
   'COMPONENT': 3,
-  'API': 4,
-  'WEBHOOK': 5,
-  'FIREWALL': 5,
-  'SECURITY': 5,
-  'SERVICE': 5,
-  'DATABASE': 6,
+  'HOOK_COMPOSABLE': 4,
+  'API_SERVICE': 5,
+  'AGENT': 5,
+  'OTHER': 5,
+  'API_ROUTER': 6,
+  'API_MIDDLEWARE': 6,
+  'API': 6,
+  'API_CONTROLLER': 7,
+  'API_UTIL': 7,
+  'WEBHOOK': 7,
+  'EXTERNAL_SERVICE': 8,
+  'SERVICE': 8,
+  'FIREWALL': 8,
+  'DATABASE': 9,
+  'SCHEMA': 10,
+  'TABLE': 11,
 };
 
 function getFlowRank(nodeType: string): number {
@@ -667,18 +679,11 @@ async function executeAgent(
   
   // Allowed node types in main canvas enum
   const allowedNodeTypes = [
-    'PROJECT',
-    'PAGE',
-    'COMPONENT',
-    'API',
-    'DATABASE',
-    'SERVICE',
-    'WEBHOOK',
-    'FIREWALL',
-    'SECURITY',
-    'REQUIREMENT',
-    'STANDARD',
-    'TECH_STACK',
+    'PROJECT', 'PAGE', 'WEB_COMPONENT', 'COMPONENT', 'HOOK_COMPOSABLE',
+    'API_SERVICE', 'API_ROUTER', 'API_MIDDLEWARE', 'API_CONTROLLER', 'API_UTIL',
+    'API', 'DATABASE', 'SCHEMA', 'TABLE',
+    'EXTERNAL_SERVICE', 'SERVICE', 'WEBHOOK', 'FIREWALL', 'SECURITY',
+    'REQUIREMENT', 'STANDARD', 'TECH_STACK', 'AGENT', 'OTHER',
   ];
   
   // Build context prompt

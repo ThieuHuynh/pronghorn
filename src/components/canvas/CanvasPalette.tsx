@@ -1,47 +1,18 @@
-import { NodeType } from "./NodePalette";
-import { Eye, EyeOff, ChevronLeft, ChevronRight, Menu } from "lucide-react";
-import { useState } from "react";
+import { Eye, EyeOff, ChevronLeft, ChevronRight, Menu, Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { LayersManager } from "./LayersManager";
 import { Layer } from "@/hooks/useRealtimeLayers";
 import { Node } from "reactflow";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-const nodeIcons: Record<NodeType, string> = {
-  PROJECT: "🎯",
-  PAGE: "📄",
-  COMPONENT: "⚛️",
-  API: "🔌",
-  DATABASE: "🗄️",
-  SERVICE: "⚙️",
-  WEBHOOK: "🪝",
-  FIREWALL: "🛡️",
-  SECURITY: "🔒",
-  REQUIREMENT: "📋",
-  STANDARD: "📏",
-  TECH_STACK: "🔧",
-};
-
-const nodeLabels: Record<NodeType, string> = {
-  PROJECT: "Project",
-  PAGE: "Page",
-  COMPONENT: "Component",
-  API: "API",
-  DATABASE: "Database",
-  SERVICE: "Service",
-  WEBHOOK: "Webhook",
-  FIREWALL: "Firewall",
-  SECURITY: "Security",
-  REQUIREMENT: "Requirement",
-  STANDARD: "Standard",
-  TECH_STACK: "Tech Stack",
-};
+import { useNodeTypes, CanvasNodeType, groupByCategory } from "@/hooks/useNodeTypes";
+import { getCategoryLabel, getCategoryOrder } from "@/lib/connectionLogic";
 
 interface CanvasPaletteProps {
-  visibleNodeTypes: Set<NodeType>;
-  onToggleVisibility: (type: NodeType) => void;
-  onNodeClick?: (type: NodeType) => void;
+  visibleNodeTypes: Set<string>;
+  onToggleVisibility: (type: string) => void;
+  onNodeClick?: (type: string) => void;
   layers: Layer[];
   selectedNodes: Node[];
   onSaveLayer: (layer: Partial<Layer> & { id: string }) => void;
@@ -66,13 +37,25 @@ export function CanvasPalette({
   onMenuClick,
 }: CanvasPaletteProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  // Fetch node types from database (exclude legacy types for palette)
+  const { data: nodeTypes, isLoading } = useNodeTypes(false);
+  
+  // Group node types by category
+  const groupedNodeTypes = useMemo(() => {
+    if (!nodeTypes) return {};
+    return groupByCategory(nodeTypes);
+  }, [nodeTypes]);
+  
+  // Get ordered categories
+  const categoryOrder = getCategoryOrder();
 
-  const onDragStart = (event: React.DragEvent, nodeType: NodeType) => {
+  const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
   };
 
-  const handleNodeClick = (e: React.MouseEvent, type: NodeType) => {
+  const handleNodeClick = (e: React.MouseEvent, type: string) => {
     // Only trigger click-to-add on mobile/touch devices
     if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
       e.preventDefault();
@@ -80,24 +63,13 @@ export function CanvasPalette({
     }
   };
 
-  const nodeTypes: NodeType[] = [
-    "PROJECT",
-    "PAGE",
-    "COMPONENT",
-    "API",
-    "DATABASE",
-    "SERVICE",
-    "WEBHOOK",
-    "FIREWALL",
-    "SECURITY",
-    "REQUIREMENT",
-    "STANDARD",
-    "TECH_STACK",
-  ];
+  const allNodeTypeNames = useMemo(() => {
+    return nodeTypes?.map(nt => nt.system_name) || [];
+  }, [nodeTypes]);
 
   const handleToggleAllNodeTypes = () => {
-    const allVisible = nodeTypes.every((type) => visibleNodeTypes.has(type));
-    nodeTypes.forEach((type) => {
+    const allVisible = allNodeTypeNames.every((type) => visibleNodeTypes.has(type));
+    allNodeTypeNames.forEach((type) => {
       if (allVisible && visibleNodeTypes.has(type)) {
         onToggleVisibility(type);
       } else if (!allVisible && !visibleNodeTypes.has(type)) {
@@ -139,88 +111,107 @@ export function CanvasPalette({
 
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="p-4">
-              <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
-                <AccordionItem value="nodes" className="border rounded-lg px-3">
-                  <AccordionTrigger className="text-sm py-2 hover:no-underline">
-                    <div className="flex items-center justify-between w-full pr-2">
-                      <span>Node Types</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-1 h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleAllNodeTypes();
-                        }}
-                        title="Toggle all node types visibility"
-                      >
-                        {nodeTypes.every((type) => visibleNodeTypes.has(type)) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      </Button>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-1 pb-2">
-                    {nodeTypes.map((type) => (
-                      <div key={type} className="flex items-center justify-between gap-2 group">
-                        <div
-                          draggable
-                          onDragStart={(e) => onDragStart(e, type)}
-                          onClick={(e) => handleNodeClick(e, type)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded cursor-move flex-1 transition-colors ${
-                            visibleNodeTypes.has(type)
-                              ? "bg-muted hover:bg-muted/80"
-                              : "bg-muted/30 hover:bg-muted/50 opacity-50"
-                          }`}
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
+                  <AccordionItem value="nodes" className="border rounded-lg px-3">
+                    <AccordionTrigger className="text-sm py-2 hover:no-underline">
+                      <div className="flex items-center justify-between w-full pr-2">
+                        <span>Node Types</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1 h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleAllNodeTypes();
+                          }}
+                          title="Toggle all node types visibility"
                         >
-                          <span className="text-base">{nodeIcons[type]}</span>
-                          <span className="text-xs font-medium">{nodeLabels[type]}</span>
-                        </div>
-                        <button
-                          onClick={() => onToggleVisibility(type)}
-                          className={`p-1 rounded transition-colors ${
-                            visibleNodeTypes.has(type)
-                              ? "text-foreground hover:text-primary"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                          title={visibleNodeTypes.has(type) ? "Hide" : "Show"}
-                        >
-                          {visibleNodeTypes.has(type) ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                        </button>
+                          {allNodeTypeNames.every((type) => visibleNodeTypes.has(type)) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        </Button>
                       </div>
-                    ))}
-                  </AccordionContent>
-                </AccordionItem>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-3 pb-2">
+                      {categoryOrder.map((category) => {
+                        const categoryNodes = groupedNodeTypes[category];
+                        if (!categoryNodes || categoryNodes.length === 0) return null;
+                        
+                        return (
+                          <div key={category} className="space-y-1">
+                            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                              {getCategoryLabel(category)}
+                            </div>
+                            {categoryNodes.map((nodeType: CanvasNodeType) => (
+                              <div key={nodeType.system_name} className="flex items-center justify-between gap-2 group">
+                                <div
+                                  draggable
+                                  onDragStart={(e) => onDragStart(e, nodeType.system_name)}
+                                  onClick={(e) => handleNodeClick(e, nodeType.system_name)}
+                                  className={`flex items-center gap-2 px-3 py-2 rounded cursor-move flex-1 transition-colors ${
+                                    visibleNodeTypes.has(nodeType.system_name)
+                                      ? "bg-muted hover:bg-muted/80"
+                                      : "bg-muted/30 hover:bg-muted/50 opacity-50"
+                                  }`}
+                                  title={nodeType.description || nodeType.display_label}
+                                >
+                                  <span className="text-base">{nodeType.emoji || '📦'}</span>
+                                  <span className="text-xs font-medium">{nodeType.display_label}</span>
+                                </div>
+                                <button
+                                  onClick={() => onToggleVisibility(nodeType.system_name)}
+                                  className={`p-1 rounded transition-colors ${
+                                    visibleNodeTypes.has(nodeType.system_name)
+                                      ? "text-foreground hover:text-primary"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                  title={visibleNodeTypes.has(nodeType.system_name) ? "Hide" : "Show"}
+                                >
+                                  {visibleNodeTypes.has(nodeType.system_name) ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </AccordionContent>
+                  </AccordionItem>
 
-                <AccordionItem value="layers" className="border rounded-lg px-3">
-                  <AccordionTrigger className="text-sm py-2 hover:no-underline">
-                    <div className="flex items-center justify-between w-full pr-2">
-                      <span>Layers</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-1 h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleAllLayers();
-                        }}
-                        title="Toggle all layers visibility"
-                      >
-                        {layers.every((l) => l.visible) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      </Button>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pb-2">
-                    <LayersManager
-                      layers={layers}
-                      selectedNodes={selectedNodes}
-                      onSaveLayer={onSaveLayer}
-                      onDeleteLayer={onDeleteLayer}
-                      onSelectLayer={onSelectLayer}
-                      activeLayerId={activeLayerId}
-                      onSetActiveLayer={onSetActiveLayer}
-                    />
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+                  <AccordionItem value="layers" className="border rounded-lg px-3">
+                    <AccordionTrigger className="text-sm py-2 hover:no-underline">
+                      <div className="flex items-center justify-between w-full pr-2">
+                        <span>Layers</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1 h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleAllLayers();
+                          }}
+                          title="Toggle all layers visibility"
+                        >
+                          {layers.every((l) => l.visible) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        </Button>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-2">
+                      <LayersManager
+                        layers={layers}
+                        selectedNodes={selectedNodes}
+                        onSaveLayer={onSaveLayer}
+                        onDeleteLayer={onDeleteLayer}
+                        onSelectLayer={onSelectLayer}
+                        activeLayerId={activeLayerId}
+                        onSetActiveLayer={onSetActiveLayer}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
             </div>
           </ScrollArea>
         </>

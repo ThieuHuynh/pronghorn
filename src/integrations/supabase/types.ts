@@ -518,6 +518,54 @@ export type Database = {
           },
         ]
       }
+      canvas_node_types: {
+        Row: {
+          category: string
+          color_class: string
+          created_at: string
+          description: string | null
+          display_label: string
+          emoji: string | null
+          icon: string
+          id: string
+          is_active: boolean
+          is_legacy: boolean
+          order_score: number
+          system_name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          color_class: string
+          created_at?: string
+          description?: string | null
+          display_label: string
+          emoji?: string | null
+          icon: string
+          id?: string
+          is_active?: boolean
+          is_legacy?: boolean
+          order_score: number
+          system_name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          color_class?: string
+          created_at?: string
+          description?: string | null
+          display_label?: string
+          emoji?: string | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          is_legacy?: boolean
+          order_score?: number
+          system_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       canvas_nodes: {
         Row: {
           created_at: string
@@ -2035,6 +2083,30 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_canvas_node_types: {
+        Args: { p_include_legacy?: boolean }
+        Returns: {
+          category: string
+          color_class: string
+          created_at: string
+          description: string | null
+          display_label: string
+          emoji: string | null
+          icon: string
+          id: string
+          is_active: boolean
+          is_legacy: boolean
+          order_score: number
+          system_name: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "canvas_node_types"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_canvas_nodes_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -3516,6 +3588,18 @@ export type Database = {
         | "TECH_STACK"
         | "PAGE"
         | "PROJECT"
+        | "WEB_COMPONENT"
+        | "HOOK_COMPOSABLE"
+        | "API_SERVICE"
+        | "API_ROUTER"
+        | "API_MIDDLEWARE"
+        | "API_CONTROLLER"
+        | "API_UTIL"
+        | "EXTERNAL_SERVICE"
+        | "SCHEMA"
+        | "TABLE"
+        | "AGENT"
+        | "OTHER"
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
@@ -3662,6 +3746,18 @@ export const Constants = {
         "TECH_STACK",
         "PAGE",
         "PROJECT",
+        "WEB_COMPONENT",
+        "HOOK_COMPOSABLE",
+        "API_SERVICE",
+        "API_ROUTER",
+        "API_MIDDLEWARE",
+        "API_CONTROLLER",
+        "API_UTIL",
+        "EXTERNAL_SERVICE",
+        "SCHEMA",
+        "TABLE",
+        "AGENT",
+        "OTHER",
       ],
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       project_token_role: ["owner", "editor", "viewer"],

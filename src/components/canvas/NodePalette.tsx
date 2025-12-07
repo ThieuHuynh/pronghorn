@@ -1,66 +1,38 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { 
-  Box, 
-  Database, 
-  Globe, 
-  Webhook, 
-  Shield, 
-  ShieldCheck, 
-  FileText, 
-  ListChecks, 
-  Code,
-  FolderKanban,
-  FileCode,
-  Eye,
-  EyeOff
-} from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useMemo } from "react";
+import { useNodeTypes, groupByCategory, CanvasNodeType } from "@/hooks/useNodeTypes";
+import { getCategoryLabel, getCategoryOrder } from "@/lib/connectionLogic";
 
-export type NodeType = 
-  | "PROJECT"
-  | "COMPONENT" 
-  | "API" 
-  | "DATABASE" 
-  | "SERVICE" 
-  | "WEBHOOK" 
-  | "FIREWALL" 
-  | "SECURITY" 
-  | "REQUIREMENT" 
-  | "STANDARD" 
-  | "TECH_STACK"
-  | "PAGE";
-
-const nodeTypes = [
-  { type: "PROJECT" as const, icon: FolderKanban, label: "Project", color: "text-cyan-500" },
-  { type: "PAGE" as const, icon: FileCode, label: "Page", color: "text-sky-500" },
-  { type: "COMPONENT" as const, icon: Box, label: "UI Component", color: "text-blue-500" },
-  { type: "API" as const, icon: Code, label: "API Endpoint", color: "text-green-500" },
-  { type: "DATABASE" as const, icon: Database, label: "Database", color: "text-purple-500" },
-  { type: "SERVICE" as const, icon: Globe, label: "External Service", color: "text-orange-500" },
-  { type: "WEBHOOK" as const, icon: Webhook, label: "Webhook", color: "text-pink-500" },
-  { type: "FIREWALL" as const, icon: Shield, label: "Firewall", color: "text-red-500" },
-  { type: "SECURITY" as const, icon: ShieldCheck, label: "Security Control", color: "text-yellow-500" },
-  { type: "REQUIREMENT" as const, icon: FileText, label: "Requirement", color: "text-indigo-500" },
-  { type: "STANDARD" as const, icon: ListChecks, label: "Standard", color: "text-teal-500" },
-  { type: "TECH_STACK" as const, icon: Code, label: "Tech Stack", color: "text-gray-500" },
-];
+// Export NodeType as a string union for backward compatibility
+export type NodeType = string;
 
 interface NodePaletteProps {
-  onDragStart?: (type: NodeType) => void;
-  onNodeClick?: (type: NodeType) => void;
-  visibleNodeTypes: Set<NodeType>;
-  onToggleVisibility: (type: NodeType) => void;
+  onDragStart?: (type: string) => void;
+  onNodeClick?: (type: string) => void;
+  visibleNodeTypes: Set<string>;
+  onToggleVisibility: (type: string) => void;
 }
 
 export function NodePalette({ onDragStart, onNodeClick, visibleNodeTypes, onToggleVisibility }: NodePaletteProps) {
-  const handleDragStart = (e: React.DragEvent, type: NodeType) => {
+  const { data: nodeTypes, isLoading } = useNodeTypes(false);
+  
+  const groupedNodeTypes = useMemo(() => {
+    if (!nodeTypes) return {};
+    return groupByCategory(nodeTypes);
+  }, [nodeTypes]);
+  
+  const categoryOrder = getCategoryOrder();
+
+  const handleDragStart = (e: React.DragEvent, type: string) => {
     e.dataTransfer.setData("application/reactflow", type);
     e.dataTransfer.effectAllowed = "move";
     onDragStart?.(type);
   };
 
-  const handleNodeClick = (e: React.MouseEvent, type: NodeType) => {
+  const handleNodeClick = (e: React.MouseEvent, type: string) => {
     // Only trigger click-to-add on mobile/touch devices
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
       e.preventDefault();
@@ -78,46 +50,65 @@ export function NodePalette({ onDragStart, onNodeClick, visibleNodeTypes, onTogg
       </CardHeader>
       <CardContent className="p-0">
         <ScrollArea className="h-[calc(100vh-12rem)]">
-          <div className="p-4 space-y-2">
-            {nodeTypes.map((node) => {
-              const isVisible = visibleNodeTypes.has(node.type);
-              return (
-                <div
-                  key={node.type}
-                  className="flex items-center gap-2"
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleVisibility(node.type);
-                    }}
-                  >
-                    {isVisible ? (
-                      <Eye className="h-4 w-4" />
-                    ) : (
-                      <EyeOff className="h-4 w-4 opacity-50" />
-                    )}
-                  </Button>
-                  <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, node.type)}
-                    onClick={(e) => handleNodeClick(e, node.type)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted cursor-move transition-colors flex-1 ${
-                      !isVisible ? "opacity-50" : ""
-                    }`}
-                  >
-                    <div className={`p-2 rounded ${node.color} bg-current/10`}>
-                      <node.icon className="h-4 w-4" />
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {categoryOrder.map((category) => {
+                const categoryNodes = groupedNodeTypes[category];
+                if (!categoryNodes || categoryNodes.length === 0) return null;
+                
+                return (
+                  <div key={category} className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {getCategoryLabel(category)}
                     </div>
-                    <span className="text-sm font-medium">{node.label}</span>
+                    {categoryNodes.map((node: CanvasNodeType) => {
+                      const isVisible = visibleNodeTypes.has(node.system_name);
+                      return (
+                        <div
+                          key={node.system_name}
+                          className="flex items-center gap-2"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleVisibility(node.system_name);
+                            }}
+                          >
+                            {isVisible ? (
+                              <Eye className="h-4 w-4" />
+                            ) : (
+                              <EyeOff className="h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                          <div
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, node.system_name)}
+                            onClick={(e) => handleNodeClick(e, node.system_name)}
+                            className={`flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted cursor-move transition-colors flex-1 ${
+                              !isVisible ? "opacity-50" : ""
+                            }`}
+                            title={node.description || node.display_label}
+                          >
+                            <div className={`p-2 rounded ${node.color_class}`}>
+                              <span className="text-sm">{node.emoji || '📦'}</span>
+                            </div>
+                            <span className="text-sm font-medium">{node.display_label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </ScrollArea>
       </CardContent>
     </Card>

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState, useMemo, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { NodeType } from "@/components/canvas/NodePalette";
 import { CanvasPalette } from "@/components/canvas/CanvasPalette";
 import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
@@ -10,6 +9,7 @@ import { useParams } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import { useRealtimeLayers } from "@/hooks/useRealtimeLayers";
+import { useNodeTypes } from "@/hooks/useNodeTypes";
 import ReactFlow, {
   Background,
   Controls,
@@ -42,13 +42,6 @@ const initialNodes: Node[] = [];
 
 const initialEdges: Edge[] = [];
 
-// All node types that can be visible
-const ALL_NODE_TYPES: NodeType[] = [
-  "PROJECT", "PAGE", "COMPONENT", "API", "DATABASE", 
-  "SERVICE", "WEBHOOK", "FIREWALL", "SECURITY", 
-  "REQUIREMENT", "STANDARD", "TECH_STACK"
-];
-
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token, isTokenSet } = useShareToken(projectId);
@@ -59,9 +52,6 @@ function CanvasFlow() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
   const [copiedNode, setCopiedNode] = useState<Node | null>(null);
-  const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
-    new Set(ALL_NODE_TYPES)
-  );
   const [isLassoActive, setIsLassoActive] = useState(false);
   const [isIsolateActive, setIsIsolateActive] = useState(false);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
@@ -70,6 +60,19 @@ function CanvasFlow() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Fetch node types from database (include legacy for rendering existing nodes)
+  const { data: allNodeTypes } = useNodeTypes(true);
+  
+  // Initialize visible node types from database
+  const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<string>>(new Set());
+  
+  // Update visible node types when data loads
+  useEffect(() => {
+    if (allNodeTypes && visibleNodeTypes.size === 0) {
+      setVisibleNodeTypes(new Set(allNodeTypes.map(nt => nt.system_name)));
+    }
+  }, [allNodeTypes]);
 
   // Layers management
   const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
@@ -154,7 +157,7 @@ function CanvasFlow() {
       }));
   }, [edges, visibleNodes]);
 
-  const handleToggleVisibility = useCallback((type: NodeType) => {
+  const handleToggleVisibility = useCallback((type: string) => {
     setVisibleNodeTypes((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(type)) {
@@ -441,7 +444,7 @@ function CanvasFlow() {
     async (event: React.DragEvent) => {
       event.preventDefault();
 
-      const type = event.dataTransfer.getData("application/reactflow") as NodeType;
+      const type = event.dataTransfer.getData("application/reactflow");
 
       if (!type || !reactFlowInstance) return;
 
@@ -477,9 +480,8 @@ function CanvasFlow() {
     [reactFlowInstance, setNodes, saveNode, activeLayerId, layers, saveLayer]
   );
 
-  // Mobile click-to-add handler: adds node to center of viewport
   const handleNodeClickToAdd = useCallback(
-    async (type: NodeType) => {
+    async (type: string) => {
       if (!reactFlowInstance) return;
 
       // Get the center of the viewport
@@ -861,11 +863,14 @@ function CanvasFlow() {
     const START_X = 50;             // Left margin
     const START_Y = 50;             // Top margin
     
-    // Type order (left to right)
-    const typeOrder: NodeType[] = [
+    // Type order (left to right) - use dynamic order from connectionLogic
+    const typeOrder: string[] = [
       "PROJECT", "REQUIREMENT", "STANDARD", "TECH_STACK", 
-      "PAGE", "COMPONENT", "FIREWALL", "SECURITY", 
-      "API", "WEBHOOK", "SERVICE", "DATABASE"
+      "PAGE", "WEB_COMPONENT", "COMPONENT", "HOOK_COMPOSABLE",
+      "API_SERVICE", "API_ROUTER", "API_MIDDLEWARE", "API_CONTROLLER", "API_UTIL",
+      "API", "WEBHOOK", "FIREWALL", "SECURITY", 
+      "EXTERNAL_SERVICE", "SERVICE", "DATABASE", "SCHEMA", "TABLE",
+      "AGENT", "OTHER"
     ];
     
     // Determine which nodes to order
@@ -876,11 +881,11 @@ function CanvasFlow() {
     if (nodesToOrder.length === 0) return;
     
     // Group nodes by type
-    const nodesByType = new Map<NodeType, Node[]>();
+    const nodesByType = new Map<string, Node[]>();
     typeOrder.forEach(type => nodesByType.set(type, []));
     
     nodesToOrder.forEach(node => {
-      const type = node.data?.type as NodeType;
+      const type = node.data?.type as string;
       if (type && nodesByType.has(type)) {
         nodesByType.get(type)!.push(node);
       }
