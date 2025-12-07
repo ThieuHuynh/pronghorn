@@ -487,7 +487,7 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
             Review uncommitted changes before committing to the repository
           </CardDescription>
         </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
+      <CardContent className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
         {/* Auto-commit checkbox - always visible */}
         <div className="flex items-center gap-2 mb-4 pb-4 border-b">
           <Checkbox 
@@ -581,8 +581,8 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4 min-w-0 overflow-hidden">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {stagedChanges.length} file{stagedChanges.length !== 1 ? "s" : ""} changed
                 </p>
@@ -600,11 +600,11 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
                 </div>
               </div>
 
-              <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto overflow-x-hidden">
                 {stagedChanges.map((change) => (
                   <div
                     key={change.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    className="flex items-center gap-2 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors overflow-hidden"
                   >
                     <Checkbox
                       checked={selectedFiles.has(change.file_path)}
