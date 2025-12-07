@@ -921,6 +921,7 @@ Use them to understand context and inform your file operations.` : ''}`;
           reasoning: agentResponse.reasoning,
           operations: agentResponse.operations,
           status: agentResponse.status,
+          blackboard_entry: agentResponse.blackboard_entry || null,
         }),
         p_metadata: { iteration },
       });
