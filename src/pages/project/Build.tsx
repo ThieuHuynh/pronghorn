@@ -63,6 +63,7 @@ export default function Build() {
     saveCurrentFile,
     saveAllDirty,
     closeFile,
+    clearFile,
     reloadCurrentFile,
   } = useFileBuffer({
     repoId: defaultRepo?.id,
@@ -162,8 +163,9 @@ export default function Build() {
         if (!showDeletedFiles && stagedChange?.operation_type === "delete") {
           return;
         }
+        // Use staging ID if file is staged, otherwise use repo_files ID
         allFiles.push({
-          id: f.id,
+          id: stagedChange ? stagedChange.id : f.id,
           path: f.path,
           isStaged: stagedChange ? true : false,
         });
@@ -231,24 +233,31 @@ export default function Build() {
            table: "repo_staging",
            filter: `repo_id=eq.${defaultRepo.id}`,
          },
-         (payload) => {
-           console.log("Staging change detected:", payload);
-           loadFiles();
-           
-           // If the changed file is currently open in the editor, reload it from DB
-           const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
-           if (changedPath && changedPath === currentPathRef.current) {
-             if (!hasDirtyFilesRef.current) {
-               // User has no unsaved changes - safe to reload
-               console.log("Reloading current file due to external change:", changedPath);
-               reloadCurrentFileRef.current?.();
-             } else {
-               // User has unsaved changes - notify them
-               toast.info("File updated externally - save your changes to see updates");
-             }
-           }
-         }
-       )
+          (payload) => {
+            console.log("Staging change detected:", payload);
+            
+            // Clear buffer for changed file so it reloads fresh from DB
+            const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
+            if (changedPath) {
+              // Clear from buffer to force fresh load on next access
+              clearFileRef.current?.(changedPath);
+            }
+            
+            loadFiles();
+            
+            // If the changed file is currently open in the editor, reload it from DB
+            if (changedPath && changedPath === currentPathRef.current) {
+              if (!hasDirtyFilesRef.current) {
+                // User has no unsaved changes - safe to reload
+                console.log("Reloading current file due to external change:", changedPath);
+                reloadCurrentFileRef.current?.();
+              } else {
+                // User has unsaved changes - notify them
+                toast.info("File updated externally - save your changes to see updates");
+              }
+            }
+          }
+        )
        .on(
          "broadcast",
          { event: "repo_files_refresh" },
@@ -273,10 +282,12 @@ export default function Build() {
   const hasDirtyFilesRef = useRef(hasDirtyFiles);
   const currentPathRef = useRef(currentPath);
   const reloadCurrentFileRef = useRef(reloadCurrentFile);
+  const clearFileRef = useRef(clearFile);
   saveAllDirtyRef.current = saveAllDirty;
   hasDirtyFilesRef.current = hasDirtyFiles;
   currentPathRef.current = currentPath;
   reloadCurrentFileRef.current = reloadCurrentFile;
+  clearFileRef.current = clearFile;
 
   // Beforeunload handler for tab/page close - save dirty files
   useEffect(() => {
