@@ -770,7 +770,7 @@ export default function Build() {
                       {currentFile ? (
                         <CodeEditor
                           ref={editorRef}
-                          key={currentFile.path}
+                          key={`${currentFile.path}-${currentFile.version}`}
                           fileId={currentFile.id}
                           filePath={currentFile.path}
                           repoId={defaultRepo?.id || ""}
@@ -972,7 +972,7 @@ export default function Build() {
                     {currentFile ? (
                       <CodeEditor
                         ref={editorRef}
-                        key={`mobile-${currentFile.path}`}
+                        key={`mobile-${currentFile.path}-${currentFile.version}`}
                         fileId={currentFile.id}
                         filePath={currentFile.path}
                         repoId={defaultRepo?.id || ""}
