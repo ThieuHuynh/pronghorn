@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft, Upload } from "lucide-react";
+import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft, ChevronDown, Upload } from "lucide-react";
 import { CodeEditor } from "@/components/repository/CodeEditor";
 
 interface StagedChange {
@@ -576,78 +577,83 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
             </div>
           ) : (
             <div className="space-y-4 min-w-0 overflow-hidden">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm text-muted-foreground">
-                  {stagedChanges.length} file{stagedChanges.length !== 1 ? "s" : ""} changed
-                </p>
-                <div className="flex items-center gap-2">
-                  {selectedFiles.size > 0 && (
-                    <Button variant="outline" size="sm" onClick={handleUnstageSelected}>
-                      <X className="w-4 h-4 mr-2" />
-                      Unstage Selected ({selectedFiles.size})
-                    </Button>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={handleDiscardAll}>
-                    <X className="w-4 h-4 mr-2" />
-                    Discard All
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-[40vh] overflow-y-auto overflow-x-hidden">
-                {stagedChanges.map((change) => (
-                  <div
-                    key={change.id}
-                    className="p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        className="mt-0.5 shrink-0"
-                        checked={selectedFiles.has(change.file_path)}
-                        onCheckedChange={(checked) => {
-                          const newSelected = new Set(selectedFiles);
-                          if (checked) {
-                            newSelected.add(change.file_path);
-                          } else {
-                            newSelected.delete(change.file_path);
-                          }
-                          setSelectedFiles(newSelected);
-                        }}
-                      />
-                      <div className="shrink-0">{getOperationIcon(change.operation_type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium break-all">{change.file_path}</p>
-                        {change.operation_type === "rename" && change.old_path && (
-                          <p className="text-xs text-muted-foreground break-all">
-                            from: {change.old_path}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-1 mt-1">
-                      {getOperationBadge(change.operation_type)}
-                      {(change.operation_type === 'edit' || change.operation_type === 'add' || change.operation_type === 'delete') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => setViewingDiff(change)}
-                        >
-                          {change.operation_type === 'delete' ? 'View' : 'Diff'}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
-                        onClick={() => handleUnstageFile(change.file_path)}
-                      >
-                        <X className="w-4 h-4" />
+              <Collapsible defaultOpen={false}>
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                  <span className="text-sm font-medium">
+                    {stagedChanges.length} file{stagedChanges.length !== 1 ? "s" : ""} staged
+                  </span>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2 space-y-2">
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
+                    {selectedFiles.size > 0 && (
+                      <Button variant="outline" size="sm" onClick={handleUnstageSelected}>
+                        <X className="w-4 h-4 mr-1" />
+                        Unstage ({selectedFiles.size})
                       </Button>
-                    </div>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={handleDiscardAll}>
+                      <X className="w-4 h-4 mr-1" />
+                      Discard All
+                    </Button>
                   </div>
-                ))}
-              </div>
+
+                  <div className="space-y-2 max-h-[30vh] overflow-y-auto overflow-x-hidden">
+                    {stagedChanges.map((change) => (
+                      <div
+                        key={change.id}
+                        className="p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            className="mt-0.5 shrink-0"
+                            checked={selectedFiles.has(change.file_path)}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedFiles);
+                              if (checked) {
+                                newSelected.add(change.file_path);
+                              } else {
+                                newSelected.delete(change.file_path);
+                              }
+                              setSelectedFiles(newSelected);
+                            }}
+                          />
+                          <div className="shrink-0">{getOperationIcon(change.operation_type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium break-all">{change.file_path}</p>
+                            {change.operation_type === "rename" && change.old_path && (
+                              <p className="text-xs text-muted-foreground break-all">
+                                from: {change.old_path}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-1 mt-1">
+                          {getOperationBadge(change.operation_type)}
+                          {(change.operation_type === 'edit' || change.operation_type === 'add' || change.operation_type === 'delete') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => setViewingDiff(change)}
+                            >
+                              {change.operation_type === 'delete' ? 'View' : 'Diff'}
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => handleUnstageFile(change.file_path)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <Separator />
 
