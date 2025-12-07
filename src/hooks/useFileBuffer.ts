@@ -11,6 +11,7 @@ export interface BufferedFile {
   lastSavedContent: string;   // What was last saved to staging (for dirty detection)
   isDirty: boolean;
   isSaving: boolean;
+  version: number;            // Increments on reload to force editor refresh
 }
 
 interface UseFileBufferOptions {
@@ -278,6 +279,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
           lastSavedContent: loadedContent.content,         // Initial = content
           isDirty: false,
           isSaving: false,
+          version: 0,  // Initialize version
         });
         return newMap;
       });
@@ -376,6 +378,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
     if (loadedContent) {
       setBuffer(prev => {
         const newMap = new Map(prev);
+        const existingFile = newMap.get(currentPath);
         newMap.set(currentPath, {
           ...file,
           content: loadedContent.content,
@@ -384,6 +387,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
           isDirty: false,
           isSaving: false,
           isStaged: shouldCheckStaging, // Update staged status
+          version: (existingFile?.version ?? 0) + 1, // Increment to force editor refresh
         });
         return newMap;
       });
