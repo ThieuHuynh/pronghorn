@@ -1069,33 +1069,57 @@ export function UnifiedAgentInterface({
           </div>
         )}
 
-        {/* Task Input - Responsive Layout */}
-        <div className="flex flex-wrap gap-2 items-end">
-          {/* Left buttons */}
-          <div className="flex gap-1 shrink-0">
+        {/* Task Input - Stacked Layout */}
+        <div className="flex flex-col gap-2">
+          {/* Top row: All buttons */}
+          <div className="flex justify-between items-center">
+            {/* Left buttons: Attach, History, Config */}
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsProjectSelectorOpen(true)}
+                disabled={isSubmitting}
+                title="Attach Context"
+                className="h-8 w-8"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsSettingsOpen(true)}
+                disabled={isSubmitting}
+                title="Chat History Settings"
+                className={`h-8 w-8 ${chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}`}
+              >
+                <BookOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsAgentConfigOpen(true)}
+                disabled={isSubmitting}
+                title="Agent Configuration"
+                className={`h-8 w-8 ${agentConfig.exposeProject ? "border-primary text-primary" : ""}`}
+              >
+                <Wrench className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Right button: Send/Stop */}
             <Button
-              variant="outline"
+              onClick={isSubmitting ? handleStop : handleSubmit}
+              disabled={!isSubmitting && (!taskInput.trim() || !repoId)}
               size="icon"
-              onClick={() => setIsProjectSelectorOpen(true)}
-              disabled={isSubmitting}
-              title="Attach Context"
+              variant={isSubmitting ? "destructive" : "default"}
               className="h-8 w-8"
             >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setIsSettingsOpen(true)}
-              disabled={isSubmitting}
-              title="Chat History Settings"
-              className={`h-8 w-8 ${chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}`}
-            >
-              <BookOpen className="h-4 w-4" />
+              {isSubmitting ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          
-          {/* Textarea - grows to fill, wraps when narrow */}
+
+          {/* Bottom: Full-width textarea */}
           <Textarea
             placeholder="Describe the task for the agent..."
             value={taskInput}
@@ -1107,35 +1131,8 @@ export function UnifiedAgentInterface({
               }
             }}
             disabled={isSubmitting}
-            className="flex-1 min-w-[150px] min-h-[60px] basis-full sm:basis-auto order-last sm:order-none"
+            className="min-h-[60px] w-full"
           />
-          
-          {/* Right buttons */}
-          <div className="flex gap-1 shrink-0">
-            <Button
-              onClick={isSubmitting ? handleStop : handleSubmit}
-              disabled={!isSubmitting && (!taskInput.trim() || !repoId)}
-              size="icon"
-              variant={isSubmitting ? "destructive" : "default"}
-              className="h-8 w-8"
-            >
-              {isSubmitting ? (
-                <Square className="h-4 w-4" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setIsAgentConfigOpen(true)}
-              disabled={isSubmitting}
-              title="Agent Configuration"
-              className={`h-8 w-8 ${agentConfig.exposeProject ? "border-primary text-primary" : ""}`}
-            >
-              <Wrench className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </div>
 
