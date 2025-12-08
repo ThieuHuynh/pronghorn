@@ -22,7 +22,7 @@ const Deploy = () => {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("pronghorn-cloud");
+  const [activeTab, setActiveTab] = useState("cloud");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fetchDeployments = async () => {
@@ -70,9 +70,9 @@ const Deploy = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex items-center justify-between">
             <TabsList className="grid w-auto grid-cols-3">
-              <TabsTrigger value="pronghorn-cloud" className="flex items-center gap-2">
+              <TabsTrigger value="cloud" className="flex items-center gap-2">
                 <Cloud className="h-4 w-4" />
-                Pronghorn Cloud
+                Cloud
               </TabsTrigger>
               <TabsTrigger value="local" className="flex items-center gap-2">
                 <Laptop className="h-4 w-4" />
@@ -97,16 +97,16 @@ const Deploy = () => {
             </div>
           </div>
 
-          <TabsContent value="pronghorn-cloud" className="space-y-6">
+          <TabsContent value="cloud" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Cloud className="h-5 w-5 text-primary" />
-                  Pronghorn Cloud
+                  Cloud Deployments
                 </CardTitle>
                 <CardDescription>
-                  Deploy your application to <span className="font-mono">appname.env.pronghorn.cloud</span> hosted on Render.com.
-                  Supports Node.js, Python, Go backends and React, Vue, TanStack frontends.
+                  Deploy your application to <span className="font-mono text-primary">dev-appname.onrender.com</span> hosted on Render.com.
+                  Each environment (dev, uat, prod) gets its own URL: <span className="font-mono">env-appname.onrender.com</span>
                 </CardDescription>
               </CardHeader>
               <CardContent>
