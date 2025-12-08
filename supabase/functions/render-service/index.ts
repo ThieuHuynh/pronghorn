@@ -169,15 +169,22 @@ async function createRenderService(
     servicePayload.repo = `https://github.com/${repo.organization}/${repo.repo}`;
   }
 
-  // Add build/start commands based on service type
+  // Add serviceDetails based on service type (required by Render API)
   if (isStaticSite) {
-    servicePayload.buildCommand = deployment.build_command || 'npm run build';
-    servicePayload.staticPublishPath = deployment.build_folder || 'dist';
+    servicePayload.serviceDetails = {
+      buildCommand: deployment.build_command || 'npm run build',
+      publishPath: deployment.build_folder || 'dist',
+    };
   } else {
-    servicePayload.buildCommand = deployment.build_command || 'npm install';
-    servicePayload.startCommand = deployment.run_command || 'npm start';
-    servicePayload.plan = 'free';
-    servicePayload.runtime = getRuntime(deployment.project_type);
+    // Web service requires serviceDetails with env, envSpecificDetails, and plan
+    servicePayload.serviceDetails = {
+      env: getRuntime(deployment.project_type), // 'node', 'python', 'go', etc.
+      envSpecificDetails: {
+        buildCommand: deployment.build_command || 'npm install',
+        startCommand: deployment.run_command || 'npm start',
+      },
+      plan: 'starter', // Cannot use 'free' via API - 'starter' is cheapest paid plan
+    };
   }
 
   console.log('[render-service] Service payload:', JSON.stringify(servicePayload, null, 2));
