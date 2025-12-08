@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Rocket, Cloud, Laptop, Server, Plus, RefreshCw, Menu } from "lucide-react";
+import { Cloud, Laptop, Server, Plus, RefreshCw } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -60,154 +60,150 @@ const Deploy = () => {
         onOpenChange={setIsSidebarOpen} 
       />
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="p-6">
+        <div className="flex-1 overflow-auto p-4 md:p-6">
           <ProjectPageHeader
             title="Deploy"
             onMenuClick={() => setIsSidebarOpen(true)}
           />
 
-      <div className="flex-1 overflow-auto p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="flex items-center justify-between">
-            <TabsList className="grid w-auto grid-cols-3">
-              <TabsTrigger value="cloud" className="flex items-center gap-2">
-                <Cloud className="h-4 w-4" />
-                Cloud
-              </TabsTrigger>
-              <TabsTrigger value="local" className="flex items-center gap-2">
-                <Laptop className="h-4 w-4" />
-                Local Development
-              </TabsTrigger>
-              <TabsTrigger value="dedicated-vm" className="flex items-center gap-2">
-                <Server className="h-4 w-4" />
-                Dedicated VMs
-                <Badge variant="secondary" className="ml-1 text-xs">Soon</Badge>
-              </TabsTrigger>
-            </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 space-y-4">
+            {/* Header with tabs and buttons - responsive */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <TabsList className="w-full lg:w-auto overflow-x-auto flex-shrink-0">
+                <TabsTrigger value="cloud" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Cloud className="h-4 w-4" />
+                  <span className="hidden sm:inline">Cloud</span>
+                </TabsTrigger>
+                <TabsTrigger value="local" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Laptop className="h-4 w-4" />
+                  <span className="hidden sm:inline">Local</span>
+                </TabsTrigger>
+                <TabsTrigger value="dedicated-vm" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Server className="h-4 w-4" />
+                  <span className="hidden sm:inline">VMs</span>
+                  <Badge variant="secondary" className="text-[10px] px-1">Soon</Badge>
+                </TabsTrigger>
+              </TabsList>
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={fetchDeployments}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
-              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Deployment
-              </Button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button variant="outline" size="sm" onClick={fetchDeployments} className="flex-1 sm:flex-none">
+                  <RefreshCw className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                <Button size="sm" onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none">
+                  <Plus className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">New Deployment</span>
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <TabsContent value="cloud" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Cloud className="h-5 w-5 text-primary" />
-                  Cloud Deployments
-                </CardTitle>
-                <CardDescription>
-                  Deploy your application to <span className="font-mono text-primary">dev-appname.onrender.com</span> hosted on Render.com.
-                  Each environment (dev, uat, prod) gets its own URL: <span className="font-mono">env-appname.onrender.com</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : cloudDeployments.length > 0 ? (
-                  <div className="grid gap-4">
-                    {cloudDeployments.map((deployment) => (
-                      <DeploymentCard
-                        key={deployment.id}
-                        deployment={deployment}
-                        shareToken={shareToken}
-                        onUpdate={fetchDeployments}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Cloud className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="mb-4">No cloud deployments yet</p>
-                    <Button onClick={() => setIsCreateOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create First Deployment
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <TabsContent value="cloud" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Cloud className="h-5 w-5 text-primary" />
+                    Cloud Deployments
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Deploy to Render.com: <span className="font-mono text-primary">env-appname.onrender.com</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : cloudDeployments.length > 0 ? (
+                    <div className="grid gap-4">
+                      {cloudDeployments.map((deployment) => (
+                        <DeploymentCard
+                          key={deployment.id}
+                          deployment={deployment}
+                          shareToken={shareToken}
+                          onUpdate={fetchDeployments}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Cloud className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p className="mb-3 text-sm">No cloud deployments yet</p>
+                      <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Deployment
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="local" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Laptop className="h-5 w-5 text-primary" />
-                  Local Development
-                </CardTitle>
-                <CardDescription>
-                  Download a Node.js package with pre-configured .env file to run your project locally.
-                  Includes file watching, hot reload, and bug telemetry back to Pronghorn.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : localDeployments.length > 0 ? (
-                  <div className="grid gap-4">
-                    {localDeployments.map((deployment) => (
-                      <DeploymentCard
-                        key={deployment.id}
-                        deployment={deployment}
-                        shareToken={shareToken}
-                        onUpdate={fetchDeployments}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Laptop className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="mb-4">No local configurations yet</p>
-                    <Button onClick={() => setIsCreateOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Local Config
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <TabsContent value="local" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Laptop className="h-5 w-5 text-primary" />
+                    Local Development
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Download a Node.js package to run locally with hot reload and telemetry.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : localDeployments.length > 0 ? (
+                    <div className="grid gap-4">
+                      {localDeployments.map((deployment) => (
+                        <DeploymentCard
+                          key={deployment.id}
+                          deployment={deployment}
+                          shareToken={shareToken}
+                          onUpdate={fetchDeployments}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Laptop className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p className="mb-3 text-sm">No local configurations yet</p>
+                      <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Local Config
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="dedicated-vm" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Server className="h-5 w-5 text-muted-foreground" />
-                  Dedicated VMs
-                  <Badge variant="secondary">Coming Soon</Badge>
-                </CardTitle>
-                <CardDescription>
-                  Deploy to dedicated virtual machines for better control, monitoring, and real-time bug telemetry.
-                  Full automation with SSH access and custom deployment scripts.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Server className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="mb-2">Dedicated VM deployments are coming soon</p>
-                  <p className="text-sm">
-                    This feature will provide dedicated VMs with full SSH access, custom deployment scripts,
-                    real-time monitoring, and automatic bug telemetry integration.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+            <TabsContent value="dedicated-vm" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Server className="h-5 w-5 text-muted-foreground" />
+                    Dedicated VMs
+                    <Badge variant="secondary">Coming Soon</Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Deploy to dedicated VMs with SSH access and custom scripts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Server className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                    <p className="mb-2 text-sm">Dedicated VM deployments are coming soon</p>
+                    <p className="text-xs max-w-md mx-auto">
+                      Full SSH access, custom deployment scripts, real-time monitoring, and bug telemetry.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
 
         <CreateDeploymentDialog
           open={isCreateOpen}
@@ -217,7 +213,6 @@ const Deploy = () => {
           defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
           onCreated={fetchDeployments}
         />
-        </div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Play, Square, Trash2, ExternalLink, Settings, 
   RefreshCw, Cloud, Laptop, Server, GitBranch,
-  Rocket, CheckCircle, Clock, XCircle, Download, Eye
+  Rocket, CheckCircle, Clock, XCircle, Download, Eye, RotateCcw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ const statusConfig: Record<string, { icon: React.ReactNode; variant: "default" |
   deploying: { icon: <Rocket className="h-3 w-3 animate-pulse" />, variant: "default", label: "Deploying" },
   running: { icon: <CheckCircle className="h-3 w-3" />, variant: "default", label: "Running" },
   stopped: { icon: <Square className="h-3 w-3" />, variant: "outline", label: "Stopped" },
+  suspended: { icon: <Square className="h-3 w-3" />, variant: "outline", label: "Suspended" },
   failed: { icon: <XCircle className="h-3 w-3" />, variant: "destructive", label: "Failed" },
   deleted: { icon: <Trash2 className="h-3 w-3" />, variant: "destructive", label: "Deleted" },
 };
@@ -75,6 +76,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   const handleStart = () => invokeRenderService('start');
   const handleStop = () => invokeRenderService('stop');
   const handleRestart = () => invokeRenderService('restart');
+  const handleSyncStatus = () => invokeRenderService('status');
 
   const handleDownloadPackage = async () => {
     setIsActionLoading('download');
@@ -149,191 +151,220 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   };
 
   const hasRenderService = !!deployment.render_service_id;
+  const isRunning = deployment.status === "running" || deployment.status === "deploying" || deployment.status === "building";
+  const isStopped = deployment.status === "stopped" || deployment.status === "failed" || deployment.status === "pending";
 
   return (
     <>
       <Card className="border">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {platformIcons[deployment.platform]}
-              <div>
-                <CardTitle className="text-base font-medium">{deployment.name}</CardTitle>
-                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                  <GitBranch className="h-3 w-3" />
-                  <span>{deployment.branch}</span>
-                  <span>•</span>
+        <CardHeader className="pb-2 sm:pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="mt-1 sm:mt-0">{platformIcons[deployment.platform]}</div>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-sm sm:text-base font-medium truncate">{deployment.name}</CardTitle>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <GitBranch className="h-3 w-3" />
+                    {deployment.branch}
+                  </span>
+                  <span className="hidden sm:inline">•</span>
                   <span className="capitalize">{deployment.environment}</span>
-                  <span>•</span>
-                  <span>{deployment.project_type}</span>
+                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden sm:inline">{deployment.project_type}</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={status.variant} className="flex items-center gap-1">
-                {status.icon}
-                {status.label}
-              </Badge>
-            </div>
+            <Badge variant={status.variant} className="flex items-center gap-1 self-start sm:self-center">
+              {status.icon}
+              {status.label}
+            </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {deployment.platform === "pronghorn_cloud" && (
-                <a 
-                  href={getDeploymentUrl()} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 hover:text-foreground transition-colors"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  {getDeploymentUrl()}
-                </a>
-              )}
-              {deployment.platform === "local" && (
-                <span className="flex items-center gap-1">
-                  <Laptop className="h-3 w-3" />
-                  Run: {deployment.run_command}
-                </span>
-              )}
-              {deployment.last_deployed_at && (
-                <span className="text-xs ml-4">
-                  Last deployed: {new Date(deployment.last_deployed_at).toLocaleString()}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {deployment.platform === "pronghorn_cloud" && (
-                <>
-                  {!hasRenderService ? (
-                    <Button 
-                      variant="default" 
-                      size="sm" 
-                      onClick={handleCreate}
-                      disabled={isActionLoading === 'create'}
-                    >
-                      {isActionLoading === 'create' ? (
-                        <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                      ) : (
-                        <Cloud className="h-4 w-4 mr-1" />
-                      )}
-                      Create Service
-                    </Button>
-                  ) : (
-                    <>
-                      {deployment.status === "running" || deployment.status === "deploying" ? (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleStop}
-                            disabled={isActionLoading === 'stop'}
-                          >
-                            {isActionLoading === 'stop' ? (
-                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <Square className="h-4 w-4 mr-1" />
-                            )}
-                            Stop
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleRestart}
-                            disabled={isActionLoading === 'restart'}
-                          >
-                            {isActionLoading === 'restart' ? (
-                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4 mr-1" />
-                            )}
-                            Restart
-                          </Button>
-                        </>
-                      ) : (
+        <CardContent className="pt-2">
+          {/* URL and last deployed */}
+          <div className="text-xs text-muted-foreground mb-3">
+            {deployment.platform === "pronghorn_cloud" && (
+              <a 
+                href={getDeploymentUrl()} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 hover:text-foreground transition-colors truncate"
+              >
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{getDeploymentUrl()}</span>
+              </a>
+            )}
+            {deployment.platform === "local" && (
+              <span className="flex items-center gap-1">
+                <Laptop className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">Run: {deployment.run_command}</span>
+              </span>
+            )}
+            {deployment.last_deployed_at && (
+              <span className="block mt-1">
+                Last deployed: {new Date(deployment.last_deployed_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons - responsive wrap */}
+          <div className="flex flex-wrap items-center gap-2">
+            {deployment.platform === "pronghorn_cloud" && (
+              <>
+                {!hasRenderService ? (
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={handleCreate}
+                    disabled={isActionLoading === 'create'}
+                    className="text-xs"
+                  >
+                    {isActionLoading === 'create' ? (
+                      <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <Cloud className="h-3 w-3 mr-1" />
+                    )}
+                    Create Service
+                  </Button>
+                ) : (
+                  <>
+                    {isRunning ? (
+                      <>
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          onClick={handleStart}
-                          disabled={isActionLoading === 'start'}
+                          onClick={handleStop}
+                          disabled={isActionLoading === 'stop'}
+                          className="text-xs"
                         >
-                          {isActionLoading === 'start' ? (
-                            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          {isActionLoading === 'stop' ? (
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                           ) : (
-                            <Play className="h-4 w-4 mr-1" />
+                            <Square className="h-3 w-3 mr-1" />
                           )}
-                          Start
+                          Stop
                         </Button>
-                      )}
-                      <Button 
-                        variant="default" 
-                        size="sm" 
-                        onClick={handleDeploy}
-                        disabled={isActionLoading === 'deploy'}
-                      >
-                        {isActionLoading === 'deploy' ? (
-                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                        ) : (
-                          <Rocket className="h-4 w-4 mr-1" />
-                        )}
-                        Deploy
-                      </Button>
-                      {deployment.url && (
                         <Button 
                           variant="outline" 
-                          size="sm"
-                          onClick={() => setIsPreviewOpen(true)}
+                          size="sm" 
+                          onClick={handleRestart}
+                          disabled={isActionLoading === 'restart'}
+                          className="text-xs"
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          Preview
+                          {isActionLoading === 'restart' ? (
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                          )}
+                          Restart
                         </Button>
+                      </>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleStart}
+                        disabled={isActionLoading === 'start'}
+                        className="text-xs"
+                      >
+                        {isActionLoading === 'start' ? (
+                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Play className="h-3 w-3 mr-1" />
+                        )}
+                        Start
+                      </Button>
+                    )}
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={handleDeploy}
+                      disabled={isActionLoading === 'deploy'}
+                      className="text-xs"
+                    >
+                      {isActionLoading === 'deploy' ? (
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Rocket className="h-3 w-3 mr-1" />
                       )}
-                    </>
-                  )}
-                </>
-              )}
-              {deployment.platform === "local" && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleDownloadPackage}
-                  disabled={isActionLoading === 'download'}
-                >
-                  {isActionLoading === 'download' ? (
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-1" />
-                  )}
-                  Download Package
-                </Button>
-              )}
+                      Deploy
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleSyncStatus}
+                      disabled={isActionLoading === 'status'}
+                      className="text-xs"
+                      title="Sync status from Render"
+                    >
+                      {isActionLoading === 'status' ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                    </Button>
+                    {deployment.url && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsPreviewOpen(true)}
+                        className="text-xs"
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Preview
+                      </Button>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            {deployment.platform === "local" && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDownloadPackage}
+                disabled={isActionLoading === 'download'}
+                className="text-xs"
+              >
+                {isActionLoading === 'download' ? (
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3 mr-1" />
+                )}
+                Download
+              </Button>
+            )}
+            
+            {/* Utility buttons */}
+            <div className="flex items-center gap-1 ml-auto">
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => setIsLogsOpen(true)}
+                className="text-xs"
               >
                 Logs
               </Button>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8"
+                className="h-7 w-7"
                 onClick={() => setIsConfigOpen(true)}
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-3 w-3" />
               </Button>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-destructive hover:text-destructive"
+                className="h-7 w-7 text-destructive hover:text-destructive"
                 onClick={handleDelete}
                 disabled={isDeleting}
               >
                 {isDeleting ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <RefreshCw className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3 w-3" />
                 )}
               </Button>
             </div>
@@ -358,20 +389,20 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
 
       {/* Preview Dialog */}
       {isPreviewOpen && deployment.url && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-6xl h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <div className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                <span className="font-medium">Preview: {deployment.name}</span>
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-6xl h-[90vh] sm:h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+              <div className="flex items-center gap-2 min-w-0">
+                <Eye className="h-4 w-4 flex-shrink-0" />
+                <span className="font-medium text-sm truncate">{deployment.name}</span>
                 <a 
                   href={deployment.url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                 >
                   <ExternalLink className="h-3 w-3" />
-                  Open in new tab
+                  <span className="hidden sm:inline">Open</span>
                 </a>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setIsPreviewOpen(false)}>

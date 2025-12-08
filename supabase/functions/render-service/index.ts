@@ -93,7 +93,7 @@ serve(async (req) => {
         result = await restartRenderService(deployment, renderHeaders);
         break;
       case 'status':
-        result = await getServiceStatus(deployment, renderHeaders);
+        result = await getServiceStatus(deployment, renderHeaders, supabase, shareToken);
         break;
       case 'delete':
         result = await deleteRenderService(deployment, renderHeaders, supabase, shareToken);
@@ -350,7 +350,12 @@ async function stopRenderService(
   return { status: 'suspended' };
 }
 
-async function getServiceStatus(deployment: any, headers: Record<string, string>) {
+async function getServiceStatus(
+  deployment: any,
+  headers: Record<string, string>,
+  supabase?: any,
+  shareToken?: string
+) {
   if (!deployment.render_service_id) {
     return { status: 'not_created' };
   }
@@ -371,12 +376,70 @@ async function getServiceStatus(deployment: any, headers: Record<string, string>
   const result = await response.json();
   console.log('[render-service] Service status:', result);
 
+  // Map Render status to our status
+  let mappedStatus = 'pending';
+  const service = result.service;
+  
+  if (service) {
+    if (service.suspended === 'suspended') {
+      mappedStatus = 'suspended';
+    } else if (service.suspended === 'not_suspended') {
+      mappedStatus = 'running';
+    }
+  }
+
+  // Also check latest deploy status
+  try {
+    const deploysResponse = await fetch(
+      `${RENDER_API_URL}/services/${deployment.render_service_id}/deploys?limit=1`,
+      { method: 'GET', headers }
+    );
+    
+    if (deploysResponse.ok) {
+      const deploysData = await deploysResponse.json();
+      const latestDeploy = deploysData[0]?.deploy;
+      
+      if (latestDeploy) {
+        const deployStatus = latestDeploy.status;
+        console.log('[render-service] Latest deploy status:', deployStatus);
+        
+        // Override status based on deploy state
+        if (deployStatus === 'build_in_progress' || deployStatus === 'update_in_progress') {
+          mappedStatus = 'building';
+        } else if (deployStatus === 'created') {
+          mappedStatus = 'deploying';
+        } else if (deployStatus === 'live') {
+          mappedStatus = service?.suspended === 'suspended' ? 'suspended' : 'running';
+        } else if (deployStatus === 'deactivated' || deployStatus === 'canceled') {
+          mappedStatus = 'stopped';
+        } else if (deployStatus === 'build_failed' || deployStatus === 'update_failed') {
+          mappedStatus = 'failed';
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[render-service] Error checking deploy status:', e);
+  }
+
+  const serviceUrl = service?.serviceDetails?.url;
+
+  // Persist the synced status to database
+  if (supabase && deployment.id) {
+    console.log('[render-service] Updating deployment status in DB:', mappedStatus);
+    await supabase.rpc('update_deployment_with_token', {
+      p_deployment_id: deployment.id,
+      p_token: shareToken || null,
+      p_status: mappedStatus,
+      p_url: serviceUrl || null,
+    });
+  }
+
   return {
-    status: result.service?.suspended ? 'suspended' : 'running',
-    url: result.service?.serviceDetails?.url,
-    createdAt: result.service?.createdAt,
-    updatedAt: result.service?.updatedAt,
-    service: result.service,
+    status: mappedStatus,
+    url: serviceUrl,
+    createdAt: service?.createdAt,
+    updatedAt: service?.updatedAt,
+    service: service,
   };
 }
 
