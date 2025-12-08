@@ -192,7 +192,7 @@ const CreateDeploymentDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pronghorn_cloud">Pronghorn Cloud</SelectItem>
+                  <SelectItem value="pronghorn_cloud">Render.com</SelectItem>
                   <SelectItem value="local">Local Development</SelectItem>
                 </SelectContent>
               </Select>
