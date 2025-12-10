@@ -1,73 +1,816 @@
-# Welcome to your Lovable project
+# Pronghorn (Alpha)
 
-## Project info
+**Build Software with AI-Powered Precision**
 
-**URL**: https://lovable.dev/projects/ee63522c-070f-4241-b05a-90b794352667
+A standards-first, agentic AI platform that transforms unstructured requirements into production-ready code with complete traceability. From idea to deployment, Pronghorn orchestrates multi-agent AI teams to design, build, and ship software autonomously.
 
-## How can I edit this code?
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Built with Lovable](https://img.shields.io/badge/Built%20with-Lovable-ff69b4)](https://lovable.dev)
+[![Powered by Supabase](https://img.shields.io/badge/Powered%20by-Supabase-3ECF8E)](https://supabase.com)
 
-There are several ways of editing your application.
+**Live Application**: [https://pronghorn.red](https://pronghorn.red)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ee63522c-070f-4241-b05a-90b794352667) and start prompting.
+## Table of Contents
 
-Changes made via Lovable will be committed automatically to this repo.
+- [Overview](#overview)
+- [Core Features](#core-features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Authentication System](#authentication-system)
+- [Multi-Token RBAC System](#multi-token-rbac-system)
+- [RPC Patterns](#rpc-patterns)
+- [Edge Functions](#edge-functions)
+- [Real-Time Subscriptions](#real-time-subscriptions)
+- [Getting Started](#getting-started)
+- [Deployment](#deployment)
+- [Legal](#legal)
+- [Contact](#contact)
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Overview
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Pronghorn is an open-source AI-powered software development platform created by the **Government of Alberta, Ministry of Technology and Innovation**. It enables teams to:
 
-Follow these steps:
+- **Design** → Transform ideas into structured requirements with AI decomposition
+- **Build** → Generate production code with autonomous AI coding agents
+- **Ship** → Deploy to cloud platforms with integrated CI/CD
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+The platform operates in three modes:
+1. **Design Mode**: Visual specification building with React Flow canvas
+2. **Audit Mode**: Continuous validation against standards
+3. **Build Mode**: Autonomous code generation with real-time monitoring
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Core Features
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 🎯 AI-Powered Requirements
+Transform unstructured ideas into hierarchical specifications:
+- **Epics** → **Features** → **User Stories** → **Acceptance Criteria**
+- AI decomposition via LLM providers (Gemini, Claude, Grok)
+- Automatic linking to organizational standards for complete traceability
+
+### 📋 Global Standards Library
+Reusable compliance templates across your organization:
+- User-customizable categories and hierarchical trees
+- Dynamic linking to all projects (updates propagate automatically)
+- Tech stack templates with associated standards
+
+### 🎨 Visual Architecture Design
+Interactive canvas for system design:
+- 24+ node types (WEB_COMPONENT, API_ROUTER, DATABASE, SCHEMA, TABLE, etc.)
+- Data-driven node types from database (add types without code changes)
+- Real-time collaboration with multi-user editing
+
+### 🤖 Multi-Agent AI Teams
+Orchestrated AI specialists working together:
+- **Architect Agent**: Designs system structure
+- **Developer Agent**: Implements components
+- **DBA Agent**: Designs database schemas
+- **Security Agent**: Reviews for vulnerabilities
+- **QA Agent**: Validates against requirements
+
+Agents share a blackboard for iterative refinement across multiple epochs.
+
+### 💻 AI Coding Agent
+Autonomous file operations with full Git workflow:
+- Read, edit, create, delete, rename files
+- Staging → Commit → Push workflow
+- Real-time progress monitoring
+- Support for pause/resume and abort operations
+
+### ⚡ Instant Collaboration
+No-login-required sharing:
+- Token-based project access
+- Anonymous project creation with session persistence
+- Real-time Supabase subscriptions for live updates
+
+---
+
+## Technology Stack
+
+### Frontend
+
+| Technology | Purpose |
+|------------|---------|
+| **React 18** | UI framework with TypeScript |
+| **Vite** | Build tool and dev server |
+| **Tailwind CSS** | Utility-first styling |
+| **shadcn/ui** | Accessible component library |
+| **React Flow** | Interactive canvas diagrams |
+| **Monaco Editor** | Code editing (VS Code engine) |
+| **TanStack Query** | Server state management |
+| **React Router DOM** | Client-side routing |
+
+### Backend (Supabase)
+
+| Technology | Purpose |
+|------------|---------|
+| **PostgreSQL** | Primary database |
+| **Row Level Security** | Token-based access control |
+| **Edge Functions** | Deno serverless functions |
+| **Realtime** | WebSocket subscriptions |
+| **Storage** | File and artifact storage |
+
+### LLM Providers
+
+| Provider | Models |
+|----------|--------|
+| **Google Gemini** | gemini-2.5-flash, gemini-2.5-pro |
+| **Anthropic Claude** | claude-opus-4-5 |
+| **xAI Grok** | grok-4-1-fast-reasoning, grok-4-1-fast-non-reasoning |
+
+---
+
+## Project Structure
+
+```
+pronghorn/
+├── src/
+│   ├── components/
+│   │   ├── ui/                    # shadcn/ui base components
+│   │   ├── canvas/                # React Flow canvas components
+│   │   │   ├── CanvasNode.tsx     # Node rendering
+│   │   │   ├── CanvasPalette.tsx  # Node type selector
+│   │   │   ├── AgentFlow.tsx      # Multi-agent orchestration UI
+│   │   │   └── ...
+│   │   ├── build/                 # Coding agent interface
+│   │   │   ├── UnifiedAgentInterface.tsx
+│   │   │   ├── AgentProgressMonitor.tsx
+│   │   │   ├── StagingPanel.tsx
+│   │   │   └── ...
+│   │   ├── repository/            # File tree, editor, Git integration
+│   │   │   ├── FileTree.tsx
+│   │   │   ├── CodeEditor.tsx
+│   │   │   └── ...
+│   │   ├── requirements/          # Requirements tree management
+│   │   ├── standards/             # Standards library UI
+│   │   ├── dashboard/             # Project cards, creation dialogs
+│   │   ├── layout/                # Navigation, sidebar, header
+│   │   └── project/               # Project-specific selectors
+│   │
+│   ├── contexts/
+│   │   ├── AuthContext.tsx        # Authentication state & methods
+│   │   └── AdminContext.tsx       # Admin mode management
+│   │
+│   ├── hooks/
+│   │   ├── useShareToken.ts       # Token extraction & caching
+│   │   ├── useRealtimeCanvas.ts   # Canvas real-time sync
+│   │   ├── useRealtimeRequirements.ts
+│   │   ├── useRealtimeArtifacts.ts
+│   │   ├── useRealtimeLayers.ts
+│   │   └── ...
+│   │
+│   ├── pages/
+│   │   ├── Landing.tsx            # Marketing landing page
+│   │   ├── Dashboard.tsx          # Project list
+│   │   ├── Auth.tsx               # Login/signup/SSO
+│   │   ├── Terms.tsx              # Terms of Use
+│   │   ├── Privacy.tsx            # Privacy Policy
+│   │   └── project/               # Project-specific pages
+│   │       ├── Requirements.tsx
+│   │       ├── Canvas.tsx
+│   │       ├── Build.tsx
+│   │       ├── Repository.tsx
+│   │       ├── Artifacts.tsx
+│   │       ├── Chat.tsx
+│   │       ├── Deploy.tsx
+│   │       ├── Audit.tsx
+│   │       ├── Specifications.tsx
+│   │       ├── Standards.tsx
+│   │       └── ProjectSettings.tsx
+│   │
+│   ├── integrations/
+│   │   └── supabase/
+│   │       ├── client.ts          # Supabase client singleton
+│   │       └── types.ts           # Generated TypeScript types
+│   │
+│   ├── lib/
+│   │   ├── tokenCache.ts          # Synchronous token caching
+│   │   ├── connectionLogic.ts     # Canvas edge validation
+│   │   └── utils.ts               # Utility functions
+│   │
+│   └── main.tsx                   # Application entry point
+│
+├── supabase/
+│   ├── functions/                 # 25+ Deno edge functions
+│   │   ├── create-project/
+│   │   ├── coding-agent-orchestrator/
+│   │   ├── orchestrate-agents/
+│   │   ├── decompose-requirements/
+│   │   ├── sync-repo-push/
+│   │   ├── sync-repo-pull/
+│   │   ├── chat-stream-gemini/
+│   │   ├── chat-stream-anthropic/
+│   │   ├── chat-stream-xai/
+│   │   ├── ai-architect/
+│   │   ├── ai-architect-critic/
+│   │   └── ...
+│   └── config.toml                # Supabase configuration
+│
+├── public/
+│   └── data/
+│       ├── agents.json            # Multi-agent definitions
+│       ├── buildAgents.json       # Coding agent config
+│       ├── connectionLogic.json   # Canvas edge rules
+│       └── graphicStyles.json     # Canvas styling
+│
+└── README.md
+```
+
+---
+
+## Authentication System
+
+Pronghorn implements a **dual access model** supporting both authenticated users and anonymous collaboration.
+
+### Authentication Methods
+
+| Method | Description |
+|--------|-------------|
+| **Email/Password** | Traditional signup and login |
+| **Google SSO** | OAuth 2.0 redirect flow |
+| **Microsoft Azure SSO** | OAuth 2.0 with Azure AD |
+| **Anonymous** | Token-based access (no login required) |
+
+### Auth Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      AuthContext Provider                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │  Email/Password  │    │   Social SSO     │                   │
+│  ├──────────────────┤    ├──────────────────┤                   │
+│  │ signUp()         │    │ signInWithGoogle │                   │
+│  │ signIn()         │    │ signInWithAzure  │                   │
+│  └────────┬─────────┘    └────────┬─────────┘                   │
+│           │                       │                              │
+│           └───────────┬───────────┘                              │
+│                       ▼                                          │
+│            ┌─────────────────────┐                               │
+│            │  Supabase Auth      │                               │
+│            │  onAuthStateChange  │                               │
+│            └──────────┬──────────┘                               │
+│                       ▼                                          │
+│            ┌─────────────────────┐                               │
+│            │  Session + User     │                               │
+│            │  State Updated      │                               │
+│            └─────────────────────┘                               │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### SSO Configuration
+
+**Google OAuth:**
+```typescript
+await supabase.auth.signInWithOAuth({
+  provider: 'google',
+  options: {
+    redirectTo: `${window.location.origin}/dashboard`,
+    skipBrowserRedirect: false  // Forces full page redirect
+  }
+});
+```
+
+**Microsoft Azure:**
+```typescript
+await supabase.auth.signInWithOAuth({
+  provider: 'azure',
+  options: {
+    scopes: 'openid profile email',
+    redirectTo: `${window.location.origin}/dashboard`,
+    skipBrowserRedirect: false
+  }
+});
+```
+
+The callback flow:
+1. User clicks SSO button → Redirects to provider
+2. Provider authenticates → Redirects to Supabase callback
+3. Supabase exchanges tokens → Redirects to `/dashboard`
+
+---
+
+## Multi-Token RBAC System
+
+Pronghorn implements a sophisticated role-based access control system using project tokens.
+
+### Token Architecture
+
+```sql
+-- project_tokens table
+CREATE TABLE project_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  token UUID NOT NULL DEFAULT gen_random_uuid(),
+  role project_token_role NOT NULL DEFAULT 'viewer',
+  label TEXT,                    -- Human-readable name
+  created_at TIMESTAMPTZ DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id),
+  expires_at TIMESTAMPTZ,        -- Optional expiration
+  last_used_at TIMESTAMPTZ,      -- Usage tracking
+  UNIQUE(token)
+);
+
+-- Role hierarchy
+CREATE TYPE project_token_role AS ENUM ('owner', 'editor', 'viewer');
+```
+
+### Role Permissions
+
+| Role | Permissions |
+|------|-------------|
+| **Owner** | Full access: manage tokens, delete project, all CRUD operations |
+| **Editor** | Create, read, update operations (no token management or deletion) |
+| **Viewer** | Read-only access to all project data |
+
+### URL Pattern
+
+```
+/project/{projectId}/{page}/t/{token}
+
+Examples:
+/project/abc123/canvas/t/def456
+/project/abc123/requirements/t/def456
+/project/abc123/build/t/def456
+```
+
+### Core Authorization Functions
+
+**1. authorize_project_access** - Validates access and returns role:
+
+```sql
+CREATE FUNCTION authorize_project_access(
+  p_project_id UUID,
+  p_token UUID DEFAULT NULL
+) RETURNS project_token_role AS $$
+BEGIN
+  -- Check 1: Authenticated owner
+  IF auth.uid() IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM projects WHERE id = p_project_id AND created_by = auth.uid()) THEN
+      RETURN 'owner';
+    END IF;
+  END IF;
+  
+  -- Check 2: Valid token in project_tokens
+  IF p_token IS NOT NULL THEN
+    -- Return role from project_tokens if valid and not expired
+    ...
+  END IF;
+  
+  RAISE EXCEPTION 'Access denied';
+END;
+$$;
+```
+
+**2. require_role** - Enforces minimum permission level:
+
+```sql
+CREATE FUNCTION require_role(
+  p_project_id UUID,
+  p_token UUID,
+  p_min_role project_token_role
+) RETURNS project_token_role AS $$
+DECLARE
+  v_current_role project_token_role;
+BEGIN
+  v_current_role := authorize_project_access(p_project_id, p_token);
+  
+  -- Role hierarchy: owner(3) > editor(2) > viewer(1)
+  IF role_to_level(v_current_role) < role_to_level(p_min_role) THEN
+    RAISE EXCEPTION 'Insufficient permissions';
+  END IF;
+  
+  RETURN v_current_role;
+END;
+$$;
+```
+
+---
+
+## RPC Patterns
+
+All database operations use **SECURITY DEFINER** RPC functions with token validation.
+
+### Client-Side Pattern
+
+```typescript
+import { supabase } from "@/integrations/supabase/client";
+import { useShareToken } from "@/hooks/useShareToken";
+
+function MyComponent({ projectId }: { projectId: string }) {
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  
+  const loadData = async () => {
+    // Wait for token to be ready
+    if (!isTokenSet) return;
+    
+    const { data, error } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken || null  // null for authenticated owners
+    });
+  };
+}
+```
+
+### RPC Function Structure
+
+```sql
+-- Read operation (requires viewer role)
+CREATE FUNCTION get_requirements_with_token(
+  p_project_id UUID,
+  p_token UUID DEFAULT NULL
+) RETURNS SETOF requirements
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  -- Validate access - require at least viewer role
+  PERFORM require_role(p_project_id, p_token, 'viewer');
+  
+  RETURN QUERY 
+    SELECT * FROM requirements 
+    WHERE project_id = p_project_id
+    ORDER BY order_index;
+END;
+$$;
+
+-- Write operation (requires editor role)
+CREATE FUNCTION insert_requirement_with_token(
+  p_project_id UUID,
+  p_token UUID,
+  p_title TEXT,
+  p_type requirement_type,
+  p_parent_id UUID DEFAULT NULL
+) RETURNS requirements
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  result requirements;
+BEGIN
+  -- Validate access - require at least editor role
+  PERFORM require_role(p_project_id, p_token, 'editor');
+  
+  INSERT INTO requirements (project_id, title, type, parent_id)
+  VALUES (p_project_id, p_title, p_type, p_parent_id)
+  RETURNING * INTO result;
+  
+  RETURN result;
+END;
+$$;
+```
+
+### Token Caching
+
+Tokens are cached in memory for synchronous access:
+
+```typescript
+// src/lib/tokenCache.ts
+const tokenCache = new Map<string, string>();
+
+export function setProjectToken(projectId: string, token: string): void {
+  tokenCache.set(projectId, token);
+}
+
+export function getProjectToken(projectId: string): string | null {
+  return tokenCache.get(projectId) || null;
+}
+
+export function clearProjectToken(projectId: string): void {
+  tokenCache.delete(projectId);
+}
+```
+
+---
+
+## Edge Functions
+
+Pronghorn includes 25+ Deno edge functions for server-side operations.
+
+### Function Categories
+
+#### Project Management
+| Function | Purpose |
+|----------|---------|
+| `create-project` | Project creation with token generation |
+| `generate-specification` | Generate project specification documents |
+
+#### Requirements Processing
+| Function | Purpose |
+|----------|---------|
+| `decompose-requirements` | AI decomposition into Epics/Features/Stories |
+| `expand-requirement` | Expand single requirement with AI |
+| `expand-standards` | Generate standards from descriptions |
+
+#### AI Agents
+| Function | Purpose |
+|----------|---------|
+| `orchestrate-agents` | Multi-agent canvas design iteration |
+| `ai-architect` | Architecture generation |
+| `ai-architect-critic` | Architecture review and critique |
+| `coding-agent-orchestrator` | Autonomous coding agent |
+
+#### Chat & Streaming
+| Function | Purpose |
+|----------|---------|
+| `chat-stream-gemini` | Gemini streaming chat |
+| `chat-stream-anthropic` | Claude streaming chat |
+| `chat-stream-xai` | Grok streaming chat |
+| `summarize-chat` | Generate chat summaries |
+| `summarize-artifact` | Generate artifact summaries |
+
+#### Repository & Git
+| Function | Purpose |
+|----------|---------|
+| `sync-repo-push` | Push commits to GitHub |
+| `sync-repo-pull` | Pull from GitHub |
+| `create-empty-repo` | Create empty repository |
+| `create-repo-from-template` | Clone from template |
+| `clone-public-repo` | Clone public repository |
+| `link-existing-repo` | Link existing GitHub repo |
+
+#### Deployment
+| Function | Purpose |
+|----------|---------|
+| `render-service` | Render.com service management |
+| `generate-local-package` | Local development package |
+
+#### Media
+| Function | Purpose |
+|----------|---------|
+| `generate-image` | AI image generation |
+| `upload-artifact-image` | Image upload handling |
+
+### Edge Function Pattern
+
+```typescript
+// supabase/functions/my-function/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { projectId, shareToken, ...params } = await req.json();
+    
+    // Create Supabase client with auth header
+    const authHeader = req.headers.get('Authorization');
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
+    );
+    
+    // Validate access via RPC
+    const { data: role, error: authError } = await supabase.rpc(
+      'authorize_project_access',
+      { p_project_id: projectId, p_token: shareToken || null }
+    );
+    
+    if (authError || !role) {
+      return new Response(JSON.stringify({ error: 'Access denied' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Perform operation...
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+    
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+});
+```
+
+---
+
+## Real-Time Subscriptions
+
+Pronghorn uses Supabase Realtime for live collaboration.
+
+### Subscription Pattern
+
+```typescript
+import { useEffect, useRef } from 'react';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+
+export function useRealtimeCanvas(projectId: string, shareToken: string | null) {
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const [nodes, setNodes] = useState([]);
+
+  useEffect(() => {
+    // Subscribe to changes
+    channelRef.current = supabase
+      .channel(`canvas:${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'canvas_nodes',
+          filter: `project_id=eq.${projectId}`
+        },
+        (payload) => {
+          // Handle INSERT, UPDATE, DELETE
+          if (payload.eventType === 'INSERT') {
+            setNodes(prev => [...prev, payload.new]);
+          } else if (payload.eventType === 'UPDATE') {
+            setNodes(prev => prev.map(n => 
+              n.id === payload.new.id ? payload.new : n
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            setNodes(prev => prev.filter(n => n.id !== payload.old.id));
+          }
+        }
+      )
+      .on('broadcast', { event: 'canvas_refresh' }, () => {
+        // Reload all data on broadcast
+        loadCanvasData();
+      })
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
+
+    // Cleanup
+    return () => {
+      channelRef.current?.unsubscribe();
+      channelRef.current = null;
+    };
+  }, [projectId]);
+
+  // Broadcast changes to other clients
+  const broadcastRefresh = () => {
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'canvas_refresh',
+      payload: {}
+    });
+  };
+
+  return { nodes, broadcastRefresh };
+}
+```
+
+### Key Patterns
+
+1. **Use `useRef` for channel storage** - Prevents stale closures
+2. **Store channel during subscription** - Required for broadcasting
+3. **Use `channelRef.current.send()`** - Not `supabase.channel().send()`
+4. **Clean up on unmount** - Unsubscribe and null the ref
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm or bun
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/pronghorn-red/pronghorn.git
+cd pronghorn
+
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+The Supabase configuration is embedded in the client. No `.env` file is required for the frontend.
 
-**Use GitHub Codespaces**
+For edge functions, the following secrets are configured in Supabase:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Secret | Purpose |
+|--------|---------|
+| `GEMINI_API_KEY` | Google Gemini API access |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API access |
+| `GROK_API_KEY` | xAI Grok API access |
+| `GITHUB_PAT` | Default repository operations |
+| `RENDER_API_KEY` | Render.com deployments |
+| `RENDER_OWNER_ID` | Render.com account ID |
 
-## What technologies are used for this project?
+---
 
-This project is built with:
+## Deployment
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Frontend
 
-## How can I deploy this project?
+The frontend is hosted on Lovable at [https://pronghorn.red](https://pronghorn.red).
 
-Simply open [Lovable](https://lovable.dev/projects/ee63522c-070f-4241-b05a-90b794352667) and click on Share -> Publish.
+To deploy updates:
+1. Push changes to the repository
+2. Lovable automatically builds and deploys
 
-## Can I connect a custom domain to my Lovable project?
+### Backend (Edge Functions)
 
-Yes, you can!
+Edge functions deploy automatically when code is pushed. No manual deployment required.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Render.com (Optional)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+For application deployments, Pronghorn supports Render.com:
+
+| Environment | URL Pattern |
+|-------------|-------------|
+| Development | `dev-{appname}.onrender.com` |
+| Staging | `uat-{appname}.onrender.com` |
+| Production | `prod-{appname}.onrender.com` |
+
+### Local Development Package
+
+Generate a local development package for testing:
+
+```bash
+# Download package from Deploy page
+# Extract and run:
+npm install
+npm start
+```
+
+The package includes:
+- `pronghorn-runner.js` - Watches files and auto-rebuilds
+- Telemetry integration with pronghorn.red
+- Environment configuration
+
+---
+
+## Legal
+
+### Alpha Notice
+
+This application is currently in Alpha testing by the **Government of Alberta**. Features, functionality, and availability are subject to change or may be removed at any time during the testing period.
+
+### Liability Waiver
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE GOVERNMENT OF ALBERTA, ITS MINISTERS, OFFICERS, EMPLOYEES, OR AGENTS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### Third-Party Services
+
+Pronghorn integrates with the following third-party services:
+
+| Service | Terms |
+|---------|-------|
+| [Lovable](https://lovable.dev) | [Terms of Service](https://lovable.dev/terms) |
+| [Supabase](https://supabase.com) | [Terms of Service](https://supabase.com/terms) |
+| [Google Cloud](https://cloud.google.com) | [Terms of Service](https://cloud.google.com/terms) |
+| [Microsoft Azure](https://azure.microsoft.com) | [Terms of Service](https://azure.microsoft.com/en-us/support/legal/) |
+| [GitHub](https://github.com) | [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
+| [Render.com](https://render.com) | [Terms of Service](https://render.com/terms) |
+
+### Full Legal Documents
+
+- [Terms of Use](https://pronghorn.red/terms)
+- [Privacy Policy](https://pronghorn.red/privacy)
+
+---
+
+## Contact
+
+**Government of Alberta**  
+Ministry of Technology and Innovation
+
+📧 Email: [ti.deputyminister@gov.ab.ca](mailto:ti.deputyminister@gov.ab.ca)
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  <strong>Built with ❤️ by the Government of Alberta</strong>
+</p>
