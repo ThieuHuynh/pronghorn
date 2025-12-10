@@ -17,7 +17,13 @@ import { Plus } from "lucide-react";
 interface CreateRepoDialogProps {
   onCreateEmpty: (name: string, isPrivate: boolean) => void;
   onCreateFromTemplate: (name: string, templateOrg: string, templateRepo: string, isPrivate: boolean) => void;
-  onClonePublic: (name: string, sourceOrg: string, sourceRepo: string, sourceBranch: string, isPrivate: boolean) => void;
+  onClonePublic: (
+    name: string,
+    sourceOrg: string,
+    sourceRepo: string,
+    sourceBranch: string,
+    isPrivate: boolean,
+  ) => void;
   onLinkExisting: (org: string, repo: string, branch: string, pat?: string) => void;
 }
 
@@ -31,7 +37,7 @@ export function CreateRepoDialog({
   const [emptyName, setEmptyName] = useState("");
   const [emptyPrivate, setEmptyPrivate] = useState(true);
   const [templateName, setTemplateName] = useState("");
-  const [templateOrg, setTemplateOrg] = useState("pronghorn-red");
+  const [templateOrg, setTemplateOrg] = useState("pronghorn-cloud");
   const [templateRepo, setTemplateRepo] = useState("");
   const [templatePrivate, setTemplatePrivate] = useState(true);
   const [cloneName, setCloneName] = useState("");
@@ -58,7 +64,7 @@ export function CreateRepoDialog({
       onCreateFromTemplate(templateName, templateOrg, templateRepo, templatePrivate);
       setOpen(false);
       setTemplateName("");
-      setTemplateOrg("pronghorn-red");
+      setTemplateOrg("pronghorn-cloud");
       setTemplateRepo("");
       setTemplatePrivate(true);
     }
@@ -98,9 +104,7 @@ export function CreateRepoDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Repository</DialogTitle>
-          <DialogDescription>
-            Create a new repository or link an existing one
-          </DialogDescription>
+          <DialogDescription>Create a new repository or link an existing one</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="empty">
@@ -120,22 +124,14 @@ export function CreateRepoDialog({
                 value={emptyName}
                 onChange={(e) => setEmptyName(e.target.value)}
               />
-              <p className="text-sm text-muted-foreground">
-                Will be created in pronghorn-red organization
-              </p>
+              <p className="text-sm text-muted-foreground">Will be created in pronghorn-cloud organization</p>
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <div className="space-y-0.5">
                 <Label>Private repository</Label>
-                <p className="text-sm text-muted-foreground">
-                  When enabled, the GitHub repository will be private.
-                </p>
+                <p className="text-sm text-muted-foreground">When enabled, the GitHub repository will be private.</p>
               </div>
-              <Switch
-                checked={emptyPrivate}
-                onCheckedChange={setEmptyPrivate}
-                aria-label="Toggle private repository"
-              />
+              <Switch checked={emptyPrivate} onCheckedChange={setEmptyPrivate} aria-label="Toggle private repository" />
             </div>
             <Button onClick={handleCreateEmpty} className="w-full">
               Create Empty Repository
@@ -147,7 +143,7 @@ export function CreateRepoDialog({
               <Label htmlFor="template-org">Template Organization</Label>
               <Input
                 id="template-org"
-                placeholder="pronghorn-red"
+                placeholder="pronghorn-cloud"
                 value={templateOrg}
                 onChange={(e) => setTemplateOrg(e.target.value)}
               />
@@ -173,9 +169,7 @@ export function CreateRepoDialog({
             <div className="flex items-center justify-between rounded-md border p-3">
               <div className="space-y-0.5">
                 <Label>Private repository</Label>
-                <p className="text-sm text-muted-foreground">
-                  When enabled, the GitHub repository will be private.
-                </p>
+                <p className="text-sm text-muted-foreground">When enabled, the GitHub repository will be private.</p>
               </div>
               <Switch
                 checked={templatePrivate}
@@ -193,7 +187,7 @@ export function CreateRepoDialog({
               <Label htmlFor="clone-org">Source Organization/Owner</Label>
               <Input
                 id="clone-org"
-                placeholder="pronghorn-red"
+                placeholder="pronghorn-cloud"
                 value={cloneOrg}
                 onChange={(e) => setCloneOrg(e.target.value)}
               />
@@ -228,15 +222,9 @@ export function CreateRepoDialog({
             <div className="flex items-center justify-between rounded-md border p-3">
               <div className="space-y-0.5">
                 <Label>Private repository</Label>
-                <p className="text-sm text-muted-foreground">
-                  When enabled, the GitHub repository will be private.
-                </p>
+                <p className="text-sm text-muted-foreground">When enabled, the GitHub repository will be private.</p>
               </div>
-              <Switch
-                checked={clonePrivate}
-                onCheckedChange={setClonePrivate}
-                aria-label="Toggle private repository"
-              />
+              <Switch checked={clonePrivate} onCheckedChange={setClonePrivate} aria-label="Toggle private repository" />
             </div>
             <Button onClick={handleClonePublic} className="w-full">
               Clone Public Repository
