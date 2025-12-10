@@ -85,7 +85,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      // If server signout failed (e.g., session_not_found), force local signout
+      if (error) {
+        console.warn("Server signout failed, clearing local session:", error.message);
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+    } catch (e) {
+      // Catch any unexpected errors and still clear local state
+      console.warn("Signout error, clearing local session:", e);
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+    
+    // Explicitly clear state to ensure UI updates
+    setUser(null);
+    setSession(null);
   };
 
   return (
