@@ -32,9 +32,9 @@ const License = () => {
         <h1 className="text-4xl font-bold mb-2">MIT License</h1>
         <p className="text-muted-foreground mb-8">Effective Date: December 10, 2025</p>
 
-        <div className="prose prose-invert max-w-none space-y-6">
-          <div className="bg-muted/30 border border-border rounded-lg p-6 font-mono text-sm leading-relaxed">
-            <p className="mb-4">MIT License</p>
+        <div className="prose max-w-none space-y-6">
+          <div className="bg-muted/50 border border-border rounded-lg p-6 font-mono text-sm leading-relaxed text-foreground">
+            <p className="mb-4 font-semibold">MIT License</p>
             <p className="mb-4">Copyright (c) 2025 Government of Alberta</p>
             <p className="mb-4">
               Permission is hereby granted, free of charge, to any person obtaining a copy

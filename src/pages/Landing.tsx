@@ -464,7 +464,7 @@ export default function Landing() {
           </div>
 
           {/* Steps Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 max-w-4xl mx-auto">
             {workflowSteps.map((step, index) => {
               const phaseColors = {
                 setup: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
