@@ -28,6 +28,8 @@ import {
   Heart,
   Zap,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -39,7 +41,7 @@ import {
 export default function Landing() {
   const navigate = useNavigate();
 
-  const [selectedStep, setSelectedStep] = useState<typeof workflowSteps[0] | null>(null);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
 
   const workflowSteps = [
     { 
@@ -479,7 +481,7 @@ export default function Landing() {
               return (
                 <div
                   key={index}
-                  onClick={() => setSelectedStep(step)}
+                  onClick={() => setSelectedStepIndex(index)}
                   className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]} ${step.featured ? "ring-2 ring-offset-2 ring-[hsl(350,80%,60%)]" : ""}`}
                 >
                   {/* Step Number */}
@@ -505,56 +507,99 @@ export default function Landing() {
           </div>
 
           {/* Step Details Dialog */}
-          <Dialog open={!!selectedStep} onOpenChange={(open) => !open && setSelectedStep(null)}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  {selectedStep && (
-                    <>
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        selectedStep.phase === "setup" ? "bg-blue-100 text-blue-600" :
-                        selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" :
-                        "bg-emerald-100 text-emerald-600"
-                      }`}>
-                        <selectedStep.icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className="text-lg">{selectedStep.label}</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            selectedStep.phase === "setup" ? "bg-blue-100 text-blue-700" :
-                            selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" :
-                            "bg-emerald-100 text-emerald-700"
-                          }`}>
-                            {selectedStep.phase.charAt(0).toUpperCase() + selectedStep.phase.slice(1)} Phase
-                          </span>
-                          {selectedStep.hasAgent && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 flex items-center gap-1">
-                              <Bot className="w-3 h-3" />
-                              AI-Powered
-                            </span>
-                          )}
+          <Dialog 
+            open={selectedStepIndex !== null} 
+            onOpenChange={(open) => !open && setSelectedStepIndex(null)}
+          >
+            <DialogContent 
+              className="sm:max-w-md"
+              onKeyDown={(e) => {
+                if (selectedStepIndex === null) return;
+                if (e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1);
+                } else if (e.key === "ArrowRight") {
+                  e.preventDefault();
+                  setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0);
+                }
+              }}
+            >
+              {selectedStepIndex !== null && (() => {
+                const selectedStep = workflowSteps[selectedStepIndex];
+                return (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          selectedStep.phase === "setup" ? "bg-blue-100 text-blue-600" :
+                          selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" :
+                          "bg-emerald-100 text-emerald-600"
+                        }`}>
+                          <selectedStep.icon className="w-5 h-5" />
                         </div>
+                        <div>
+                          <span className="text-lg">{selectedStep.label}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              selectedStep.phase === "setup" ? "bg-blue-100 text-blue-700" :
+                              selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" :
+                              "bg-emerald-100 text-emerald-700"
+                            }`}>
+                              {selectedStep.phase.charAt(0).toUpperCase() + selectedStep.phase.slice(1)} Phase
+                            </span>
+                            {selectedStep.hasAgent && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 flex items-center gap-1">
+                                <Bot className="w-3 h-3" />
+                                AI-Powered
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </DialogTitle>
+                    </DialogHeader>
+                    {selectedStep.aiDetails && (
+                      <div className="mt-4">
+                        <h4 className="font-medium text-sm text-muted-foreground mb-3">
+                          {selectedStep.aiDetails.title}
+                        </h4>
+                        <ul className="space-y-2">
+                          {selectedStep.aiDetails.capabilities.map((capability, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm">
+                              <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span>{capability}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    </>
-                  )}
-                </DialogTitle>
-              </DialogHeader>
-              {selectedStep?.aiDetails && (
-                <div className="mt-4">
-                  <h4 className="font-medium text-sm text-muted-foreground mb-3">
-                    {selectedStep.aiDetails.title}
-                  </h4>
-                  <ul className="space-y-2">
-                    {selectedStep.aiDetails.capabilities.map((capability, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>{capability}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                    )}
+                    
+                    {/* Navigation Arrows */}
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1)}
+                        className="flex items-center gap-1"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedStepIndex + 1} / {workflowSteps.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0)}
+                        className="flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
             </DialogContent>
           </Dialog>
 
