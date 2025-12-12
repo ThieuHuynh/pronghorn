@@ -17,9 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import EnvVarEditor from "./EnvVarEditor";
 
 interface CreateDeploymentDialogProps {
   open: boolean;
@@ -60,6 +66,8 @@ const CreateDeploymentDialog = ({
 }: CreateDeploymentDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
+  const [envVarsOpen, setEnvVarsOpen] = useState(false);
+  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   
   const [form, setForm] = useState({
     name: "",
@@ -117,6 +125,14 @@ const CreateDeploymentDialog = ({
 
     setIsSubmitting(true);
     try {
+      // Convert env vars array to object
+      const envVarsObj: Record<string, string> = {};
+      envVars.forEach(({ key, value }) => {
+        if (key.trim()) {
+          envVarsObj[key.trim()] = value;
+        }
+      });
+
       const { error } = await supabase.rpc("insert_deployment_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
@@ -129,6 +145,7 @@ const CreateDeploymentDialog = ({
         p_run_command: form.runCommand,
         p_build_command: form.buildCommand,
         p_branch: form.branch,
+        p_env_vars: envVarsObj,
       });
 
       if (error) throw error;
@@ -149,6 +166,8 @@ const CreateDeploymentDialog = ({
         buildCommand: "npm run build",
         branch: "main",
       });
+      setEnvVars([]);
+      setEnvVarsOpen(false);
     } catch (error: any) {
       console.error("Error creating deployment:", error);
       toast.error(error.message || "Failed to create deployment");
@@ -159,7 +178,7 @@ const CreateDeploymentDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Deployment</DialogTitle>
           <DialogDescription>
@@ -290,6 +309,33 @@ const CreateDeploymentDialog = ({
               className="font-mono text-sm"
             />
           </div>
+
+          {/* Environment Variables Collapsible */}
+          <Collapsible open={envVarsOpen} onOpenChange={setEnvVarsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full justify-between p-2 h-auto">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  Environment Variables
+                  {envVars.length > 0 && (
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                      {envVars.length}
+                    </span>
+                  )}
+                </span>
+                {envVarsOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <EnvVarEditor
+                value={envVars}
+                onChange={setEnvVars}
+              />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         <DialogFooter>

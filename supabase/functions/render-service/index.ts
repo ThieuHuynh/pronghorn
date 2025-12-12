@@ -9,7 +9,7 @@ const corsHeaders = {
 const RENDER_API_URL = 'https://api.render.com/v1';
 
 interface RenderServiceRequest {
-  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars';
+  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents';
   deploymentId: string;
   shareToken?: string;
   // For create action
@@ -23,6 +23,7 @@ interface RenderServiceRequest {
   commitId?: string;
   // For updateEnvVars action
   newEnvVars?: Array<{key: string, value: string}>;
+  clearExisting?: boolean;
 }
 
 serve(async (req) => {
@@ -104,18 +105,26 @@ serve(async (req) => {
       case 'updateEnvVars':
         result = await updateEnvVarsRenderService(deployment, body, renderHeaders);
         break;
+      case 'getEnvVars':
+        result = await getEnvVarsRenderService(deployment, renderHeaders);
+        break;
+      case 'getEvents':
+        result = await getEventsRenderService(deployment, renderHeaders);
+        break;
       default:
         throw new Error(`Unknown action: ${action}`);
     }
 
-    // Log the action
-    await supabase.rpc('insert_deployment_log_with_token', {
-      p_deployment_id: deploymentId,
-      p_token: shareToken || null,
-      p_log_type: action,
-      p_message: `${action} action completed`,
-      p_metadata: { result: result?.status || 'success' },
-    });
+    // Log the action (skip for read-only actions)
+    if (!['status', 'logs', 'getEnvVars', 'getEvents'].includes(action)) {
+      await supabase.rpc('insert_deployment_log_with_token', {
+        p_deployment_id: deploymentId,
+        p_token: shareToken || null,
+        p_log_type: action,
+        p_message: `${action} action completed`,
+        p_metadata: { result: result?.status || 'success' },
+      });
+    }
 
     return new Response(JSON.stringify({ success: true, data: result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -555,12 +564,49 @@ async function updateEnvVarsRenderService(
 
   console.log('[render-service] Updating env vars for service:', deployment.render_service_id);
 
-  const envVars = body.newEnvVars || [];
+  let envVarsToSend = body.newEnvVars || [];
+  
+  // If not clearing existing, we need to merge with current vars
+  if (!body.clearExisting && envVarsToSend.length > 0) {
+    // First, get current env vars
+    const currentResponse = await fetch(
+      `${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`,
+      { method: 'GET', headers }
+    );
 
+    if (currentResponse.ok) {
+      const currentVars = await currentResponse.json();
+      console.log('[render-service] Current env vars count:', currentVars.length);
+      
+      // Create a map of new vars for quick lookup
+      const newVarsMap = new Map(envVarsToSend.map(v => [v.key, v.value]));
+      
+      // Start with current vars, then overwrite with new ones
+      const mergedVarsMap = new Map<string, string>();
+      
+      // Add all current vars
+      for (const v of currentVars) {
+        if (v.envVar?.key && v.envVar?.value !== undefined) {
+          mergedVarsMap.set(v.envVar.key, v.envVar.value);
+        }
+      }
+      
+      // Overwrite/add new vars
+      for (const [key, value] of newVarsMap) {
+        mergedVarsMap.set(key, value);
+      }
+      
+      // Convert back to array
+      envVarsToSend = Array.from(mergedVarsMap.entries()).map(([key, value]) => ({ key, value }));
+      console.log('[render-service] Merged env vars count:', envVarsToSend.length);
+    }
+  }
+
+  // PUT replaces all env vars on Render
   const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`, {
     method: 'PUT',
     headers,
-    body: JSON.stringify(envVars),
+    body: JSON.stringify(envVarsToSend),
   });
 
   if (!response.ok) {
@@ -573,8 +619,102 @@ async function updateEnvVarsRenderService(
   return { 
     status: 'env_vars_updated', 
     note: 'Deploy the service to apply changes',
-    envVars: result,
+    envVarsCount: result.length,
   };
+}
+
+async function getEnvVarsRenderService(
+  deployment: any,
+  headers: Record<string, string>
+) {
+  if (!deployment.render_service_id) {
+    throw new Error('Service not yet created on Render');
+  }
+
+  console.log('[render-service] Getting env vars for service:', deployment.render_service_id);
+
+  const response = await fetch(
+    `${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`,
+    { method: 'GET', headers }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[render-service] Get env vars error:', errorText);
+    throw new Error(`Failed to get env vars: ${errorText}`);
+  }
+
+  const result = await response.json();
+  
+  // Render API returns array of { envVar: { key, value } } objects
+  const envVars = result.map((item: any) => ({
+    key: item.envVar?.key || '',
+    value: item.envVar?.value || '',
+  }));
+
+  return envVars;
+}
+
+async function getEventsRenderService(
+  deployment: any,
+  headers: Record<string, string>
+) {
+  if (!deployment.render_service_id) {
+    return { events: [], deploys: [], latestDeploy: null };
+  }
+
+  console.log('[render-service] Getting events for service:', deployment.render_service_id);
+
+  // Get service events
+  let events: any[] = [];
+  try {
+    const eventsResponse = await fetch(
+      `${RENDER_API_URL}/services/${deployment.render_service_id}/events?limit=50`,
+      { method: 'GET', headers }
+    );
+
+    if (eventsResponse.ok) {
+      const eventsData = await eventsResponse.json();
+      events = eventsData.map((item: any) => ({
+        id: item.event?.id,
+        type: item.event?.type,
+        timestamp: item.event?.timestamp,
+        details: item.event?.details,
+        statusChange: item.event?.statusChange,
+      }));
+    }
+  } catch (e) {
+    console.error('[render-service] Error getting events:', e);
+  }
+
+  // Get recent deploys
+  let deploys: any[] = [];
+  let latestDeploy: any = null;
+  try {
+    const deploysResponse = await fetch(
+      `${RENDER_API_URL}/services/${deployment.render_service_id}/deploys?limit=10`,
+      { method: 'GET', headers }
+    );
+
+    if (deploysResponse.ok) {
+      const deploysData = await deploysResponse.json();
+      deploys = deploysData.map((item: any) => ({
+        id: item.deploy?.id,
+        status: item.deploy?.status,
+        createdAt: item.deploy?.createdAt,
+        finishedAt: item.deploy?.finishedAt,
+        commit: item.deploy?.commit,
+      }));
+      
+      if (deploys.length > 0) {
+        latestDeploy = deploys[0];
+      }
+    }
+  } catch (e) {
+    console.error('[render-service] Error getting deploys:', e);
+  }
+
+  return { events, deploys, latestDeploy };
 }
 
 function getRuntime(projectType?: string): string {

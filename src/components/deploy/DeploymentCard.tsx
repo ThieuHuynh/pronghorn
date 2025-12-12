@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,10 +21,10 @@ interface DeploymentCardProps {
   onUpdate: () => void;
 }
 
-const statusConfig: Record<string, { icon: React.ReactNode; variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+const statusConfig: Record<string, { icon: React.ReactNode; variant: "default" | "secondary" | "destructive" | "outline"; label: string; pulse?: boolean }> = {
   pending: { icon: <Clock className="h-3 w-3" />, variant: "secondary", label: "Pending" },
-  building: { icon: <RefreshCw className="h-3 w-3 animate-spin" />, variant: "secondary", label: "Building" },
-  deploying: { icon: <Rocket className="h-3 w-3 animate-pulse" />, variant: "default", label: "Deploying" },
+  building: { icon: <RefreshCw className="h-3 w-3 animate-spin" />, variant: "secondary", label: "Building", pulse: true },
+  deploying: { icon: <Rocket className="h-3 w-3" />, variant: "default", label: "Deploying", pulse: true },
   running: { icon: <CheckCircle className="h-3 w-3" />, variant: "default", label: "Running" },
   stopped: { icon: <Square className="h-3 w-3" />, variant: "outline", label: "Stopped" },
   suspended: { icon: <Square className="h-3 w-3" />, variant: "outline", label: "Suspended" },
@@ -44,8 +44,54 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
+  const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
   const status = statusConfig[deployment.status] || statusConfig.pending;
+
+  // Check if status is transitional (should auto-refresh)
+  const isTransitionalStatus = deployment.status === "building" || deployment.status === "deploying";
+
+  // Auto-refresh for transitional statuses
+  const syncStatus = useCallback(async () => {
+    if (!deployment.render_service_id) return;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('render-service', {
+        body: {
+          action: 'status',
+          deploymentId: deployment.id,
+          shareToken: shareToken || null,
+        },
+      });
+
+      if (!error && data?.success) {
+        // If status changed, trigger parent update
+        if (data.data?.status !== deployment.status) {
+          onUpdate();
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing status:', error);
+    }
+  }, [deployment.id, deployment.render_service_id, deployment.status, shareToken, onUpdate]);
+
+  // Setup auto-refresh when status is transitional
+  useEffect(() => {
+    if (isTransitionalStatus && deployment.render_service_id) {
+      autoRefreshRef.current = setInterval(syncStatus, 10000);
+    } else {
+      if (autoRefreshRef.current) {
+        clearInterval(autoRefreshRef.current);
+        autoRefreshRef.current = null;
+      }
+    }
+
+    return () => {
+      if (autoRefreshRef.current) {
+        clearInterval(autoRefreshRef.current);
+      }
+    };
+  }, [isTransitionalStatus, deployment.render_service_id, syncStatus]);
 
   const invokeRenderService = async (action: string) => {
     setIsActionLoading(action);
@@ -175,7 +221,10 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
                 </div>
               </div>
             </div>
-            <Badge variant={status.variant} className="flex items-center gap-1 self-start sm:self-center">
+            <Badge 
+              variant={status.variant} 
+              className={`flex items-center gap-1 self-start sm:self-center ${status.pulse ? "animate-pulse" : ""}`}
+            >
               {status.icon}
               {status.label}
             </Badge>
@@ -385,6 +434,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
         onOpenChange={setIsLogsOpen}
         deploymentId={deployment.id}
         shareToken={shareToken}
+        renderServiceId={deployment.render_service_id}
       />
 
       {/* Preview Dialog */}
