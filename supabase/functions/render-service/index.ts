@@ -9,20 +9,16 @@ const corsHeaders = {
 const RENDER_API_URL = 'https://api.render.com/v1';
 
 interface RenderServiceRequest {
-  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents';
+  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents' | 'syncEnvVars';
   deploymentId: string;
   shareToken?: string;
-  // For create action
-  name?: string;
-  projectType?: string;
-  branch?: string;
-  buildCommand?: string;
-  startCommand?: string;
-  envVars?: Record<string, string>;
+  // For create action - client passes full key:value pairs
+  envVars?: Array<{key: string, value: string}>;
   // For deploy action
   commitId?: string;
-  // For updateEnvVars action
+  // For updateEnvVars/syncEnvVars action
   newEnvVars?: Array<{key: string, value: string}>;
+  keysToDelete?: string[];
   clearExisting?: boolean;
 }
 
@@ -111,6 +107,9 @@ serve(async (req) => {
       case 'getEvents':
         result = await getEventsRenderService(deployment, renderHeaders);
         break;
+      case 'syncEnvVars':
+        result = await syncEnvVarsRenderService(deployment, body, renderHeaders);
+        break;
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -177,11 +176,9 @@ async function createRenderService(
   // Determine service type based on project type
   const isStaticSite = ['react', 'vue', 'tanstack'].includes(deployment.project_type?.toLowerCase() || '');
   
-  // Build environment variables array
-  const envVars = Object.entries(deployment.env_vars || {}).map(([key, value]) => ({
-    key,
-    value,
-  }));
+  // Build environment variables array from client-provided values (NOT from DB)
+  // The DB only stores keys, client passes full key:value pairs
+  const envVars = body.envVars || [];
 
   // Add secrets to env vars
   const secrets = deployment.secrets || {};
@@ -715,6 +712,80 @@ async function getEventsRenderService(
   }
 
   return { events, deploys, latestDeploy };
+}
+
+// Sync env vars: add/update keys with values, delete specified keys
+async function syncEnvVarsRenderService(
+  deployment: any,
+  body: RenderServiceRequest,
+  headers: Record<string, string>
+) {
+  if (!deployment.render_service_id) {
+    throw new Error('Service not yet created on Render');
+  }
+
+  console.log('[render-service] Syncing env vars for service:', deployment.render_service_id);
+
+  // Get current env vars from Render
+  const currentResponse = await fetch(
+    `${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`,
+    { method: 'GET', headers }
+  );
+
+  if (!currentResponse.ok) {
+    const errorText = await currentResponse.text();
+    throw new Error(`Failed to get current env vars: ${errorText}`);
+  }
+
+  const currentVars = await currentResponse.json();
+  const currentVarsMap = new Map<string, string>();
+  
+  for (const v of currentVars) {
+    if (v.envVar?.key) {
+      currentVarsMap.set(v.envVar.key, v.envVar.value || '');
+    }
+  }
+
+  console.log('[render-service] Current env vars count:', currentVarsMap.size);
+
+  // Remove keys marked for deletion
+  const keysToDelete = new Set(body.keysToDelete || []);
+  for (const key of keysToDelete) {
+    currentVarsMap.delete(key);
+  }
+
+  // Add/update keys with values (skip blank values to preserve existing)
+  const newEnvVars = body.newEnvVars || [];
+  for (const { key, value } of newEnvVars) {
+    if (key && value) {
+      currentVarsMap.set(key, value);
+    }
+  }
+
+  // Convert to array for Render API
+  const envVarsToSend = Array.from(currentVarsMap.entries()).map(([key, value]) => ({ key, value }));
+
+  console.log('[render-service] Final env vars count:', envVarsToSend.length, 'Deleted:', keysToDelete.size);
+
+  // PUT replaces all env vars on Render
+  const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(envVarsToSend),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to sync env vars: ${errorText}`);
+  }
+
+  const result = await response.json();
+  return { 
+    status: 'env_vars_synced', 
+    note: 'Deploy the service to apply changes',
+    envVarsCount: result.length,
+    deletedCount: keysToDelete.size,
+  };
 }
 
 function getRuntime(projectType?: string): string {

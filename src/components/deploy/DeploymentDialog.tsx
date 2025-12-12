@@ -74,6 +74,7 @@ const DeploymentDialog = ({
   const [primeRepoName, setPrimeRepoName] = useState("");
   const [activeTab, setActiveTab] = useState("config");
   const [clearExisting, setClearExisting] = useState(false);
+  const [originalKeys, setOriginalKeys] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     name: "",
@@ -107,15 +108,18 @@ const DeploymentDialog = ({
         branch: deployment.branch || "main",
       });
       // Load env var keys from database (values shown as masked)
-      const storedEnvVars = deployment.env_vars as Record<string, string> | null;
+      const storedEnvVars = deployment.env_vars as Record<string, boolean> | null;
       if (storedEnvVars) {
+        const keys = Object.keys(storedEnvVars);
+        setOriginalKeys(new Set(keys));
         setEnvVars(
-          Object.keys(storedEnvVars).map((key) => ({
+          keys.map((key) => ({
             key,
             value: "", // Values not stored - user must re-enter or pull from Render
           }))
         );
       } else {
+        setOriginalKeys(new Set());
         setEnvVars([]);
       }
       setClearExisting(false);
@@ -134,6 +138,7 @@ const DeploymentDialog = ({
         branch: "main",
       });
       setEnvVars([]);
+      setOriginalKeys(new Set());
       setActiveTab("config");
     }
   }, [open, mode, deployment, defaultPlatform, primeRepoName]);
@@ -228,9 +233,18 @@ const DeploymentDialog = ({
         envVarsKeysOnly[key.trim()] = true;
       });
 
+      // Get env vars with values (for Render)
+      const envVarsWithValues = envVarsArray
+        .filter((v) => v.value)
+        .map((v) => ({ key: v.key.trim(), value: v.value }));
+
+      // Detect deleted keys (keys in original but not in current)
+      const currentKeys = new Set(envVarsArray.map((v) => v.key.trim()));
+      const deletedKeys = [...originalKeys].filter((k) => !currentKeys.has(k));
+
       if (mode === "create") {
-        // Create new deployment - store only keys
-        const { error } = await supabase.rpc("insert_deployment_with_token", {
+        // Create new deployment - store only keys in DB
+        const { data: newDeployment, error } = await supabase.rpc("insert_deployment_with_token", {
           p_project_id: projectId,
           p_token: shareToken || null,
           p_name: form.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
@@ -248,7 +262,7 @@ const DeploymentDialog = ({
         if (error) throw error;
         toast.success("Deployment created");
       } else if (mode === "edit" && deployment) {
-        // Update deployment - store only keys
+        // Update deployment - store only keys in DB
         const { error } = await supabase.rpc("update_deployment_with_token", {
           p_deployment_id: deployment.id,
           p_token: shareToken || null,
@@ -265,33 +279,28 @@ const DeploymentDialog = ({
 
         if (error) throw error;
 
-        // If Render service exists and env vars have values, push to Render
-        if (deployment.render_service_id && envVarsArray.some((v) => v.value)) {
-          const envVarsWithValues = envVarsArray
-            .filter((v) => v.value)
-            .map((v) => ({ key: v.key.trim(), value: v.value }));
-
-          if (envVarsWithValues.length > 0) {
-            const { data: renderData, error: renderError } = await supabase.functions.invoke(
-              "render-service",
-              {
-                body: {
-                  action: "updateEnvVars",
-                  deploymentId: deployment.id,
-                  shareToken: shareToken || null,
-                  newEnvVars: envVarsWithValues,
-                  clearExisting,
-                },
-              }
-            );
-
-            if (renderError || !renderData?.success) {
-              toast.warning("Saved locally, but failed to push env vars to Render");
-            } else {
-              toast.success("Deployment updated. Env vars pushed to Render.");
+        // If Render service exists, sync env vars (add/update/delete)
+        if (deployment.render_service_id && (envVarsWithValues.length > 0 || deletedKeys.length > 0)) {
+          const { data: renderData, error: renderError } = await supabase.functions.invoke(
+            "render-service",
+            {
+              body: {
+                action: "syncEnvVars",
+                deploymentId: deployment.id,
+                shareToken: shareToken || null,
+                newEnvVars: envVarsWithValues,
+                keysToDelete: deletedKeys,
+              },
             }
+          );
+
+          if (renderError || !renderData?.success) {
+            toast.warning("Saved locally, but failed to sync env vars to Render");
           } else {
-            toast.success("Deployment updated");
+            const msg = deletedKeys.length > 0 
+              ? `Updated. ${deletedKeys.length} key(s) deleted from Render.`
+              : "Deployment updated. Env vars synced to Render.";
+            toast.success(msg);
           }
         } else {
           toast.success("Deployment updated");

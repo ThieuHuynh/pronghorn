@@ -308,9 +308,8 @@ const EnvVarEditor = ({
       )}
 
       <p className="text-xs text-muted-foreground">
-        {keysOnlyMode 
-          ? "Only variable names are stored. Values are sent directly to Render when you save."
-          : "Values are sent directly to Render and not stored in Pronghorn."}
+        Values are sent directly to Render.com and not stored in Pronghorn.
+        {keysOnlyMode && " Leave value blank to keep existing. Enter new value to update. Remove row to delete."}
       </p>
     </div>
   );
