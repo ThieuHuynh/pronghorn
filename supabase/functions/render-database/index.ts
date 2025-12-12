@@ -23,12 +23,12 @@ Deno.serve(async (req) => {
 
   try {
     const RENDER_API_KEY = Deno.env.get("RENDER_API_KEY");
-    const RENDER_OWNER_ID = Deno.env.get("RENDER_OWNER_ID");
+    const RENDER_ID = Deno.env.get("RENDER_ID");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    if (!RENDER_API_KEY || !RENDER_OWNER_ID) {
-      throw new Error("RENDER_API_KEY and RENDER_OWNER_ID must be configured");
+    if (!RENDER_API_KEY || !RENDER_ID) {
+      throw new Error("RENDER_API_KEY and RENDER_ID must be configured");
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'create':
-        result = await createRenderDatabase(database, body, headers, RENDER_OWNER_ID, supabase, shareToken);
+        result = await createRenderDatabase(database, body, headers, RENDER_ID, supabase, shareToken);
         break;
       case 'status':
         result = await getStatusRenderDatabase(database, headers, supabase, shareToken);
