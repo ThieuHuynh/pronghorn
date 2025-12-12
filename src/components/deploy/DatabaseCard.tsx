@@ -19,11 +19,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database, MoreVertical, Play, Pause, RefreshCw, Trash2, Key, Loader2, ExternalLink, Settings } from "lucide-react";
+import { Database, MoreVertical, Play, Pause, RefreshCw, Trash2, Key, Loader2, ExternalLink, Settings, Terminal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ConnectionStringDialog } from "./ConnectionStringDialog";
 import { DatabaseDialog } from "./DatabaseDialog";
+import { DatabaseExplorerModal } from "./DatabaseExplorerModal";
 
 interface DatabaseCardProps {
   database: any;
@@ -37,6 +38,7 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showExplorerModal, setShowExplorerModal] = useState(false);
   const [connectionInfo, setConnectionInfo] = useState<any>(null);
 
   const invokeRenderDatabase = async (action: string, extraBody: any = {}) => {
@@ -161,7 +163,7 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
   const canGetConnection = database.has_connection_info && database.render_postgres_id && database.status === "available";
   const canDelete = true;
   const canSync = database.render_postgres_id && !["pending", "deleted"].includes(database.status);
-
+  const canExplore = database.render_postgres_id && database.status === "available";
   return (
     <>
       <Card className="bg-card border-border">
@@ -200,6 +202,12 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
                   <DropdownMenuItem onClick={handleGetConnectionInfo}>
                     <Key className="h-4 w-4 mr-2" />
                     Get Connection String
+                  </DropdownMenuItem>
+                )}
+                {canExplore && (
+                  <DropdownMenuItem onClick={() => setShowExplorerModal(true)}>
+                    <Terminal className="h-4 w-4 mr-2" />
+                    Explore Database
                   </DropdownMenuItem>
                 )}
                 {canSync && (
@@ -295,19 +303,25 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
 
           {canGetConnection && (
             <div className="mt-4 pt-4 border-t border-border">
-              <Button onClick={handleGetConnectionInfo} variant="outline" disabled={isLoading} className="w-full">
-                {loadingAction === "connectionInfo" ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Fetching...
-                  </>
-                ) : (
-                  <>
-                    <Key className="h-4 w-4 mr-2" />
-                    Get Connection String
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleGetConnectionInfo} variant="outline" disabled={isLoading} className="flex-1">
+                  {loadingAction === "connectionInfo" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Fetching...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="h-4 w-4 mr-2" />
+                      Connection String
+                    </>
+                  )}
+                </Button>
+                <Button onClick={() => setShowExplorerModal(true)} variant="default" disabled={isLoading} className="flex-1">
+                  <Terminal className="h-4 w-4 mr-2" />
+                  Explore
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -356,6 +370,13 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
         projectId={database.project_id}
         shareToken={shareToken}
         onSuccess={onRefresh}
+      />
+
+      <DatabaseExplorerModal
+        open={showExplorerModal}
+        onOpenChange={setShowExplorerModal}
+        database={database}
+        shareToken={shareToken}
       />
     </>
   );

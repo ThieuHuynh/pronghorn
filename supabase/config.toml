@@ -77,3 +77,9 @@ verify_jwt = false
 
 [functions.generate-local-package]
 verify_jwt = false
+
+[functions.render-database]
+verify_jwt = false
+
+[functions.manage-database]
+verify_jwt = false
