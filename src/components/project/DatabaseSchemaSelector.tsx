@@ -16,7 +16,9 @@ import {
   Loader2,
   FunctionSquare,
   Zap,
-  List
+  List,
+  FileText,
+  History
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -58,18 +60,36 @@ interface SchemaInfo {
   types: SchemaObject[];
 }
 
+interface SavedQueryInfo {
+  id: string;
+  name: string;
+  description?: string;
+  sql_content: string;
+}
+
+interface MigrationInfo {
+  id: string;
+  sequence_number: number;
+  name: string;
+  sql_content: string;
+  statement_type: string;
+  object_type: string;
+}
+
 interface DatabaseSchema {
   database: DatabaseInfo;
   schemas: SchemaInfo[];
+  savedQueries: SavedQueryInfo[];
+  migrations: MigrationInfo[];
   loading: boolean;
   error: string | null;
 }
 
-// Generate unique key for each item: databaseId:schema:type:name
-const getItemKey = (databaseId: string, schemaName: string, type: string, name: string) => 
+// Generate unique key for each item: databaseId:schema:type:name or databaseId:savedQuery:id or databaseId:migration:id
+export const getItemKey = (databaseId: string, schemaName: string, type: string, name: string) => 
   `${databaseId}:${schemaName}:${type}:${name}`;
 
-const parseItemKey = (key: string) => {
+export const parseItemKey = (key: string) => {
   const parts = key.split(':');
   return {
     databaseId: parts[0],
@@ -126,170 +146,96 @@ export function DatabaseSchemaSelector({
       const initialDbs: DatabaseSchema[] = availableDbs.map((db: any) => ({
         database: db,
         schemas: [],
+        savedQueries: [],
+        migrations: [],
         loading: true,
         error: null
       }));
       setDatabases(initialDbs);
 
-      // Fetch schemas for each database
+      // Fetch schemas, saved queries, and migrations for each database
       const updatedDbs = await Promise.all(
         availableDbs.map(async (db: any) => {
           try {
-            const response = await supabase.functions.invoke('manage-database', {
-              body: {
-                databaseId: db.id,
-                shareToken,
-                action: 'get_schema'
-              }
-            });
+            // Fetch schema, saved queries, and migrations in parallel
+            const [schemaResponse, savedQueriesResult, migrationsResult] = await Promise.all([
+              supabase.functions.invoke('manage-database', {
+                body: {
+                  databaseId: db.id,
+                  shareToken,
+                  action: 'get_schema'
+                }
+              }),
+              supabase.rpc('get_saved_queries_with_token', {
+                p_database_id: db.id,
+                p_token: shareToken
+              }),
+              supabase.rpc('get_migrations_with_token', {
+                p_database_id: db.id,
+                p_token: shareToken
+              })
+            ]);
 
-            if (response.error) throw response.error;
+            if (schemaResponse.error) throw schemaResponse.error;
 
-            const schemaData = response.data;
+            const schemaData = schemaResponse.data;
             const schemas: SchemaInfo[] = [];
 
-            // Group by schema
-            const schemaMap = new Map<string, SchemaInfo>();
-            
-            // Process tables
-            (schemaData.tables || []).forEach((t: any) => {
-              const schemaName = t.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.tables.push({ name: t.name, type: 'table' });
+            // Process the schemas array from the response
+            // The response format is: { schemas: [{ name, tables: string[], views: string[], ... }] }
+            (schemaData.schemas || []).forEach((s: any) => {
+              const schemaInfo: SchemaInfo = {
+                name: s.name,
+                tables: (s.tables || []).map((name: string) => ({ name, type: 'table' as const })),
+                views: (s.views || []).map((name: string) => ({ name, type: 'view' as const })),
+                functions: (s.functions || []).map((name: string) => ({ name, type: 'function' as const })),
+                triggers: (s.triggers || []).map((t: any) => ({ 
+                  name: typeof t === 'string' ? t : t.name, 
+                  type: 'trigger' as const,
+                  table: typeof t === 'object' ? t.table : undefined 
+                })),
+                indexes: (s.indexes || []).map((i: any) => ({ 
+                  name: typeof i === 'string' ? i : i.name, 
+                  type: 'index' as const,
+                  table: typeof i === 'object' ? i.table : undefined 
+                })),
+                sequences: (s.sequences || []).map((name: string) => ({ name, type: 'sequence' as const })),
+                types: (s.types || []).map((t: any) => ({ 
+                  name: typeof t === 'string' ? t : t.name, 
+                  type: 'type' as const 
+                }))
+              };
+              schemas.push(schemaInfo);
             });
 
-            // Process views
-            (schemaData.views || []).forEach((v: any) => {
-              const schemaName = v.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.views.push({ name: v.name, type: 'view' });
-            });
+            // Sort schemas with 'public' first
+            schemas.sort((a, b) => 
+              a.name === 'public' ? -1 : b.name === 'public' ? 1 : a.name.localeCompare(b.name)
+            );
 
-            // Process functions
-            (schemaData.functions || []).forEach((f: any) => {
-              const schemaName = f.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.functions.push({ name: f.name, type: 'function' });
-            });
+            // Process saved queries
+            const savedQueries: SavedQueryInfo[] = (savedQueriesResult.data || []).map((q: any) => ({
+              id: q.id,
+              name: q.name,
+              description: q.description,
+              sql_content: q.sql_content
+            }));
 
-            // Process triggers
-            (schemaData.triggers || []).forEach((t: any) => {
-              const schemaName = t.table_schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.triggers.push({ 
-                name: t.name, 
-                type: 'trigger',
-                table: t.table_name 
-              });
-            });
-
-            // Process indexes
-            (schemaData.indexes || []).forEach((i: any) => {
-              const schemaName = i.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.indexes.push({ 
-                name: i.name, 
-                type: 'index',
-                table: i.table_name 
-              });
-            });
-
-            // Process sequences
-            (schemaData.sequences || []).forEach((s: any) => {
-              const schemaName = s.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.sequences.push({ name: s.name, type: 'sequence' });
-            });
-
-            // Process types
-            (schemaData.types || []).forEach((t: any) => {
-              const schemaName = t.schema || 'public';
-              if (!schemaMap.has(schemaName)) {
-                schemaMap.set(schemaName, {
-                  name: schemaName,
-                  tables: [],
-                  views: [],
-                  functions: [],
-                  triggers: [],
-                  indexes: [],
-                  sequences: [],
-                  types: []
-                });
-              }
-              schemaMap.get(schemaName)!.types.push({ name: t.name, type: 'type' });
-            });
+            // Process migrations
+            const migrations: MigrationInfo[] = (migrationsResult.data || []).map((m: any) => ({
+              id: m.id,
+              sequence_number: m.sequence_number,
+              name: m.name,
+              sql_content: m.sql_content,
+              statement_type: m.statement_type,
+              object_type: m.object_type
+            }));
 
             return {
               database: db,
-              schemas: Array.from(schemaMap.values()).sort((a, b) => 
-                a.name === 'public' ? -1 : b.name === 'public' ? 1 : a.name.localeCompare(b.name)
-              ),
+              schemas,
+              savedQueries,
+              migrations,
               loading: false,
               error: null
             };
@@ -298,6 +244,8 @@ export function DatabaseSchemaSelector({
             return {
               database: db,
               schemas: [],
+              savedQueries: [],
+              migrations: [],
               loading: false,
               error: err.message || 'Failed to load schema'
             };
@@ -310,6 +258,11 @@ export function DatabaseSchemaSelector({
       // Collect all selectable item keys
       const allKeys: string[] = [];
       updatedDbs.forEach(db => {
+        // Add saved queries
+        db.savedQueries.forEach(q => allKeys.push(getItemKey(db.database.id, 'savedQuery', 'savedQuery', q.id)));
+        // Add migrations
+        db.migrations.forEach(m => allKeys.push(getItemKey(db.database.id, 'migration', 'migration', m.id)));
+        // Add schema objects
         db.schemas.forEach(schema => {
           schema.tables.forEach(t => allKeys.push(getItemKey(db.database.id, schema.name, 'table', t.name)));
           schema.views.forEach(v => allKeys.push(getItemKey(db.database.id, schema.name, 'view', v.name)));
@@ -404,6 +357,8 @@ export function DatabaseSchemaSelector({
       case 'index': return <Key className="h-4 w-4 text-orange-500" />;
       case 'sequence': return <Hash className="h-4 w-4 text-cyan-500" />;
       case 'type': return <List className="h-4 w-4 text-pink-500" />;
+      case 'savedQuery': return <FileText className="h-4 w-4 text-emerald-500" />;
+      case 'migration': return <History className="h-4 w-4 text-amber-500" />;
       default: return <Columns3 className="h-4 w-4 text-muted-foreground" />;
     }
   };
@@ -483,6 +438,136 @@ export function DatabaseSchemaSelector({
     );
   };
 
+  const renderSavedQueries = (databaseId: string, savedQueries: SavedQueryInfo[], depth: number) => {
+    if (savedQueries.length === 0) return null;
+    
+    const nodeId = `${databaseId}:savedQueries`;
+    const isExpanded = expandedNodes.has(nodeId);
+    const selectionState = getFolderSelectionState(databaseId, 'savedQuery', 'savedQuery');
+    const paddingLeft = depth * 16 + 4;
+
+    return (
+      <div key={nodeId}>
+        <div
+          className="flex items-center gap-2 py-1.5 px-2 hover:bg-accent/50 rounded-sm cursor-pointer group"
+          style={{ paddingLeft }}
+        >
+          <button
+            onClick={() => toggleExpanded(nodeId)}
+            className="p-0.5 hover:bg-accent rounded"
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+          <Checkbox
+            checked={selectionState === 'checked' ? true : selectionState === 'indeterminate' ? 'indeterminate' : false}
+            onCheckedChange={() => toggleFolder(databaseId, 'savedQuery', 'savedQuery')}
+            className="data-[state=indeterminate]:bg-primary/50"
+          />
+          <FileText className="h-4 w-4 text-emerald-500" />
+          <span className="text-sm font-medium">Saved Queries</span>
+          <span className="text-xs text-muted-foreground ml-auto opacity-0 group-hover:opacity-100">
+            {savedQueries.length}
+          </span>
+        </div>
+        {isExpanded && (
+          <div>
+            {savedQueries.map(query => {
+              const itemKey = getItemKey(databaseId, 'savedQuery', 'savedQuery', query.id);
+              const isSelected = selectedDatabaseItems.has(itemKey);
+              return (
+                <div
+                  key={itemKey}
+                  className={cn(
+                    "flex items-center gap-2 py-1.5 px-2 hover:bg-accent/50 rounded-sm cursor-pointer",
+                    isSelected && "bg-accent/30"
+                  )}
+                  style={{ paddingLeft: paddingLeft + 24 }}
+                  onClick={() => toggleItem(itemKey)}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleItem(itemKey)}
+                  />
+                  <FileText className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm truncate">{query.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMigrations = (databaseId: string, migrations: MigrationInfo[], depth: number) => {
+    if (migrations.length === 0) return null;
+    
+    const nodeId = `${databaseId}:migrations`;
+    const isExpanded = expandedNodes.has(nodeId);
+    const selectionState = getFolderSelectionState(databaseId, 'migration', 'migration');
+    const paddingLeft = depth * 16 + 4;
+
+    return (
+      <div key={nodeId}>
+        <div
+          className="flex items-center gap-2 py-1.5 px-2 hover:bg-accent/50 rounded-sm cursor-pointer group"
+          style={{ paddingLeft }}
+        >
+          <button
+            onClick={() => toggleExpanded(nodeId)}
+            className="p-0.5 hover:bg-accent rounded"
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+          <Checkbox
+            checked={selectionState === 'checked' ? true : selectionState === 'indeterminate' ? 'indeterminate' : false}
+            onCheckedChange={() => toggleFolder(databaseId, 'migration', 'migration')}
+            className="data-[state=indeterminate]:bg-primary/50"
+          />
+          <History className="h-4 w-4 text-amber-500" />
+          <span className="text-sm font-medium">Migrations</span>
+          <span className="text-xs text-muted-foreground ml-auto opacity-0 group-hover:opacity-100">
+            {migrations.length}
+          </span>
+        </div>
+        {isExpanded && (
+          <div>
+            {migrations.map(migration => {
+              const itemKey = getItemKey(databaseId, 'migration', 'migration', migration.id);
+              const isSelected = selectedDatabaseItems.has(itemKey);
+              return (
+                <div
+                  key={itemKey}
+                  className={cn(
+                    "flex items-center gap-2 py-1.5 px-2 hover:bg-accent/50 rounded-sm cursor-pointer",
+                    isSelected && "bg-accent/30"
+                  )}
+                  style={{ paddingLeft: paddingLeft + 24 }}
+                  onClick={() => toggleItem(itemKey)}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleItem(itemKey)}
+                  />
+                  <History className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm truncate">{migration.name || `${migration.sequence_number}_${migration.statement_type}`}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSchema = (databaseId: string, schema: SchemaInfo, depth: number) => {
     const nodeId = `${databaseId}:${schema.name}`;
     const isExpanded = expandedNodes.has(nodeId);
@@ -541,7 +626,7 @@ export function DatabaseSchemaSelector({
   };
 
   const renderDatabase = (dbSchema: DatabaseSchema) => {
-    const { database, schemas, loading: dbLoading, error } = dbSchema;
+    const { database, schemas, savedQueries, migrations, loading: dbLoading, error } = dbSchema;
     const isExpanded = expandedNodes.has(database.id);
     const selectionState = getFolderSelectionState(database.id);
 
@@ -583,12 +668,16 @@ export function DatabaseSchemaSelector({
               <div className="py-2 px-4 text-sm text-destructive" style={{ paddingLeft: 36 }}>
                 {error}
               </div>
-            ) : schemas.length === 0 ? (
+            ) : schemas.length === 0 && savedQueries.length === 0 && migrations.length === 0 ? (
               <div className="py-2 px-4 text-sm text-muted-foreground" style={{ paddingLeft: 36 }}>
                 No schemas found
               </div>
             ) : (
-              schemas.map(schema => renderSchema(database.id, schema, 1))
+              <>
+                {renderSavedQueries(database.id, savedQueries, 1)}
+                {renderMigrations(database.id, migrations, 1)}
+                {schemas.map(schema => renderSchema(database.id, schema, 1))}
+              </>
             )}
           </div>
         )}

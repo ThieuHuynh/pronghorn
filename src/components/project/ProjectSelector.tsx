@@ -42,10 +42,17 @@ export interface DatabaseSchemaItem {
   databaseId: string;
   databaseName: string;
   schemaName: string;
-  type: 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type';
+  type: 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'savedQuery' | 'migration';
   name: string;
   columns?: Array<{ name: string; type: string; nullable: boolean }>;
   sampleData?: any[];
+  // For saved queries
+  sql_content?: string;
+  description?: string;
+  // For migrations
+  sequence_number?: number;
+  statement_type?: string;
+  object_type?: string;
 }
 
 export interface ProjectSelectionResult {
@@ -539,6 +546,19 @@ export function ProjectSelector({
         const dbMap = new Map((dbData || []).map((d: any) => [d.id, d]));
 
         // Fetch columns for selected tables
+        // Fetch saved queries and migrations for each database
+        const savedQueriesMap = new Map<string, any[]>();
+        const migrationsMap = new Map<string, any[]>();
+
+        for (const databaseId of databaseGroups.keys()) {
+          const [savedQueriesResult, migrationsResult] = await Promise.all([
+            supabase.rpc('get_saved_queries_with_token', { p_database_id: databaseId, p_token: shareToken }),
+            supabase.rpc('get_migrations_with_token', { p_database_id: databaseId, p_token: shareToken })
+          ]);
+          savedQueriesMap.set(databaseId, savedQueriesResult.data || []);
+          migrationsMap.set(databaseId, migrationsResult.data || []);
+        }
+
         for (const [databaseId, items] of databaseGroups) {
           const dbInfo = dbMap.get(databaseId);
           if (!dbInfo) continue;
@@ -551,6 +571,34 @@ export function ProjectSelector({
               type: item.type as DatabaseSchemaItem['type'],
               name: item.name
             };
+
+            // Handle saved queries
+            if (item.type === 'savedQuery') {
+              const queries = savedQueriesMap.get(databaseId) || [];
+              const query = queries.find((q: any) => q.id === item.name);
+              if (query) {
+                dbSchemaItem.name = query.name;
+                dbSchemaItem.sql_content = query.sql_content;
+                dbSchemaItem.description = query.description;
+              }
+              databases.push(dbSchemaItem);
+              continue;
+            }
+
+            // Handle migrations
+            if (item.type === 'migration') {
+              const migrations = migrationsMap.get(databaseId) || [];
+              const migration = migrations.find((m: any) => m.id === item.name);
+              if (migration) {
+                dbSchemaItem.name = migration.name || `${migration.sequence_number}_${migration.statement_type}`;
+                dbSchemaItem.sql_content = migration.sql_content;
+                dbSchemaItem.sequence_number = migration.sequence_number;
+                dbSchemaItem.statement_type = migration.statement_type;
+                dbSchemaItem.object_type = migration.object_type;
+              }
+              databases.push(dbSchemaItem);
+              continue;
+            }
 
             // Fetch columns for tables
             if (item.type === 'table') {

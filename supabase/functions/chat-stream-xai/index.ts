@@ -99,8 +99,14 @@ serve(async (req) => {
       }
       if (attachedContext.databases?.length) {
         const tables = attachedContext.databases.filter((d: any) => d.type === 'table');
+        const savedQueries = attachedContext.databases.filter((d: any) => d.type === 'savedQuery');
+        const migrations = attachedContext.databases.filter((d: any) => d.type === 'migration');
         const hasSampleData = tables.some((t: any) => t.sampleData?.length > 0);
-        contextParts.push(`DATABASE SCHEMAS: ${attachedContext.databases.length} items attached (${tables.length} tables${hasSampleData ? ' with sample data' : ''})`);
+        const parts = [`${attachedContext.databases.length} items`];
+        if (tables.length > 0) parts.push(`${tables.length} tables${hasSampleData ? ' with sample data' : ''}`);
+        if (savedQueries.length > 0) parts.push(`${savedQueries.length} saved queries`);
+        if (migrations.length > 0) parts.push(`${migrations.length} migrations`);
+        contextParts.push(`DATABASE SCHEMAS: ${parts.join(', ')}`);
       }
 
       if (contextParts.length > 0) {
