@@ -69,7 +69,7 @@ function TreeItem({ label, type, icon, level, count, children, onClick, defaultO
           <span className="w-3.5" />
         )}
         {icon}
-        <span className="truncate flex-1">{label}</span>
+        <span className="truncate flex-1 text-foreground">{label}</span>
         {count !== undefined && (
           <span className="text-xs text-muted-foreground">({count})</span>
         )}
