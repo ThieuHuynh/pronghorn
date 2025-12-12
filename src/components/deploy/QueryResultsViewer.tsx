@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -22,7 +23,11 @@ import {
   X,
   FileJson,
   FileSpreadsheet,
-  FileCode
+  FileCode,
+  ZoomIn,
+  ZoomOut,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -53,6 +58,8 @@ export function QueryResultsViewer({
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [zoom, setZoom] = useState(100);
 
   // Filter and sort rows
   const processedRows = useMemo(() => {
@@ -99,7 +106,7 @@ export function QueryResultsViewer({
   };
 
   const handleCopyCell = (value: any, cellId: string) => {
-    const textValue = value === null ? 'NULL' : String(value);
+    const textValue = value === null ? 'NULL' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
     navigator.clipboard.writeText(textValue);
     setCopiedCell(cellId);
     setTimeout(() => setCopiedCell(null), 1500);
@@ -110,6 +117,31 @@ export function QueryResultsViewer({
     toast.success("Row copied to clipboard");
   };
 
+  const handleCopySelectedRows = useCallback(() => {
+    if (selectedRows.size === 0) return;
+    const selectedData = processedRows.filter((_, idx) => selectedRows.has(idx));
+    navigator.clipboard.writeText(JSON.stringify(selectedData, null, 2));
+    toast.success(`${selectedRows.size} row(s) copied to clipboard`);
+  }, [selectedRows, processedRows]);
+
+  const handleSelectAll = () => {
+    if (selectedRows.size === processedRows.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(processedRows.map((_, idx) => idx)));
+    }
+  };
+
+  const handleRowSelect = (rowIndex: number) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(rowIndex)) {
+      newSelected.delete(rowIndex);
+    } else {
+      newSelected.add(rowIndex);
+    }
+    setSelectedRows(newSelected);
+  };
+
   const currentPage = Math.floor(offset / limit) + 1;
   const totalPages = totalRows ? Math.ceil(totalRows / limit) : 1;
 
@@ -118,6 +150,8 @@ export function QueryResultsViewer({
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
+
+  const fontSize = Math.max(10, Math.min(16, 13 * (zoom / 100)));
 
   if (columns.length === 0) {
     return (
@@ -140,8 +174,64 @@ export function QueryResultsViewer({
               {executionTime}ms
             </span>
           )}
+          {selectedRows.size > 0 && (
+            <Badge variant="outline" className="font-mono gap-1">
+              <CheckSquare className="h-3 w-3" />
+              {selectedRows.size} selected
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Zoom */}
+          <div className="flex items-center gap-1 border-r border-border pr-2 mr-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setZoom(Math.max(75, zoom - 10))}
+              disabled={zoom <= 75}
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-10 text-center">{zoom}%</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setZoom(Math.min(150, zoom + 10))}
+              disabled={zoom >= 150}
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Select All / Copy Selected */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5"
+            onClick={handleSelectAll}
+          >
+            {selectedRows.size === processedRows.length ? (
+              <Square className="h-3.5 w-3.5" />
+            ) : (
+              <CheckSquare className="h-3.5 w-3.5" />
+            )}
+            {selectedRows.size === processedRows.length ? "None" : "All"}
+          </Button>
+
+          {selectedRows.size > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5"
+              onClick={handleCopySelectedRows}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
+            </Button>
+          )}
+
           {/* Filter */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -218,9 +308,15 @@ export function QueryResultsViewer({
       {/* Table */}
       <ScrollArea className="flex-1">
         <div className="min-w-max">
-          <table className="w-full text-sm">
+          <table className="w-full" style={{ fontSize: `${fontSize}px` }}>
             <thead className="bg-muted/50 sticky top-0">
               <tr>
+                <th className="px-2 py-2 text-left font-medium text-muted-foreground w-8">
+                  <Checkbox
+                    checked={selectedRows.size === processedRows.length && processedRows.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground w-10">#</th>
                 {columns.map((col) => (
                   <th
@@ -248,9 +344,18 @@ export function QueryResultsViewer({
               {processedRows.map((row, rowIndex) => (
                 <tr 
                   key={rowIndex} 
-                  className="border-b border-border/50 hover:bg-muted/30 group"
+                  className={cn(
+                    "border-b border-border/50 hover:bg-muted/30 group",
+                    selectedRows.has(rowIndex) && "bg-primary/10"
+                  )}
                 >
-                  <td className="px-3 py-1.5 text-muted-foreground font-mono text-xs">
+                  <td className="px-2 py-1.5">
+                    <Checkbox
+                      checked={selectedRows.has(rowIndex)}
+                      onCheckedChange={() => handleRowSelect(rowIndex)}
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 text-muted-foreground font-mono">
                     <div className="flex items-center gap-1">
                       <span>{offset + rowIndex + 1}</span>
                       <Button
@@ -268,13 +373,15 @@ export function QueryResultsViewer({
                     const value = row[col];
                     const displayValue = formatCellValue(value);
                     const isNull = value === null || value === undefined;
+                    const isObject = typeof value === 'object' && value !== null;
 
                     return (
                       <td
                         key={col}
                         className={cn(
-                          "px-3 py-1.5 font-mono text-xs max-w-[300px] truncate cursor-pointer hover:bg-muted/50",
-                          isNull && "text-muted-foreground italic"
+                          "px-3 py-1.5 font-mono max-w-[300px] truncate cursor-pointer hover:bg-muted/50",
+                          isNull && "text-muted-foreground italic",
+                          isObject && "text-blue-500"
                         )}
                         onClick={() => handleCopyCell(value, cellId)}
                         title={displayValue}

@@ -8,13 +8,14 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Play, Trash2, History, Loader2, AlignLeft, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Play, Trash2, History, Loader2, AlignLeft, AlertTriangle, ShieldAlert, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SqlQueryEditorProps {
   onExecute: (sql: string) => Promise<void>;
   isExecuting?: boolean;
   initialQuery?: string;
+  onSaveQuery?: (sql: string) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -34,7 +35,7 @@ const WRITE_PATTERNS = [
   /^\s*ALTER\s+/i,
 ];
 
-export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQueryEditorProps) {
+export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery }: SqlQueryEditorProps) {
   const [query, setQuery] = useState(initialQuery || "SELECT 1;");
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -66,6 +67,13 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQuer
     // Add Ctrl+Enter keyboard shortcut
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleExecute();
+    });
+
+    // Add Ctrl+S keyboard shortcut for save
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      if (onSaveQuery && query.trim()) {
+        onSaveQuery(query);
+      }
     });
   };
 
@@ -148,6 +156,18 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQuer
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onSaveQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onSaveQuery(query)}
+              disabled={!query.trim()}
+              className="h-7 px-2 text-muted-foreground hover:text-foreground"
+              title="Save Query (Ctrl+S)"
+            >
+              <Save className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

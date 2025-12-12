@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, Table2, Eye, Zap, Clock, Search, Hash, KeyRound, Type, FolderClosed, FolderOpen, Database } from "lucide-react";
+import { ChevronRight, ChevronDown, Table2, Eye, Zap, Clock, Search, Hash, KeyRound, Type, FolderClosed, FolderOpen, Database, FileCode, Bookmark } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { DatabaseTreeContextMenu, TreeItemContextType } from "./DatabaseTreeContextMenu";
 
 interface SchemaInfo {
   name: string;
@@ -17,15 +18,29 @@ interface SchemaInfo {
   constraints: { name: string; table: string; type: string }[];
 }
 
+interface SavedQuery {
+  id: string;
+  name: string;
+  description?: string;
+  sql_content: string;
+}
+
 interface DatabaseSchemaTreeProps {
   schemas: SchemaInfo[];
+  savedQueries?: SavedQuery[];
   loading?: boolean;
   onTableSelect?: (schema: string, table: string) => void;
   onViewSelect?: (schema: string, view: string) => void;
   onItemClick?: (type: string, schema: string, name: string, extra?: any) => void;
+  onShowFirst100?: (schema: string, name: string) => void;
+  onViewStructure?: (schema: string, name: string) => void;
+  onGetDefinition?: (type: TreeItemContextType, schema: string, name: string, extra?: any) => void;
+  onLoadQuery?: (query: SavedQuery) => void;
+  onEditQuery?: (query: SavedQuery) => void;
+  onDeleteQuery?: (query: SavedQuery) => void;
 }
 
-type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint';
+type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query';
 
 interface TreeItemProps {
   label: string;
@@ -35,10 +50,35 @@ interface TreeItemProps {
   count?: number;
   children?: React.ReactNode;
   onClick?: () => void;
+  onContextAction?: () => void;
   defaultOpen?: boolean;
+  schema?: string;
+  name?: string;
+  extra?: any;
+  contextMenuProps?: {
+    onShowFirst100?: (schema: string, name: string) => void;
+    onViewStructure?: (schema: string, name: string) => void;
+    onGetDefinition?: (type: TreeItemContextType, schema: string, name: string, extra?: any) => void;
+    onLoadQuery?: (query: any) => void;
+    onEditQuery?: (query: any) => void;
+    onDeleteQuery?: (query: any) => void;
+  };
 }
 
-function TreeItem({ label, type, icon, level, count, children, onClick, defaultOpen = false }: TreeItemProps) {
+function TreeItem({ 
+  label, 
+  type, 
+  icon, 
+  level, 
+  count, 
+  children, 
+  onClick, 
+  defaultOpen = false,
+  schema = '',
+  name = '',
+  extra,
+  contextMenuProps,
+}: TreeItemProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const hasChildren = !!children;
 
@@ -49,31 +89,56 @@ function TreeItem({ label, type, icon, level, count, children, onClick, defaultO
     onClick?.();
   };
 
+  const itemButton = (
+    <button
+      className={cn(
+        "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50",
+        (type === 'table' || type === 'view' || type === 'saved_query') && 'hover:bg-[#264f78]/30'
+      )}
+      style={{ paddingLeft: `${level * 16 + 8}px` }}
+      onClick={handleClick}
+    >
+      {hasChildren ? (
+        isOpen ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
+        )
+      ) : (
+        <span className="w-3.5" />
+      )}
+      {icon}
+      <span className="truncate flex-1 text-[#cccccc]">{label}</span>
+      {count !== undefined && (
+        <span className="text-xs text-[#858585]">({count})</span>
+      )}
+    </button>
+  );
+
+  // Wrap with context menu for items that support it
+  const contextMenuTypes: TreeItemContextType[] = ['table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 'saved_query'];
+  const shouldHaveContextMenu = contextMenuTypes.includes(type as TreeItemContextType) && contextMenuProps;
+
   return (
     <div>
-      <button
-        className={cn(
-          "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50",
-          type === 'table' || type === 'view' ? 'hover:bg-[#264f78]/30' : ''
-        )}
-        style={{ paddingLeft: `${level * 16 + 8}px` }}
-        onClick={handleClick}
-      >
-        {hasChildren ? (
-          isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-          )
-        ) : (
-          <span className="w-3.5" />
-        )}
-        {icon}
-        <span className="truncate flex-1 text-[#cccccc]">{label}</span>
-        {count !== undefined && (
-          <span className="text-xs text-[#858585]">({count})</span>
-        )}
-      </button>
+      {shouldHaveContextMenu ? (
+        <DatabaseTreeContextMenu
+          type={type as TreeItemContextType}
+          schema={schema}
+          name={name}
+          extra={extra}
+          onShowFirst100={contextMenuProps.onShowFirst100}
+          onViewStructure={contextMenuProps.onViewStructure}
+          onGetDefinition={contextMenuProps.onGetDefinition}
+          onLoadQuery={contextMenuProps.onLoadQuery}
+          onEditQuery={contextMenuProps.onEditQuery}
+          onDeleteQuery={contextMenuProps.onDeleteQuery}
+        >
+          {itemButton}
+        </DatabaseTreeContextMenu>
+      ) : (
+        itemButton
+      )}
       {isOpen && children && <div>{children}</div>}
     </div>
   );
@@ -81,12 +146,28 @@ function TreeItem({ label, type, icon, level, count, children, onClick, defaultO
 
 export function DatabaseSchemaTree({ 
   schemas, 
+  savedQueries = [],
   loading, 
   onTableSelect,
   onViewSelect,
   onItemClick,
+  onShowFirst100,
+  onViewStructure,
+  onGetDefinition,
+  onLoadQuery,
+  onEditQuery,
+  onDeleteQuery,
 }: DatabaseSchemaTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
+
+  const contextMenuProps = {
+    onShowFirst100,
+    onViewStructure,
+    onGetDefinition,
+    onLoadQuery,
+    onEditQuery,
+    onDeleteQuery,
+  };
 
   const filteredSchemas = useMemo(() => {
     if (!searchTerm.trim()) return schemas;
@@ -114,6 +195,16 @@ export function DatabaseSchemaTree({
       schema.name.toLowerCase().includes(term)
     );
   }, [schemas, searchTerm]);
+
+  const filteredSavedQueries = useMemo(() => {
+    if (!searchTerm.trim()) return savedQueries;
+    const term = searchTerm.toLowerCase();
+    return savedQueries.filter(q => 
+      q.name.toLowerCase().includes(term) || 
+      q.description?.toLowerCase().includes(term) ||
+      q.sql_content.toLowerCase().includes(term)
+    );
+  }, [savedQueries, searchTerm]);
 
   if (loading) {
     return (
@@ -149,6 +240,34 @@ export function DatabaseSchemaTree({
       </div>
       <ScrollArea className="flex-1">
         <div className="py-1">
+          {/* Saved Queries Section */}
+          {(savedQueries.length > 0 || filteredSavedQueries.length > 0) && (
+            <TreeItem
+              label="Saved Queries"
+              type="category"
+              icon={<Bookmark className="h-4 w-4 text-amber-500" />}
+              level={0}
+              count={savedQueries.length}
+              defaultOpen={true}
+            >
+              {filteredSavedQueries.map((query) => (
+                <TreeItem
+                  key={query.id}
+                  label={query.name}
+                  type="saved_query"
+                  icon={<FileCode className="h-4 w-4 text-amber-400" />}
+                  level={1}
+                  schema=""
+                  name={query.name}
+                  extra={query}
+                  contextMenuProps={contextMenuProps}
+                  onClick={() => onLoadQuery?.(query)}
+                />
+              ))}
+            </TreeItem>
+          )}
+
+          {/* Schema sections */}
           {filteredSchemas.map((schema) => (
             <TreeItem
               key={schema.name}
@@ -163,7 +282,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Tables"
                   type="category"
-              icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.tables.length}
                   defaultOpen={schema.name === 'public'}
@@ -175,6 +294,9 @@ export function DatabaseSchemaTree({
                       type="table"
                       icon={<Table2 className="h-4 w-4 text-blue-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={table}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => {
                         onTableSelect?.(schema.name, table);
                         onItemClick?.('table', schema.name, table);
@@ -200,6 +322,9 @@ export function DatabaseSchemaTree({
                       type="view"
                       icon={<Eye className="h-4 w-4 text-purple-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={view}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => {
                         onViewSelect?.(schema.name, view);
                         onItemClick?.('view', schema.name, view);
@@ -225,6 +350,9 @@ export function DatabaseSchemaTree({
                       type="function"
                       icon={<Zap className="h-4 w-4 text-orange-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={func}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('function', schema.name, func)}
                     />
                   ))}
@@ -247,6 +375,10 @@ export function DatabaseSchemaTree({
                       type="trigger"
                       icon={<Clock className="h-4 w-4 text-green-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={trigger.name}
+                      extra={trigger}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('trigger', schema.name, trigger.name, trigger)}
                     />
                   ))}
@@ -269,6 +401,10 @@ export function DatabaseSchemaTree({
                       type="index"
                       icon={<Search className="h-4 w-4 text-cyan-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={index.name}
+                      extra={index}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('index', schema.name, index.name, index)}
                     />
                   ))}
@@ -291,6 +427,9 @@ export function DatabaseSchemaTree({
                       type="sequence"
                       icon={<Hash className="h-4 w-4 text-pink-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={seq}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('sequence', schema.name, seq)}
                     />
                   ))}
@@ -313,6 +452,10 @@ export function DatabaseSchemaTree({
                       type="type"
                       icon={<Type className="h-4 w-4 text-indigo-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={type.name}
+                      extra={type}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('type', schema.name, type.name, type)}
                     />
                   ))}
@@ -335,6 +478,10 @@ export function DatabaseSchemaTree({
                       type="constraint"
                       icon={<KeyRound className="h-4 w-4 text-red-500" />}
                       level={2}
+                      schema={schema.name}
+                      name={constraint.name}
+                      extra={constraint}
+                      contextMenuProps={contextMenuProps}
                       onClick={() => onItemClick?.('constraint', schema.name, constraint.name, constraint)}
                     />
                   ))}
