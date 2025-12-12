@@ -260,7 +260,29 @@ const DeploymentDialog = ({
         });
 
         if (error) throw error;
-        toast.success("Deployment created");
+
+        // If cloud deployment with env vars, create service immediately with env vars
+        if (form.platform === "pronghorn_cloud" && envVarsWithValues.length > 0 && newDeployment) {
+          const { data: renderData, error: renderError } = await supabase.functions.invoke(
+            "render-service",
+            {
+              body: {
+                action: "create",
+                deploymentId: newDeployment.id,
+                shareToken: shareToken || null,
+                envVars: envVarsWithValues,
+              },
+            }
+          );
+
+          if (renderError || !renderData?.success) {
+            toast.warning("Deployment saved. Use 'Create Service' to provision with env vars.");
+          } else {
+            toast.success("Deployment created and service provisioned with env vars");
+          }
+        } else {
+          toast.success("Deployment created");
+        }
       } else if (mode === "edit" && deployment) {
         // Update deployment - store only keys in DB
         const { error } = await supabase.rpc("update_deployment_with_token", {
@@ -279,11 +301,27 @@ const DeploymentDialog = ({
 
         if (error) throw error;
 
-        // If Render service exists, sync env vars (add/update/delete)
-        if (deployment.render_service_id && (envVarsWithValues.length > 0 || deletedKeys.length > 0)) {
-          const { data: renderData, error: renderError } = await supabase.functions.invoke(
-            "render-service",
-            {
+        // If Render service exists, sync config AND env vars
+        if (deployment.render_service_id) {
+          let syncSuccess = true;
+
+          // Sync service configuration (build/run commands)
+          const { error: configError } = await supabase.functions.invoke("render-service", {
+            body: {
+              action: "updateServiceConfig",
+              deploymentId: deployment.id,
+              shareToken: shareToken || null,
+            },
+          });
+
+          if (configError) {
+            console.error("Config sync error:", configError);
+            syncSuccess = false;
+          }
+
+          // Sync env vars (add/update/delete)
+          if (envVarsWithValues.length > 0 || deletedKeys.length > 0) {
+            const { error: envError } = await supabase.functions.invoke("render-service", {
               body: {
                 action: "syncEnvVars",
                 deploymentId: deployment.id,
@@ -291,16 +329,21 @@ const DeploymentDialog = ({
                 newEnvVars: envVarsWithValues,
                 keysToDelete: deletedKeys,
               },
-            }
-          );
+            });
 
-          if (renderError || !renderData?.success) {
-            toast.warning("Saved locally, but failed to sync env vars to Render");
-          } else {
+            if (envError) {
+              console.error("Env sync error:", envError);
+              syncSuccess = false;
+            }
+          }
+
+          if (syncSuccess) {
             const msg = deletedKeys.length > 0 
-              ? `Updated. ${deletedKeys.length} key(s) deleted from Render.`
-              : "Deployment updated. Env vars synced to Render.";
+              ? `Updated and synced. ${deletedKeys.length} key(s) deleted.`
+              : "Deployment updated and synced to Render.";
             toast.success(msg);
+          } else {
+            toast.warning("Saved locally, but some changes may not have synced to Render");
           }
         } else {
           toast.success("Deployment updated");

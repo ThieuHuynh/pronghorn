@@ -9,7 +9,7 @@ const corsHeaders = {
 const RENDER_API_URL = 'https://api.render.com/v1';
 
 interface RenderServiceRequest {
-  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents' | 'syncEnvVars';
+  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents' | 'syncEnvVars' | 'updateServiceConfig';
   deploymentId: string;
   shareToken?: string;
   // For create action - client passes full key:value pairs
@@ -109,6 +109,9 @@ serve(async (req) => {
         break;
       case 'syncEnvVars':
         result = await syncEnvVarsRenderService(deployment, body, renderHeaders);
+        break;
+      case 'updateServiceConfig':
+        result = await updateServiceConfigRenderService(deployment, renderHeaders);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -785,6 +788,61 @@ async function syncEnvVarsRenderService(
     note: 'Deploy the service to apply changes',
     envVarsCount: result.length,
     deletedCount: keysToDelete.size,
+  };
+}
+
+// Update service configuration (build/run commands, etc.)
+async function updateServiceConfigRenderService(
+  deployment: any,
+  headers: Record<string, string>
+) {
+  if (!deployment.render_service_id) {
+    throw new Error('Service not yet created on Render');
+  }
+
+  console.log('[render-service] Updating service config for:', deployment.render_service_id);
+
+  const isStaticSite = ['react', 'vue', 'tanstack'].includes(deployment.project_type?.toLowerCase() || '');
+  const serviceName = `${deployment.environment}-${deployment.name}`;
+
+  const updatePayload: any = {
+    name: serviceName,
+    branch: deployment.branch || 'main',
+    autoDeploy: 'no',
+  };
+
+  if (isStaticSite) {
+    updatePayload.serviceDetails = {
+      buildCommand: deployment.build_command || 'npm run build',
+      publishPath: deployment.build_folder || 'dist',
+    };
+  } else {
+    updatePayload.serviceDetails = {
+      envSpecificDetails: {
+        buildCommand: deployment.build_command || 'npm install',
+        startCommand: deployment.run_command || 'npm start',
+      },
+    };
+  }
+
+  console.log('[render-service] Update payload:', JSON.stringify(updatePayload, null, 2));
+
+  const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(updatePayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[render-service] Update config error:', errorText);
+    throw new Error(`Failed to update service config: ${errorText}`);
+  }
+
+  const result = await response.json();
+  return { 
+    status: 'config_updated', 
+    note: 'Deploy the service to apply changes',
   };
 }
 
