@@ -88,7 +88,7 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
           bg-card flex flex-col
         `}
       >
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="h-full overflow-hidden flex flex-col">
           {/* Header with project name and close/collapse button */}
           <div className="flex items-center justify-between p-2 border-b border-border">
             {!isCollapsed && !isMobile && projectName && (
@@ -116,7 +116,7 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-2 space-y-1 flex flex-col overflow-y-auto min-h-0">
+          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
             <div className="space-y-1">
               {activeNavItems.map((item) => (
                 <NavLink
