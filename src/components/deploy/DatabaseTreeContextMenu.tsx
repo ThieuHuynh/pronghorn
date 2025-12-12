@@ -15,6 +15,7 @@ import {
   Trash2,
   Edit,
   FileCode,
+  Download,
 } from "lucide-react";
 
 export type TreeItemContextType = 
@@ -26,7 +27,8 @@ export type TreeItemContextType =
   | 'sequence' 
   | 'type' 
   | 'constraint'
-  | 'saved_query';
+  | 'saved_query'
+  | 'migration';
 
 interface DatabaseTreeContextMenuProps {
   type: TreeItemContextType;
@@ -41,6 +43,9 @@ interface DatabaseTreeContextMenuProps {
   onLoadQuery?: (query: any) => void;
   onEditQuery?: (query: any) => void;
   onDeleteQuery?: (query: any) => void;
+  onLoadMigration?: (migration: any) => void;
+  onDeleteMigration?: (migration: any) => void;
+  onDownloadMigration?: (migration: any) => void;
 }
 
 export function DatabaseTreeContextMenu({
@@ -56,10 +61,19 @@ export function DatabaseTreeContextMenu({
   onLoadQuery,
   onEditQuery,
   onDeleteQuery,
+  onLoadMigration,
+  onDeleteMigration,
+  onDownloadMigration,
 }: DatabaseTreeContextMenuProps) {
   const handleCopyName = () => {
     const fullName = schema ? `"${schema}"."${name}"` : name;
     navigator.clipboard.writeText(fullName);
+  };
+
+  const handleCopySql = () => {
+    if (extra?.sql_content) {
+      navigator.clipboard.writeText(extra.sql_content);
+    }
   };
 
   return (
@@ -212,6 +226,32 @@ export function DatabaseTreeContextMenu({
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete Query
+            </ContextMenuItem>
+          </>
+        )}
+
+        {/* Migration context menu */}
+        {type === 'migration' && (
+          <>
+            <ContextMenuItem onClick={() => onLoadMigration?.(extra)}>
+              <Play className="h-4 w-4 mr-2" />
+              Load into Editor
+            </ContextMenuItem>
+            <ContextMenuItem onClick={handleCopySql}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copy SQL
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onDownloadMigration?.(extra)}>
+              <Download className="h-4 w-4 mr-2" />
+              Download as .sql
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem 
+              onClick={() => onDeleteMigration?.(extra)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Migration
             </ContextMenuItem>
           </>
         )}

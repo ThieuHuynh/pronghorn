@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, Table2, Eye, Zap, Clock, Search, Hash, KeyRound, Type, FolderClosed, FolderOpen, Database, FileCode, Bookmark } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { ChevronRight, ChevronDown, Table2, Eye, Zap, Clock, Search, Hash, KeyRound, Type, FolderClosed, Database, FileCode, Bookmark, GitBranch, Download, Copy } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DatabaseTreeContextMenu, TreeItemContextType } from "./DatabaseTreeContextMenu";
 
@@ -25,9 +26,22 @@ interface SavedQuery {
   sql_content: string;
 }
 
+export interface Migration {
+  id: string;
+  sequence_number: number;
+  name: string;
+  sql_content: string;
+  statement_type: string;
+  object_type: string;
+  object_schema?: string;
+  object_name?: string;
+  executed_at: string;
+}
+
 interface DatabaseSchemaTreeProps {
   schemas: SchemaInfo[];
   savedQueries?: SavedQuery[];
+  migrations?: Migration[];
   loading?: boolean;
   onTableSelect?: (schema: string, table: string) => void;
   onViewSelect?: (schema: string, view: string) => void;
@@ -38,9 +52,13 @@ interface DatabaseSchemaTreeProps {
   onLoadQuery?: (query: SavedQuery) => void;
   onEditQuery?: (query: SavedQuery) => void;
   onDeleteQuery?: (query: SavedQuery) => void;
+  onLoadMigration?: (migration: Migration) => void;
+  onDeleteMigration?: (migration: Migration) => void;
+  onDownloadMigration?: (migration: Migration) => void;
+  onDownloadAllMigrations?: () => void;
 }
 
-type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query';
+type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query' | 'migration';
 
 interface TreeItemProps {
   label: string;
@@ -52,6 +70,8 @@ interface TreeItemProps {
   onClick?: () => void;
   onContextAction?: () => void;
   defaultOpen?: boolean;
+  isOpen?: boolean;
+  onToggle?: (open: boolean) => void;
   schema?: string;
   name?: string;
   extra?: any;
@@ -62,6 +82,9 @@ interface TreeItemProps {
     onLoadQuery?: (query: any) => void;
     onEditQuery?: (query: any) => void;
     onDeleteQuery?: (query: any) => void;
+    onLoadMigration?: (migration: any) => void;
+    onDeleteMigration?: (migration: any) => void;
+    onDownloadMigration?: (migration: any) => void;
   };
 }
 
@@ -74,36 +97,53 @@ function TreeItem({
   children, 
   onClick, 
   defaultOpen = false,
+  isOpen: controlledIsOpen,
+  onToggle,
   schema = '',
   name = '',
   extra,
   contextMenuProps,
 }: TreeItemProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  
+  // Use controlled state if provided, otherwise use internal state
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalOpen;
+  const setIsOpen = onToggle || setInternalOpen;
+  
   const hasChildren = !!children;
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (hasChildren) {
       setIsOpen(!isOpen);
     }
     onClick?.();
   };
 
+  const handleChevronClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasChildren) {
+      setIsOpen(!isOpen);
+    }
+  };
+
   const itemButton = (
     <button
       className={cn(
         "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50",
-        (type === 'table' || type === 'view' || type === 'saved_query') && 'hover:bg-[#264f78]/30'
+        (type === 'table' || type === 'view' || type === 'saved_query' || type === 'migration') && 'hover:bg-[#264f78]/30'
       )}
       style={{ paddingLeft: `${level * 16 + 8}px` }}
       onClick={handleClick}
     >
       {hasChildren ? (
-        isOpen ? (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-        )
+        <span onClick={handleChevronClick} className="shrink-0">
+          {isOpen ? (
+            <ChevronDown className="h-3.5 w-3.5 text-[#858585]" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-[#858585]" />
+          )}
+        </span>
       ) : (
         <span className="w-3.5" />
       )}
@@ -116,7 +156,7 @@ function TreeItem({
   );
 
   // Wrap with context menu for items that support it
-  const contextMenuTypes: TreeItemContextType[] = ['table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 'saved_query'];
+  const contextMenuTypes: TreeItemContextType[] = ['table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 'saved_query', 'migration'];
   const shouldHaveContextMenu = contextMenuTypes.includes(type as TreeItemContextType) && contextMenuProps;
 
   return (
@@ -133,6 +173,9 @@ function TreeItem({
           onLoadQuery={contextMenuProps.onLoadQuery}
           onEditQuery={contextMenuProps.onEditQuery}
           onDeleteQuery={contextMenuProps.onDeleteQuery}
+          onLoadMigration={contextMenuProps.onLoadMigration}
+          onDeleteMigration={contextMenuProps.onDeleteMigration}
+          onDownloadMigration={contextMenuProps.onDownloadMigration}
         >
           {itemButton}
         </DatabaseTreeContextMenu>
@@ -147,6 +190,7 @@ function TreeItem({
 export function DatabaseSchemaTree({ 
   schemas, 
   savedQueries = [],
+  migrations = [],
   loading, 
   onTableSelect,
   onViewSelect,
@@ -157,8 +201,24 @@ export function DatabaseSchemaTree({
   onLoadQuery,
   onEditQuery,
   onDeleteQuery,
+  onLoadMigration,
+  onDeleteMigration,
+  onDownloadMigration,
+  onDownloadAllMigrations,
 }: DatabaseSchemaTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Track open state for categories to prevent collapse on context menu actions
+  const [openStates, setOpenStates] = useState<Record<string, boolean>>({
+    'saved_queries': true,
+    'migrations': true,
+    'public': true,
+    'public_tables': true,
+  });
+
+  const toggleOpen = useCallback((key: string, value: boolean) => {
+    setOpenStates(prev => ({ ...prev, [key]: value }));
+  }, []);
 
   const contextMenuProps = {
     onShowFirst100,
@@ -167,6 +227,9 @@ export function DatabaseSchemaTree({
     onLoadQuery,
     onEditQuery,
     onDeleteQuery,
+    onLoadMigration,
+    onDeleteMigration,
+    onDownloadMigration,
   };
 
   const filteredSchemas = useMemo(() => {
@@ -205,6 +268,17 @@ export function DatabaseSchemaTree({
       q.sql_content.toLowerCase().includes(term)
     );
   }, [savedQueries, searchTerm]);
+
+  const filteredMigrations = useMemo(() => {
+    if (!searchTerm.trim()) return migrations;
+    const term = searchTerm.toLowerCase();
+    return migrations.filter(m => 
+      m.name?.toLowerCase().includes(term) || 
+      m.sql_content.toLowerCase().includes(term) ||
+      m.object_name?.toLowerCase().includes(term) ||
+      m.object_type.toLowerCase().includes(term)
+    );
+  }, [migrations, searchTerm]);
 
   if (loading) {
     return (
@@ -248,7 +322,8 @@ export function DatabaseSchemaTree({
               icon={<Bookmark className="h-4 w-4 text-amber-500" />}
               level={0}
               count={savedQueries.length}
-              defaultOpen={true}
+              isOpen={openStates['saved_queries'] ?? true}
+              onToggle={(v) => toggleOpen('saved_queries', v)}
             >
               {filteredSavedQueries.map((query) => (
                 <TreeItem
@@ -267,228 +342,307 @@ export function DatabaseSchemaTree({
             </TreeItem>
           )}
 
-          {/* Schema sections */}
-          {filteredSchemas.map((schema) => (
+          {/* Migrations Section */}
+          {migrations.length > 0 && (
             <TreeItem
-              key={schema.name}
-              label={schema.name}
-              type="schema"
-              icon={<FolderClosed className="h-4 w-4 text-yellow-500" />}
+              label="Migrations"
+              type="category"
+              icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
               level={0}
-              defaultOpen={schema.name === 'public'}
+              count={migrations.length}
+              isOpen={openStates['migrations'] ?? true}
+              onToggle={(v) => toggleOpen('migrations', v)}
             >
-              {/* Tables */}
-              {schema.tables.length > 0 && (
-                <TreeItem
-                  label="Tables"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.tables.length}
-                  defaultOpen={schema.name === 'public'}
-                >
-                  {schema.tables.map((table) => (
-                    <TreeItem
-                      key={table}
-                      label={table}
-                      type="table"
-                      icon={<Table2 className="h-4 w-4 text-blue-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={table}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => {
-                        onTableSelect?.(schema.name, table);
-                        onItemClick?.('table', schema.name, table);
-                      }}
-                    />
-                  ))}
-                </TreeItem>
+              {/* Download All button */}
+              {migrations.length > 1 && onDownloadAllMigrations && (
+                <div className="px-2 py-1" style={{ paddingLeft: '24px' }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDownloadAllMigrations}
+                    className="h-6 text-xs text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50 w-full justify-start gap-1.5"
+                  >
+                    <Download className="h-3 w-3" />
+                    Download All Migrations
+                  </Button>
+                </div>
               )}
-
-              {/* Views */}
-              {schema.views.length > 0 && (
+              {filteredMigrations.map((migration) => (
                 <TreeItem
-                  label="Views"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                  key={migration.id}
+                  label={`${migration.sequence_number}. ${migration.name || `${migration.statement_type} ${migration.object_type}`}`}
+                  type="migration"
+                  icon={<GitBranch className="h-4 w-4 text-emerald-400" />}
                   level={1}
-                  count={schema.views.length}
-                >
-                  {schema.views.map((view) => (
-                    <TreeItem
-                      key={view}
-                      label={view}
-                      type="view"
-                      icon={<Eye className="h-4 w-4 text-purple-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={view}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => {
-                        onViewSelect?.(schema.name, view);
-                        onItemClick?.('view', schema.name, view);
-                      }}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Functions */}
-              {schema.functions.length > 0 && (
-                <TreeItem
-                  label="Functions"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.functions.length}
-                >
-                  {schema.functions.map((func) => (
-                    <TreeItem
-                      key={func}
-                      label={func}
-                      type="function"
-                      icon={<Zap className="h-4 w-4 text-orange-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={func}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('function', schema.name, func)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Triggers */}
-              {schema.triggers.length > 0 && (
-                <TreeItem
-                  label="Triggers"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.triggers.length}
-                >
-                  {schema.triggers.map((trigger) => (
-                    <TreeItem
-                      key={trigger.name}
-                      label={`${trigger.name} (${trigger.table})`}
-                      type="trigger"
-                      icon={<Clock className="h-4 w-4 text-green-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={trigger.name}
-                      extra={trigger}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('trigger', schema.name, trigger.name, trigger)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Indexes */}
-              {schema.indexes.length > 0 && (
-                <TreeItem
-                  label="Indexes"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.indexes.length}
-                >
-                  {schema.indexes.map((index) => (
-                    <TreeItem
-                      key={index.name}
-                      label={`${index.name} (${index.table})`}
-                      type="index"
-                      icon={<Search className="h-4 w-4 text-cyan-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={index.name}
-                      extra={index}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('index', schema.name, index.name, index)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Sequences */}
-              {schema.sequences.length > 0 && (
-                <TreeItem
-                  label="Sequences"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.sequences.length}
-                >
-                  {schema.sequences.map((seq) => (
-                    <TreeItem
-                      key={seq}
-                      label={seq}
-                      type="sequence"
-                      icon={<Hash className="h-4 w-4 text-pink-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={seq}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('sequence', schema.name, seq)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Types */}
-              {schema.types.length > 0 && (
-                <TreeItem
-                  label="Types"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.types.length}
-                >
-                  {schema.types.map((type) => (
-                    <TreeItem
-                      key={type.name}
-                      label={`${type.name} (${type.type})`}
-                      type="type"
-                      icon={<Type className="h-4 w-4 text-indigo-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={type.name}
-                      extra={type}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('type', schema.name, type.name, type)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
-
-              {/* Constraints */}
-              {schema.constraints.length > 0 && (
-                <TreeItem
-                  label="Constraints"
-                  type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
-                  level={1}
-                  count={schema.constraints.length}
-                >
-                  {schema.constraints.map((constraint) => (
-                    <TreeItem
-                      key={constraint.name}
-                      label={`${constraint.name} (${constraint.type})`}
-                      type="constraint"
-                      icon={<KeyRound className="h-4 w-4 text-red-500" />}
-                      level={2}
-                      schema={schema.name}
-                      name={constraint.name}
-                      extra={constraint}
-                      contextMenuProps={contextMenuProps}
-                      onClick={() => onItemClick?.('constraint', schema.name, constraint.name, constraint)}
-                    />
-                  ))}
-                </TreeItem>
-              )}
+                  schema={migration.object_schema || ''}
+                  name={migration.name || ''}
+                  extra={migration}
+                  contextMenuProps={contextMenuProps}
+                  onClick={() => onLoadMigration?.(migration)}
+                />
+              ))}
             </TreeItem>
-          ))}
+          )}
+
+          {/* Schema sections */}
+          {filteredSchemas.map((schema) => {
+            const schemaKey = schema.name;
+            return (
+              <TreeItem
+                key={schema.name}
+                label={schema.name}
+                type="schema"
+                icon={<FolderClosed className="h-4 w-4 text-yellow-500" />}
+                level={0}
+                isOpen={openStates[schemaKey] ?? schema.name === 'public'}
+                onToggle={(v) => toggleOpen(schemaKey, v)}
+              >
+                {/* Tables */}
+                {schema.tables.length > 0 && (
+                  <TreeItem
+                    label="Tables"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.tables.length}
+                    isOpen={openStates[`${schemaKey}_tables`] ?? schema.name === 'public'}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_tables`, v)}
+                  >
+                    {schema.tables.map((table) => (
+                      <TreeItem
+                        key={table}
+                        label={table}
+                        type="table"
+                        icon={<Table2 className="h-4 w-4 text-blue-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={table}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onTableSelect?.(schema.name, table);
+                          onItemClick?.('table', schema.name, table);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Views */}
+                {schema.views.length > 0 && (
+                  <TreeItem
+                    label="Views"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.views.length}
+                    isOpen={openStates[`${schemaKey}_views`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_views`, v)}
+                  >
+                    {schema.views.map((view) => (
+                      <TreeItem
+                        key={view}
+                        label={view}
+                        type="view"
+                        icon={<Eye className="h-4 w-4 text-purple-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={view}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onViewSelect?.(schema.name, view);
+                          onItemClick?.('view', schema.name, view);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Functions */}
+                {schema.functions.length > 0 && (
+                  <TreeItem
+                    label="Functions"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.functions.length}
+                    isOpen={openStates[`${schemaKey}_functions`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_functions`, v)}
+                  >
+                    {schema.functions.map((func) => (
+                      <TreeItem
+                        key={func}
+                        label={func}
+                        type="function"
+                        icon={<Zap className="h-4 w-4 text-orange-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={func}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('function', schema.name, func);
+                          onItemClick?.('function', schema.name, func);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Triggers */}
+                {schema.triggers.length > 0 && (
+                  <TreeItem
+                    label="Triggers"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.triggers.length}
+                    isOpen={openStates[`${schemaKey}_triggers`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_triggers`, v)}
+                  >
+                    {schema.triggers.map((trigger) => (
+                      <TreeItem
+                        key={trigger.name}
+                        label={`${trigger.name} (${trigger.table})`}
+                        type="trigger"
+                        icon={<Clock className="h-4 w-4 text-green-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={trigger.name}
+                        extra={trigger}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('trigger', schema.name, trigger.name, trigger);
+                          onItemClick?.('trigger', schema.name, trigger.name, trigger);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Indexes */}
+                {schema.indexes.length > 0 && (
+                  <TreeItem
+                    label="Indexes"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.indexes.length}
+                    isOpen={openStates[`${schemaKey}_indexes`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_indexes`, v)}
+                  >
+                    {schema.indexes.map((index) => (
+                      <TreeItem
+                        key={index.name}
+                        label={`${index.name} (${index.table})`}
+                        type="index"
+                        icon={<Search className="h-4 w-4 text-cyan-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={index.name}
+                        extra={index}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('index', schema.name, index.name, index);
+                          onItemClick?.('index', schema.name, index.name, index);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Sequences */}
+                {schema.sequences.length > 0 && (
+                  <TreeItem
+                    label="Sequences"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.sequences.length}
+                    isOpen={openStates[`${schemaKey}_sequences`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_sequences`, v)}
+                  >
+                    {schema.sequences.map((seq) => (
+                      <TreeItem
+                        key={seq}
+                        label={seq}
+                        type="sequence"
+                        icon={<Hash className="h-4 w-4 text-pink-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={seq}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('sequence', schema.name, seq);
+                          onItemClick?.('sequence', schema.name, seq);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Types */}
+                {schema.types.length > 0 && (
+                  <TreeItem
+                    label="Types"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.types.length}
+                    isOpen={openStates[`${schemaKey}_types`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_types`, v)}
+                  >
+                    {schema.types.map((type) => (
+                      <TreeItem
+                        key={type.name}
+                        label={`${type.name} (${type.type})`}
+                        type="type"
+                        icon={<Type className="h-4 w-4 text-indigo-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={type.name}
+                        extra={type}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('type', schema.name, type.name, type);
+                          onItemClick?.('type', schema.name, type.name, type);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+
+                {/* Constraints */}
+                {schema.constraints.length > 0 && (
+                  <TreeItem
+                    label="Constraints"
+                    type="category"
+                    icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
+                    level={1}
+                    count={schema.constraints.length}
+                    isOpen={openStates[`${schemaKey}_constraints`]}
+                    onToggle={(v) => toggleOpen(`${schemaKey}_constraints`, v)}
+                  >
+                    {schema.constraints.map((constraint) => (
+                      <TreeItem
+                        key={constraint.name}
+                        label={`${constraint.name} (${constraint.type})`}
+                        type="constraint"
+                        icon={<KeyRound className="h-4 w-4 text-red-500" />}
+                        level={2}
+                        schema={schema.name}
+                        name={constraint.name}
+                        extra={constraint}
+                        contextMenuProps={contextMenuProps}
+                        onClick={() => {
+                          onGetDefinition?.('constraint', schema.name, constraint.name, constraint);
+                          onItemClick?.('constraint', schema.name, constraint.name, constraint);
+                        }}
+                      />
+                    ))}
+                  </TreeItem>
+                )}
+              </TreeItem>
+            );
+          })}
         </div>
       </ScrollArea>
     </div>

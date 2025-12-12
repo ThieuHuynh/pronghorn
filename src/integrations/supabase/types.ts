@@ -1095,6 +1095,69 @@ export type Database = {
           },
         ]
       }
+      project_migrations: {
+        Row: {
+          created_at: string
+          database_id: string
+          executed_at: string
+          executed_by: string | null
+          id: string
+          name: string | null
+          object_name: string | null
+          object_schema: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }
+        Insert: {
+          created_at?: string
+          database_id: string
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          name?: string | null
+          object_name?: string | null
+          object_schema?: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }
+        Update: {
+          created_at?: string
+          database_id?: string
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          name?: string | null
+          object_name?: string | null
+          object_schema?: string | null
+          object_type?: string
+          project_id?: string
+          sequence_number?: number
+          sql_content?: string
+          statement_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_migrations_database_id_fkey"
+            columns: ["database_id"]
+            isOneToOne: false
+            referencedRelation: "project_databases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_migrations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_repos: {
         Row: {
           auto_commit: boolean | null
@@ -2183,6 +2246,10 @@ export type Database = {
         Args: { p_file_id: string; p_token: string }
         Returns: boolean
       }
+      delete_migration_with_token: {
+        Args: { p_migration_id: string; p_token?: string }
+        Returns: undefined
+      }
       delete_project_repo_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: undefined
@@ -2700,6 +2767,30 @@ export type Database = {
           project_updated_at: string
           role: Database["public"]["Enums"]["project_token_role"]
         }[]
+      }
+      get_migrations_with_token: {
+        Args: { p_database_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          database_id: string
+          executed_at: string
+          executed_by: string | null
+          id: string
+          name: string | null
+          object_name: string | null
+          object_schema: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_migrations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_multiple_files_with_token: {
         Args: { p_paths: string[]; p_repo_id: string; p_token?: string }
@@ -3426,6 +3517,39 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      insert_migration_with_token: {
+        Args: {
+          p_database_id: string
+          p_name?: string
+          p_object_name?: string
+          p_object_schema?: string
+          p_object_type: string
+          p_sql_content: string
+          p_statement_type: string
+          p_token?: string
+        }
+        Returns: {
+          created_at: string
+          database_id: string
+          executed_at: string
+          executed_by: string | null
+          id: string
+          name: string | null
+          object_name: string | null
+          object_schema: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_migrations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_project_standard_with_token: {
         Args: { p_project_id: string; p_standard_id: string; p_token: string }
         Returns: {

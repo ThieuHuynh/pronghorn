@@ -21,13 +21,14 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { DatabaseSchemaTree } from "./DatabaseSchemaTree";
+import { DatabaseSchemaTree, Migration } from "./DatabaseSchemaTree";
 import { SqlQueryEditor } from "./SqlQueryEditor";
 import { QueryResultsViewer } from "./QueryResultsViewer";
 import { TableStructureViewer } from "./TableStructureViewer";
 import { SaveQueryDialog } from "./SaveQueryDialog";
 import { TreeItemContextType } from "./DatabaseTreeContextMenu";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { extractDDLStatements } from "@/lib/sqlParser";
 
 interface SchemaInfo {
   name: string;
@@ -59,6 +60,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   const isMobile = useIsMobile();
   const [schemas, setSchemas] = useState<SchemaInfo[]>([]);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [migrations, setMigrations] = useState<Migration[]>([]);
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   
@@ -124,13 +126,26 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
     }
   }, [database.id, shareToken]);
 
+  const loadMigrations = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_migrations_with_token", {
+        p_database_id: database.id,
+        p_token: shareToken || null,
+      });
+      if (!error && data) setMigrations(data as Migration[]);
+    } catch (error) {
+      console.error("Failed to load migrations:", error);
+    }
+  }, [database.id, shareToken]);
+
   useEffect(() => {
     if (!initialLoadDone.current) {
       initialLoadDone.current = true;
       loadSchema();
       loadSavedQueries();
+      loadMigrations();
     }
-  }, [loadSchema, loadSavedQueries]);
+  }, [loadSchema, loadSavedQueries, loadMigrations]);
 
   const silentRefresh = useCallback(() => { loadSchema(true); }, [loadSchema]);
 
@@ -141,6 +156,27 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
       const result = await invokeManageDatabase("execute_sql", { sql });
       setQueryResults({ columns: result.columns || [], rows: result.rows || [], executionTime: result.executionTime, totalRows: result.rowCount });
       toast.success(`Query executed: ${result.rowCount} rows`);
+      
+      // Auto-capture DDL statements as migrations
+      const ddlStatements = extractDDLStatements(sql);
+      for (const ddl of ddlStatements) {
+        try {
+          await supabase.rpc("insert_migration_with_token", {
+            p_database_id: database.id,
+            p_sql_content: ddl.sql,
+            p_statement_type: ddl.statementType,
+            p_object_type: ddl.objectType,
+            p_token: shareToken || null,
+            p_object_schema: ddl.objectSchema || 'public',
+            p_object_name: ddl.objectName,
+          });
+          toast.success(`Migration captured: ${ddl.statementType} ${ddl.objectType}${ddl.objectName ? ` ${ddl.objectName}` : ''}`);
+        } catch (e) {
+          console.error("Failed to capture migration:", e);
+        }
+      }
+      if (ddlStatements.length > 0) loadMigrations();
+      
       silentRefresh();
       if (isMobile) setMobileActiveTab("results");
     } catch (error: any) {
@@ -278,6 +314,34 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
 
   const handleOpenSaveDialog = (sql: string) => { setPendingSqlToSave(sql); setEditingQuery(null); setSaveDialogOpen(true); };
 
+  const handleLoadMigration = (migration: Migration) => { setCurrentQuery(migration.sql_content); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
+  
+  const handleDeleteMigration = async (migration: Migration) => {
+    try {
+      await supabase.rpc("delete_migration_with_token", { p_migration_id: migration.id, p_token: shareToken || null });
+      toast.success("Migration deleted");
+      loadMigrations();
+    } catch (error: any) { toast.error("Failed to delete: " + error.message); }
+  };
+
+  const handleDownloadMigration = (migration: Migration) => {
+    const filename = `${String(migration.sequence_number).padStart(4, '0')}_${migration.name || 'migration'}.sql`;
+    const content = `-- Migration: ${migration.name || 'Unnamed'}\n-- Type: ${migration.statement_type} ${migration.object_type}\n-- Executed: ${new Date(migration.executed_at).toISOString()}\n\n${migration.sql_content};`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${filename}`);
+  };
+
+  const handleDownloadAllMigrations = () => {
+    if (migrations.length === 0) return;
+    const content = migrations.map(m => `-- Migration ${m.sequence_number}: ${m.name || 'Unnamed'}\n-- Type: ${m.statement_type} ${m.object_type}\n-- Executed: ${new Date(m.executed_at).toISOString()}\n\n${m.sql_content};`).join('\n\n-- ============================================\n\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `migrations_${database.name}.sql`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${migrations.length} migrations`);
+  };
+
   const handleExport = async (format: 'json' | 'csv' | 'sql') => {
     if (!selectedTable) return;
     try {
@@ -313,7 +377,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
         {schemaError ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center"><AlertCircle className="h-8 w-8 text-destructive mb-2" /><p className="text-sm text-destructive">{schemaError}</p><Button variant="outline" size="sm" onClick={() => loadSchema()} className="mt-4">Retry</Button></div>
         ) : (
-          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} />
+          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} />
         )}
       </div>
     </div>
