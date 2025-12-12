@@ -31,16 +31,14 @@ interface DatabaseDialogProps {
 }
 
 const PLANS = [
-  { value: "starter", label: "Starter", enabled: true },
-  { value: "standard", label: "Standard", enabled: true },
-  { value: "free", label: "Free", enabled: false },
-  { value: "pro", label: "Pro", enabled: false },
-  { value: "pro_plus", label: "Pro Plus", enabled: false },
-  { value: "basic_256mb", label: "Basic 256MB", enabled: false },
-  { value: "basic_1gb", label: "Basic 1GB", enabled: false },
+  { value: "basic_256mb", label: "Basic 256MB", enabled: true },
+  { value: "basic_1gb", label: "Basic 1GB", enabled: true },
   { value: "basic_4gb", label: "Basic 4GB", enabled: false },
   { value: "pro_4gb", label: "Pro 4GB", enabled: false },
   { value: "pro_8gb", label: "Pro 8GB", enabled: false },
+  { value: "pro_16gb", label: "Pro 16GB", enabled: false },
+  { value: "pro_32gb", label: "Pro 32GB", enabled: false },
+  { value: "pro_64gb", label: "Pro 64GB", enabled: false },
 ];
 
 const REGIONS = [
@@ -78,7 +76,7 @@ export function DatabaseDialog({
   const [form, setForm] = useState({
     name: "",
     provider: "render_postgres",
-    plan: "starter",
+    plan: "basic_256mb",
     region: "oregon",
     postgresVersion: "16",
   });
@@ -88,7 +86,7 @@ export function DatabaseDialog({
       setForm({
         name: database.name || "",
         provider: database.provider || "render_postgres",
-        plan: database.plan || "starter",
+        plan: database.plan || "basic_256mb",
         region: database.region || "oregon",
         postgresVersion: database.postgres_version || "16",
       });
@@ -96,7 +94,7 @@ export function DatabaseDialog({
       setForm({
         name: "",
         provider: "render_postgres",
-        plan: "starter",
+        plan: "basic_256mb",
         region: "oregon",
         postgresVersion: "16",
       });
