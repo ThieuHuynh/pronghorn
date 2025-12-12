@@ -119,7 +119,7 @@ async function createRenderDatabase(
 
   const createPayload = {
     name: database.name,
-    owner: { id: ownerId },
+    ownerId: ownerId,
     databaseName: database.name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
     databaseUser: `user_${database.id.substring(0, 8)}`,
     plan: database.plan,
