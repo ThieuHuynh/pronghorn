@@ -19,6 +19,7 @@ interface EnvVarEditorProps {
   clearExisting?: boolean;
   onClearExistingChange?: (clear: boolean) => void;
   disabled?: boolean;
+  keysOnlyMode?: boolean;
 }
 
 const EnvVarEditor = ({
@@ -28,6 +29,7 @@ const EnvVarEditor = ({
   clearExisting = false,
   onClearExistingChange,
   disabled = false,
+  keysOnlyMode = false,
 }: EnvVarEditorProps) => {
   const [mode, setMode] = useState<"key-value" | "json">("key-value");
   const [jsonValue, setJsonValue] = useState("");
@@ -306,7 +308,9 @@ const EnvVarEditor = ({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Environment variables are encrypted and only visible to project owners.
+        {keysOnlyMode 
+          ? "Only variable names are stored. Values are sent directly to Render when you save."
+          : "Values are sent directly to Render and not stored in Pronghorn."}
       </p>
     </div>
   );

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import DeploymentConfigDialog from "./DeploymentConfigDialog";
+import DeploymentDialog from "./DeploymentDialog";
 import DeploymentLogsDialog from "./DeploymentLogsDialog";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -421,12 +421,14 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
         </CardContent>
       </Card>
 
-      <DeploymentConfigDialog
+      <DeploymentDialog
         open={isConfigOpen}
         onOpenChange={setIsConfigOpen}
-        deployment={deployment}
+        projectId={deployment.project_id}
         shareToken={shareToken}
-        onUpdate={onUpdate}
+        mode="edit"
+        deployment={deployment}
+        onSuccess={onUpdate}
       />
 
       <DeploymentLogsDialog

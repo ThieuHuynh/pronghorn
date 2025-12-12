@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import DeploymentCard from "@/components/deploy/DeploymentCard";
-import CreateDeploymentDialog from "@/components/deploy/CreateDeploymentDialog";
+import DeploymentDialog from "@/components/deploy/DeploymentDialog";
 import type { Database } from "@/integrations/supabase/types";
 
 type Deployment = Database["public"]["Tables"]["project_deployments"]["Row"];
@@ -205,13 +205,14 @@ const Deploy = () => {
           </Tabs>
         </div>
 
-        <CreateDeploymentDialog
+        <DeploymentDialog
           open={isCreateOpen}
           onOpenChange={setIsCreateOpen}
           projectId={projectId || ""}
           shareToken={shareToken}
+          mode="create"
           defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
-          onCreated={fetchDeployments}
+          onSuccess={fetchDeployments}
         />
       </div>
     </div>
