@@ -53,7 +53,7 @@ function TreeItem({ label, type, icon, level, count, children, onClick, defaultO
     <div>
       <button
         className={cn(
-          "w-full text-left px-2 py-1 text-sm hover:bg-muted/50 transition-colors flex items-center gap-1.5",
+          "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50",
           type === 'table' || type === 'view' ? 'hover:bg-primary/10' : ''
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
