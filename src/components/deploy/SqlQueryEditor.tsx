@@ -85,22 +85,23 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   };
 
   const handleEditorChange = (value: string | undefined) => {
-    const next = value ?? "";
-    setInternalQuery(next);
-    lastExternalQuery.current = next;
-    onQueryChange?.(next);
+    setInternalQuery(value ?? "");
   };
 
   const handleExecute = useCallback(async () => {
-    if (!editorValue.trim() || isExecuting) return;
+    const sql = internalQuery.trim();
+    if (!sql || isExecuting) return;
 
     // Add to history
-    const newHistory = [editorValue, ...queryHistory.filter(q => q !== editorValue)].slice(0, MAX_HISTORY);
+    const newHistory = [sql, ...queryHistory.filter((q) => q !== sql)].slice(0, MAX_HISTORY);
     setQueryHistory(newHistory);
     localStorage.setItem("db-query-history", JSON.stringify(newHistory));
 
-    await onExecute(editorValue);
-  }, [editorValue, queryHistory, onExecute, isExecuting]);
+    lastExternalQuery.current = internalQuery;
+    onQueryChange?.(internalQuery);
+
+    await onExecute(internalQuery);
+  }, [internalQuery, queryHistory, onExecute, isExecuting, onQueryChange]);
 
   const handleClear = () => {
     const next = "";
