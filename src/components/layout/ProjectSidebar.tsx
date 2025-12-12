@@ -82,13 +82,13 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
       <aside
         className={`
           ${isMobile 
-            ? "fixed top-14 left-0 bottom-0 z-50 w-64 shadow-lg md:hidden" 
+            ? "fixed top-14 left-0 bottom-0 z-50 w-64 shadow-lg" 
             : `relative border-r border-border transition-all duration-300 ${isCollapsed ? "w-16" : "w-56"}`
           }
-          bg-card h-full flex flex-col
+          bg-card flex flex-col
         `}
       >
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0">
           {/* Header with project name and close/collapse button */}
           <div className="flex items-center justify-between p-2 border-b border-border">
             {!isCollapsed && !isMobile && projectName && (
