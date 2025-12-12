@@ -16,6 +16,7 @@ interface SqlQueryEditorProps {
   isExecuting?: boolean;
   initialQuery?: string;
   onSaveQuery?: (sql: string) => void;
+  onQueryChange?: (sql: string) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -35,7 +36,7 @@ const WRITE_PATTERNS = [
   /^\s*ALTER\s+/i,
 ];
 
-export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery }: SqlQueryEditorProps) {
+export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery, onQueryChange }: SqlQueryEditorProps) {
   const [query, setQuery] = useState(initialQuery || "SELECT 1;");
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -54,10 +55,12 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
     return 'read';
   }, [query]);
 
-  // Update query when initialQuery changes
+  // Update query when initialQuery changes externally (e.g., loading saved query)
+  const initialQueryRef = useRef(initialQuery);
   useEffect(() => {
-    if (initialQuery && initialQuery !== query) {
+    if (initialQuery && initialQuery !== initialQueryRef.current) {
       setQuery(initialQuery);
+      initialQueryRef.current = initialQuery;
     }
   }, [initialQuery]);
 
@@ -139,7 +142,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
             )}
             Run
           </Button>
-          <span className="text-xs text-muted-foreground">Ctrl+Enter</span>
+          <span className="text-xs text-[#858585]">Ctrl+Enter</span>
           
           {/* Query type indicator */}
           {queryType === 'destructive' && (
@@ -219,7 +222,11 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
           language="sql"
           theme="vs-dark"
           value={query}
-          onChange={(value) => setQuery(value || "")}
+          onChange={(value) => {
+            const newValue = value || "";
+            setQuery(newValue);
+            onQueryChange?.(newValue);
+          }}
           onMount={handleEditorMount}
           options={{
             minimap: { enabled: false },

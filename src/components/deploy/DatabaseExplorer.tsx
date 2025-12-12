@@ -277,6 +277,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   };
 
   const handleOpenSaveDialog = (sql: string) => { setPendingSqlToSave(sql); setEditingQuery(null); setSaveDialogOpen(true); };
+  const handleQueryChange = useCallback((sql: string) => { setCurrentQuery(sql); }, []);
 
   const handleExport = async (format: 'json' | 'csv' | 'sql') => {
     if (!selectedTable) return;
@@ -330,9 +331,9 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
           </TabsList>
         </div>
         <TabsContent value="query" className="flex-1 m-0 min-h-0">
-          {isMobile ? <SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /> : (
+          {isMobile ? <SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} onQueryChange={handleQueryChange} /> : (
             <ResizablePanelGroup direction="vertical">
-              <ResizablePanel defaultSize={40} minSize={20}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></ResizablePanel>
+              <ResizablePanel defaultSize={40} minSize={20}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} onQueryChange={handleQueryChange} /></ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={60} minSize={20}><div className="h-full bg-background">{queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query to see results</p></div>}</div></ResizablePanel>
             </ResizablePanelGroup>
@@ -354,7 +355,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
         <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full h-10 rounded-none border-b grid grid-cols-4"><TabsTrigger value="schema" className="text-xs">Schema</TabsTrigger><TabsTrigger value="query" className="text-xs">Query</TabsTrigger><TabsTrigger value="results" className="text-xs">Results</TabsTrigger><TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger></TabsList>
           <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
-          <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></div></TabsContent>
+          <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} onQueryChange={handleQueryChange} /></div></TabsContent>
           <TabsContent value="results" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "results" ? "active" : "inactive"}><div className={mobileActiveTab === "results" ? "h-full" : "hidden"}><ResultsPanel /></div></TabsContent>
           <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><AgentPanel /></div></TabsContent>
         </Tabs>
