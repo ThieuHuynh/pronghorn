@@ -1,6 +1,40 @@
 {
   "projectTypes": [
     {
+      "value": "static",
+      "label": "Static Web App",
+      "renderType": "static_site",
+      "runtime": null,
+      "buildCommand": "",
+      "runCommand": null,
+      "buildFolder": "/",
+      "runFolder": "/",
+      "publishPath": "/",
+      "description": "Static site deployed to Render CDN"
+    },
+    {
+      "value": "vue_vite",
+      "label": "Vue (Vite)",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm install && npm run build",
+      "runCommand": "npx http-server dist -p $PORT",
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "description": "Vue app built with Vite, served via http-server"
+    },
+    {
+      "value": "react_vite",
+      "label": "React (Vite)",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm install && npm run build",
+      "runCommand": "npx http-server dist -p $PORT",
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "description": "React app built with Vite, served via http-server"
+    },
+    {
       "value": "node",
       "label": "Node.js Backend",
       "renderType": "web_service",
@@ -76,52 +110,6 @@
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Uses Dockerfile in repository root"
-    },
-    {
-      "value": "react_vite",
-      "label": "React (Vite)",
-      "renderType": "web_service",
-      "runtime": "node",
-      "buildCommand": "npm install && npm run build",
-      "runCommand": "npx http-server dist -p $PORT",
-      "buildFolder": "dist",
-      "runFolder": "/",
-      "description": "React app built with Vite, served via http-server"
-    },
-    {
-      "value": "vue_vite",
-      "label": "Vue (Vite)",
-      "renderType": "web_service",
-      "runtime": "node",
-      "buildCommand": "npm install && npm run build",
-      "runCommand": "npx http-server dist -p $PORT",
-      "buildFolder": "dist",
-      "runFolder": "/",
-      "description": "Vue app built with Vite, served via http-server"
-    },
-    {
-      "value": "static",
-      "label": "Static Web App",
-      "renderType": "static_site",
-      "runtime": null,
-      "buildCommand": "npm run build",
-      "runCommand": null,
-      "buildFolder": "dist",
-      "runFolder": "/",
-      "publishPath": "dist",
-      "description": "Static site deployed to Render CDN"
-    },
-    {
-      "value": "tanstack",
-      "label": "TanStack (Static)",
-      "renderType": "static_site",
-      "runtime": null,
-      "buildCommand": "npm install && npm run build",
-      "runCommand": null,
-      "buildFolder": "dist",
-      "runFolder": "/",
-      "publishPath": "dist",
-      "description": "TanStack Start/Router static build"
     }
   ],
   "runtimes": ["docker", "elixir", "go", "node", "python", "ruby", "rust", "image"]
