@@ -16,7 +16,6 @@ interface SqlQueryEditorProps {
   isExecuting?: boolean;
   initialQuery?: string;
   onSaveQuery?: (sql: string) => void;
-  onQueryChange?: (sql: string) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -36,7 +35,7 @@ const WRITE_PATTERNS = [
   /^\s*ALTER\s+/i,
 ];
 
-export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery, onQueryChange }: SqlQueryEditorProps) {
+export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery }: SqlQueryEditorProps) {
   const [query, setQuery] = useState(initialQuery || "SELECT 1;");
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -54,15 +53,6 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
     if (WRITE_PATTERNS.some(p => p.test(query))) return 'write';
     return 'read';
   }, [query]);
-
-  // Update query when initialQuery changes externally (e.g., loading saved query)
-  const initialQueryRef = useRef(initialQuery);
-  useEffect(() => {
-    if (initialQuery && initialQuery !== initialQueryRef.current) {
-      setQuery(initialQuery);
-      initialQueryRef.current = initialQuery;
-    }
-  }, [initialQuery]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -222,11 +212,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
           language="sql"
           theme="vs-dark"
           value={query}
-          onChange={(value) => {
-            const newValue = value || "";
-            setQuery(newValue);
-            onQueryChange?.(newValue);
-          }}
+                onChange={(value) => setQuery(value || "")}
           onMount={handleEditorMount}
           options={{
             minimap: { enabled: false },
