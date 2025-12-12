@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import EnvVarEditor from "./EnvVarEditor";
 import type { Database } from "@/integrations/supabase/types";
 
 type Deployment = Database["public"]["Tables"]["project_deployments"]["Row"];
@@ -51,7 +52,9 @@ const DeploymentConfigDialog = ({
   onUpdate,
 }: DeploymentConfigDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncingEnvVars, setIsSyncingEnvVars] = useState(false);
   const [activeTab, setActiveTab] = useState("config");
+  const [clearExisting, setClearExisting] = useState(false);
   
   const [form, setForm] = useState({
     name: deployment.name,
@@ -83,13 +86,48 @@ const DeploymentConfigDialog = ({
       setEnvVars(
         Object.entries((deployment.env_vars as Record<string, string>) || {}).map(([key, value]) => ({ key, value }))
       );
+      setClearExisting(false);
     }
   }, [open, deployment]);
+
+  const handleSyncFromRender = async () => {
+    if (!deployment.render_service_id) {
+      toast.error("No Render service linked yet");
+      return;
+    }
+
+    setIsSyncingEnvVars(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("render-service", {
+        body: {
+          action: "getEnvVars",
+          deploymentId: deployment.id,
+          shareToken: shareToken || null,
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      const renderEnvVars = data.data || [];
+      setEnvVars(renderEnvVars.map((v: { key: string; value: string }) => ({
+        key: v.key,
+        value: v.value,
+      })));
+      
+      toast.success("Environment variables synced from Render");
+    } catch (error: any) {
+      console.error("Error syncing env vars:", error);
+      toast.error(error.message || "Failed to sync from Render");
+    } finally {
+      setIsSyncingEnvVars(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Convert env vars array to object
+      // Convert env vars array to object for database storage
       const envVarsObj: Record<string, string> = {};
       envVars.forEach(({ key, value }) => {
         if (key.trim()) {
@@ -97,6 +135,7 @@ const DeploymentConfigDialog = ({
         }
       });
 
+      // Update local database
       const { error } = await supabase.rpc("update_deployment_with_token", {
         p_deployment_id: deployment.id,
         p_token: shareToken || null,
@@ -113,7 +152,32 @@ const DeploymentConfigDialog = ({
 
       if (error) throw error;
 
-      toast.success("Deployment updated");
+      // If there's a Render service, also update env vars on Render
+      if (deployment.render_service_id) {
+        const envVarsArray = envVars.filter(v => v.key.trim()).map(v => ({
+          key: v.key.trim(),
+          value: v.value,
+        }));
+
+        const { data: renderData, error: renderError } = await supabase.functions.invoke("render-service", {
+          body: {
+            action: "updateEnvVars",
+            deploymentId: deployment.id,
+            shareToken: shareToken || null,
+            newEnvVars: envVarsArray,
+            clearExisting,
+          },
+        });
+
+        if (renderError || !renderData?.success) {
+          toast.warning("Saved locally, but failed to update Render. Deploy to retry.");
+        } else {
+          toast.success("Deployment updated. Deploy to apply changes.");
+        }
+      } else {
+        toast.success("Deployment updated");
+      }
+
       onOpenChange(false);
       onUpdate();
     } catch (error: any) {
@@ -124,19 +188,7 @@ const DeploymentConfigDialog = ({
     }
   };
 
-  const addEnvVar = () => {
-    setEnvVars([...envVars, { key: "", value: "" }]);
-  };
-
-  const removeEnvVar = (index: number) => {
-    setEnvVars(envVars.filter((_, i) => i !== index));
-  };
-
-  const updateEnvVar = (index: number, field: "key" | "value", value: string) => {
-    const updated = [...envVars];
-    updated[index][field] = value;
-    setEnvVars(updated);
-  };
+  const hasRenderService = !!deployment.render_service_id;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,9 +227,9 @@ const DeploymentConfigDialog = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="development">Development</SelectItem>
-                    <SelectItem value="staging">Staging</SelectItem>
-                    <SelectItem value="production">Production</SelectItem>
+                    <SelectItem value="dev">Dev</SelectItem>
+                    <SelectItem value="uat">UAT</SelectItem>
+                    <SelectItem value="prod">Prod</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -253,42 +305,35 @@ const DeploymentConfigDialog = ({
           </TabsContent>
 
           <TabsContent value="env" className="space-y-4 pt-4">
-            <div className="space-y-3">
-              {envVars.map((envVar, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    placeholder="KEY"
-                    value={envVar.key}
-                    onChange={(e) => updateEnvVar(index, "key", e.target.value)}
-                    className="font-mono text-sm flex-1"
-                  />
-                  <Input
-                    placeholder="value"
-                    value={envVar.value}
-                    onChange={(e) => updateEnvVar(index, "value", e.target.value)}
-                    className="font-mono text-sm flex-[2]"
-                    type="password"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeEnvVar(index)}
-                    className="h-9 w-9 text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+            {hasRenderService && (
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <span>Sync with Render.com</span>
                 </div>
-              ))}
-            </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncFromRender}
+                  disabled={isSyncingEnvVars}
+                >
+                  {isSyncingEnvVars ? (
+                    <RefreshCw className="h-3 w-3 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                  )}
+                  Pull from Render
+                </Button>
+              </div>
+            )}
             
-            <Button variant="outline" size="sm" onClick={addEnvVar}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Variable
-            </Button>
-            
-            <p className="text-xs text-muted-foreground">
-              Environment variables are encrypted and only visible to project owners.
-            </p>
+            <EnvVarEditor
+              value={envVars}
+              onChange={setEnvVars}
+              showClearExisting={hasRenderService}
+              clearExisting={clearExisting}
+              onClearExistingChange={setClearExisting}
+            />
           </TabsContent>
         </Tabs>
 
