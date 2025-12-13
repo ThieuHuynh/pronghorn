@@ -997,7 +997,8 @@ export function UnifiedAgentInterface({
     (attachedContext?.canvasNodes?.length || 0) +
     (attachedContext?.canvasEdges?.length || 0) +
     (attachedContext?.canvasLayers?.length || 0) +
-    (attachedContext?.files?.length || 0);
+    (attachedContext?.files?.length || 0) +
+    (attachedContext?.databases?.length || 0);
 
   return (
     <div className="flex flex-col h-full min-h-0">

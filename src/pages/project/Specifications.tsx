@@ -721,6 +721,12 @@ export default function Specifications() {
                     {selectedContent.canvasLayers.length > 0 && (
                       <div>• <strong>Canvas Layers:</strong> {selectedContent.canvasLayers.length} items</div>
                     )}
+                    {selectedContent.files && selectedContent.files.length > 0 && (
+                      <div>• <strong>Repository Files:</strong> {selectedContent.files.length} items</div>
+                    )}
+                    {selectedContent.databases && selectedContent.databases.length > 0 && (
+                      <div>• <strong>Database Items:</strong> {selectedContent.databases.length} items</div>
+                    )}
                   </div>
                 )}
               </CardContent>
