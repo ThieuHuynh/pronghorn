@@ -472,13 +472,30 @@ serve(async (req) => {
       if (projectContext.databases?.length > 0) {
         const dbs = projectContext.databases as any[];
         const dbItems = dbs.map((d: any) => {
-          let itemStr = `- ${d.type}: ${d.name}`;
-          if (d.sql_content) itemStr += `\n  SQL: ${d.sql_content.substring(0, 500)}${d.sql_content.length > 500 ? '...' : ''}`;
-          if (d.columns) itemStr += `\n  Columns: ${d.columns.join(', ')}`;
-          if (d.sampleData?.length) itemStr += `\n  Sample rows: ${d.sampleData.length}`;
+          let itemStr = `### ${d.type.toUpperCase()}: ${d.schemaName}.${d.name}`;
+          if (d.definition) {
+            itemStr += `\n\`\`\`sql\n${d.definition}\n\`\`\``;
+          }
+          if (d.columns?.length) {
+            const colDetails = d.columns.map((c: any) => {
+              let col = `  - ${c.name}: ${c.type}`;
+              if (c.isPrimaryKey) col += ' [PK]';
+              if (c.isForeignKey) col += ` [FK -> ${c.foreignKeyRef}]`;
+              if (!c.nullable) col += ' NOT NULL';
+              if (c.default) col += ` DEFAULT ${c.default}`;
+              return col;
+            }).join('\n');
+            itemStr += `\nColumns:\n${colDetails}`;
+          }
+          if (d.indexes?.length) {
+            const idxDetails = d.indexes.map((i: any) => `  - ${i.name}: ${i.definition}`).join('\n');
+            itemStr += `\nIndexes:\n${idxDetails}`;
+          }
+          if (d.sql_content) itemStr += `\n\`\`\`sql\n${d.sql_content}\n\`\`\``;
+          if (d.sampleData?.length) itemStr += `\nSample data: ${d.sampleData.length} rows\n${JSON.stringify(d.sampleData.slice(0, 3), null, 2)}`;
           return itemStr;
-        }).join("\n");
-        parts.push(`Database Schemas (${dbs.length} items attached):\n${dbItems}`);
+        }).join("\n\n");
+        parts.push(`DATABASE SCHEMAS (${dbs.length} items attached):\n\n${dbItems}`);
       }
 
       contextSummary = parts.join("\n\n");

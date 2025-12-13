@@ -11,7 +11,8 @@ const RENDER_API_URL = "https://api.render.com/v1";
 interface ManageDatabaseRequest {
   action: 'get_schema' | 'execute_sql' | 'get_table_data' | 'get_table_columns' | 'export_table' 
     | 'get_table_definition' | 'get_view_definition' | 'get_function_definition' 
-    | 'get_trigger_definition' | 'get_index_definition' | 'get_sequence_info' | 'get_type_definition';
+    | 'get_trigger_definition' | 'get_index_definition' | 'get_sequence_info' | 'get_type_definition'
+    | 'get_table_structure';
   databaseId: string;
   shareToken?: string;
   // For execute_sql
@@ -207,6 +208,12 @@ Deno.serve(async (req) => {
           throw new Error("Schema and type name are required");
         }
         result = await getTypeDefinition(connectionString, body.schema, body.name);
+        break;
+      case 'get_table_structure':
+        if (!body.schema || !body.table) {
+          throw new Error("Schema and table are required");
+        }
+        result = await getTableStructure(connectionString, body.schema, body.table);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -753,6 +760,121 @@ async function getTypeDefinition(connectionString: string, schema: string, typeN
     }
 
     throw new Error(`Type ${schema}.${typeName} not found or unsupported type`);
+  } finally {
+    await client.end();
+  }
+}
+
+async function getTableStructure(connectionString: string, schema: string, table: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    // Get columns with full details
+    const columnsResult = await client.queryObject<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+      column_default: string | null;
+      character_maximum_length: number | null;
+    }>`
+      SELECT column_name, data_type, is_nullable, column_default, character_maximum_length
+      FROM information_schema.columns
+      WHERE table_schema = ${schema} AND table_name = ${table}
+      ORDER BY ordinal_position
+    `;
+
+    // Get primary key columns
+    const pkResult = await client.queryObject<{ column_name: string }>`
+      SELECT kcu.column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      WHERE tc.constraint_type = 'PRIMARY KEY'
+        AND tc.table_schema = ${schema}
+        AND tc.table_name = ${table}
+    `;
+    const pkColumns = new Set(pkResult.rows.map(r => r.column_name));
+
+    // Get foreign key columns with references
+    const fkResult = await client.queryObject<{
+      column_name: string;
+      foreign_table_schema: string;
+      foreign_table_name: string;
+      foreign_column_name: string;
+    }>`
+      SELECT 
+        kcu.column_name,
+        ccu.table_schema AS foreign_table_schema,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage ccu 
+        ON ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_schema = ${schema}
+        AND tc.table_name = ${table}
+    `;
+    const fkMap = new Map(fkResult.rows.map(r => [
+      r.column_name, 
+      `${r.foreign_table_schema}.${r.foreign_table_name}(${r.foreign_column_name})`
+    ]));
+
+    // Get indexes for this table
+    const indexesResult = await client.queryObject<{ indexname: string; indexdef: string }>`
+      SELECT indexname, indexdef
+      FROM pg_indexes
+      WHERE schemaname = ${schema} AND tablename = ${table}
+      ORDER BY indexname
+    `;
+
+    // Build columns array with full details
+    const columns = columnsResult.rows.map(col => ({
+      name: col.column_name,
+      type: col.data_type,
+      nullable: col.is_nullable === 'YES',
+      default: col.column_default,
+      maxLength: col.character_maximum_length,
+      isPrimaryKey: pkColumns.has(col.column_name),
+      isForeignKey: fkMap.has(col.column_name),
+      foreignKeyRef: fkMap.get(col.column_name) || null,
+    }));
+
+    // Build indexes array
+    const indexes = indexesResult.rows.map(idx => ({
+      name: idx.indexname,
+      definition: idx.indexdef + ';',
+    }));
+
+    // Build CREATE TABLE statement
+    const columnDefs = columnsResult.rows.map(col => {
+      let def = `  "${col.column_name}" ${col.data_type}`;
+      if (col.character_maximum_length) {
+        def += `(${col.character_maximum_length})`;
+      }
+      if (col.is_nullable === 'NO') {
+        def += ' NOT NULL';
+      }
+      if (col.column_default) {
+        def += ` DEFAULT ${col.column_default}`;
+      }
+      if (pkColumns.has(col.column_name)) {
+        def += ' PRIMARY KEY';
+      }
+      return def;
+    });
+
+    const definition = `CREATE TABLE "${schema}"."${table}" (\n${columnDefs.join(',\n')}\n);`;
+
+    return {
+      definition,
+      columns,
+      indexes,
+    };
   } finally {
     await client.end();
   }

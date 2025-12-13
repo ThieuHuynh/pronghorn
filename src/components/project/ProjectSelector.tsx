@@ -44,7 +44,21 @@ export interface DatabaseSchemaItem {
   schemaName: string;
   type: 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'savedQuery' | 'migration';
   name: string;
-  columns?: Array<{ name: string; type: string; nullable: boolean }>;
+  columns?: Array<{
+    name: string;
+    type: string;
+    nullable: boolean;
+    default?: string | null;
+    maxLength?: number | null;
+    isPrimaryKey?: boolean;
+    isForeignKey?: boolean;
+    foreignKeyRef?: string | null;
+  }>;
+  indexes?: Array<{
+    name: string;
+    definition: string;
+  }>;
+  definition?: string; // CREATE TABLE/VIEW/FUNCTION statement
   sampleData?: any[];
   // For saved queries
   sql_content?: string;
@@ -600,24 +614,23 @@ export function ProjectSelector({
               continue;
             }
 
-            // Fetch columns for tables
+            // Fetch full structure for tables (columns with defaults/PK/FK, indexes, CREATE statement)
             if (item.type === 'table') {
               try {
-                const colResponse = await supabase.functions.invoke('manage-database', {
+                const structureResponse = await supabase.functions.invoke('manage-database', {
                   body: {
                     databaseId,
                     shareToken,
-                    action: 'get_table_columns',
+                    action: 'get_table_structure',
                     schema: item.schemaName,
                     table: item.name
                   }
                 });
-                if (colResponse.data) {
-                  dbSchemaItem.columns = colResponse.data.map((c: any) => ({
-                    name: c.column_name,
-                    type: c.data_type,
-                    nullable: c.is_nullable === 'YES'
-                  }));
+                if (structureResponse.data?.data) {
+                  const data = structureResponse.data.data;
+                  dbSchemaItem.columns = data.columns;
+                  dbSchemaItem.indexes = data.indexes;
+                  dbSchemaItem.definition = data.definition;
                 }
 
                 // Fetch sample data if enabled
@@ -632,12 +645,132 @@ export function ProjectSelector({
                       limit: sampleDataRows
                     }
                   });
-                  if (sampleResponse.data?.rows) {
-                    dbSchemaItem.sampleData = sampleResponse.data.rows;
+                  if (sampleResponse.data?.data?.rows) {
+                    dbSchemaItem.sampleData = sampleResponse.data.data.rows;
                   }
                 }
               } catch (err) {
-                console.error(`Error fetching columns for ${item.name}:`, err);
+                console.error(`Error fetching structure for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch definition for views
+            if (item.type === 'view') {
+              try {
+                const viewResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_view_definition',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (viewResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = viewResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching view definition for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch definition for functions
+            if (item.type === 'function') {
+              try {
+                const funcResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_function_definition',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (funcResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = funcResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching function definition for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch definition for triggers
+            if (item.type === 'trigger') {
+              try {
+                const triggerResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_trigger_definition',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (triggerResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = triggerResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching trigger definition for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch definition for indexes
+            if (item.type === 'index') {
+              try {
+                const indexResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_index_definition',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (indexResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = indexResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching index definition for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch info for sequences
+            if (item.type === 'sequence') {
+              try {
+                const seqResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_sequence_info',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (seqResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = seqResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching sequence info for ${item.name}:`, err);
+              }
+            }
+
+            // Fetch definition for types
+            if (item.type === 'type') {
+              try {
+                const typeResponse = await supabase.functions.invoke('manage-database', {
+                  body: {
+                    databaseId,
+                    shareToken,
+                    action: 'get_type_definition',
+                    schema: item.schemaName,
+                    name: item.name
+                  }
+                });
+                if (typeResponse.data?.data?.definition) {
+                  dbSchemaItem.definition = typeResponse.data.data.definition;
+                }
+              } catch (err) {
+                console.error(`Error fetching type definition for ${item.name}:`, err);
               }
             }
 
