@@ -535,6 +535,7 @@ export async function downloadAsZip(data: any, options: DownloadOptions, project
   agentTitle: string;
   content: string;
   contentLength: number;
+  version?: number;
 }>) {
   const zip = new JSZip();
 
@@ -635,21 +636,23 @@ export async function downloadAsZip(data: any, options: DownloadOptions, project
     }
   }
 
-  // Add AI Analysis results
+  // Add specifications (AI Analysis results)
   if (agentResults && agentResults.length > 0) {
-    const aiAnalysisFolder = zip.folder('ai-analysis');
-    if (aiAnalysisFolder) {
-      // Create summary file
-      aiAnalysisFolder.file('_summary.json', JSON.stringify(agentResults.map(r => ({
+    const specificationsFolder = zip.folder('specifications');
+    if (specificationsFolder) {
+      // Create summary file with version info
+      specificationsFolder.file('_summary.json', JSON.stringify(agentResults.map(r => ({
         agentId: r.agentId,
         agentTitle: r.agentTitle,
-        contentLength: r.contentLength
+        contentLength: r.contentLength,
+        version: r.version || 1
       })), null, 2));
       
-      // Add individual agent reports
+      // Add individual agent reports with version in filename
       for (const result of agentResults) {
         const filename = result.agentTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        aiAnalysisFolder.file(`${filename}.md`, result.content);
+        const versionSuffix = result.version ? `_v${result.version}` : '';
+        specificationsFolder.file(`${filename}${versionSuffix}.md`, result.content);
       }
     }
   }
