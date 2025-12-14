@@ -259,6 +259,10 @@ const CONFIG = {
 
 const APP_DIR = path.join(process.cwd(), 'app');
 let devProcess = null;
+
+// Cache for staging records (DELETE events only contain id, not file_path)
+// Map<staging_id, { file_path, operation_type, repo_id }>
+const stagingCache = new Map();
 let isRestarting = false;
 
 // ============================================
@@ -522,6 +526,30 @@ async function restartDevServer() {
 // REALTIME SUBSCRIPTION
 // ============================================
 
+async function populateStagingCache() {
+  console.log('[Pronghorn] Pre-populating staging cache...');
+  
+  const { data: existingStaging, error } = await supabase.rpc('get_staged_changes_with_token', {
+    p_repo_id: CONFIG.repoId,
+    p_token: CONFIG.shareToken || null,
+  });
+  
+  if (error) {
+    console.error('[Pronghorn] Error fetching staging for cache:', error.message);
+    return;
+  }
+  
+  if (existingStaging) {
+    existingStaging.forEach(record => {
+      stagingCache.set(record.id, { 
+        file_path: record.file_path, 
+        operation_type: record.operation_type 
+      });
+    });
+    console.log(\`[Pronghorn] Cached \${existingStaging.length} staging records\`);
+  }
+}
+
 async function setupRealtimeSubscription() {
   console.log('[Pronghorn] Setting up real-time subscriptions...');
   
@@ -539,7 +567,10 @@ async function setupRealtimeSubscription() {
       },
       async (payload) => {
         if (!CONFIG.rebuildOnStaging) return;
-        console.log('[Pronghorn] Staging change detected:', payload.eventType);
+        console.log('[Pronghorn] === STAGING EVENT ===');
+        console.log('[Pronghorn] Event type:', payload.eventType);
+        console.log('[Pronghorn] payload.new:', JSON.stringify(payload.new));
+        console.log('[Pronghorn] payload.old:', JSON.stringify(payload.old));
         await handleFileChange('staging', payload);
       }
     )
@@ -553,7 +584,10 @@ async function setupRealtimeSubscription() {
       },
       async (payload) => {
         if (!CONFIG.rebuildOnFiles) return;
-        console.log('[Pronghorn] File change detected:', payload.eventType);
+        console.log('[Pronghorn] === FILES EVENT ===');
+        console.log('[Pronghorn] Event type:', payload.eventType);
+        console.log('[Pronghorn] payload.new:', JSON.stringify(payload.new));
+        console.log('[Pronghorn] payload.old:', JSON.stringify(payload.old));
         await handleFileChange('files', payload);
       }
     )
@@ -569,7 +603,6 @@ async function setupRealtimeSubscription() {
 
 async function handleFileChange(source, payload) {
   console.log(\`[Pronghorn] Processing \${source} change: \${payload.eventType}\`);
-  console.log('[Pronghorn] Payload:', JSON.stringify(payload, null, 2));
   
   try {
     let filePath, content, isDelete = false;
@@ -578,27 +611,40 @@ async function handleFileChange(source, payload) {
       // STAGING EVENTS
       if (payload.eventType === 'DELETE') {
         // Staging record was deleted - could be rollback or commit
-        // Need to fetch current state from repo_files
+        // DELETE events only contain 'id' in payload.old, not the full record
         const record = payload.old;
-        if (!record || !record.file_path) {
-          console.log('[Pronghorn] No file_path in deleted staging record, skipping');
+        const recordId = record?.id;
+        
+        if (!recordId) {
+          console.log('[Pronghorn] No id in deleted staging record, skipping');
           return;
         }
-        filePath = record.file_path;
+        
+        // Try to get file_path from cache
+        const cached = stagingCache.get(recordId);
+        if (cached) {
+          filePath = cached.file_path;
+          stagingCache.delete(recordId); // Clean up cache
+          console.log(\`[Pronghorn] Found cached file_path for \${recordId}: \${filePath}\`);
+        } else {
+          console.log(\`[Pronghorn] No cached file_path for id: \${recordId}\`);
+          console.log('[Pronghorn] Current cache keys:', Array.from(stagingCache.keys()).slice(0, 5));
+          return;
+        }
         
         console.log(\`[Pronghorn] Staging cleared for: \${filePath}, fetching from repo_files...\`);
         
-        // Query repo_files to get canonical version
-        const { data: currentFile, error } = await supabase
-          .from('repo_files')
-          .select('content, path')
-          .eq('repo_id', CONFIG.repoId)
-          .eq('path', filePath)
-          .single();
+        // Query repo_files to get canonical version using RPC
+        const { data: repoFiles, error } = await supabase.rpc('get_repo_files_with_token', {
+          p_repo_id: CONFIG.repoId,
+          p_token: CONFIG.shareToken || null,
+        });
         
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('[Pronghorn] Error fetching repo_files:', error.message);
         }
+        
+        const currentFile = repoFiles?.find(f => f.path === filePath);
         
         if (currentFile) {
           // File exists in repo - revert to committed version
@@ -614,10 +660,20 @@ async function handleFileChange(source, payload) {
         // INSERT or UPDATE on staging
         const record = payload.new;
         if (!record || !record.file_path) {
-          console.log('[Pronghorn] No file_path in staging record, skipping');
+          console.log('[Pronghorn] No file_path in staging record');
+          console.log('[Pronghorn] Available fields:', Object.keys(record || {}));
           return;
         }
         filePath = record.file_path;
+        
+        // Cache this record for DELETE lookup later
+        if (record.id) {
+          stagingCache.set(record.id, { 
+            file_path: record.file_path, 
+            operation_type: record.operation_type 
+          });
+          console.log(\`[Pronghorn] Cached staging record: \${record.id} → \${record.file_path}\`);
+        }
         
         if (record.operation_type === 'delete') {
           // File is marked for deletion in staging
@@ -793,6 +849,9 @@ async function main() {
     }
     
     await reportLog('info', \`Initial sync complete (\${files.length} files)\`);
+    
+    // Pre-populate staging cache for DELETE event handling
+    await populateStagingCache();
     
     // Setup realtime subscription
     await setupRealtimeSubscription();
