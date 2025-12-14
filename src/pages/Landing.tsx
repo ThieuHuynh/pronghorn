@@ -311,6 +311,14 @@ export default function Landing() {
 
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
           <div className="space-y-8 text-center lg:text-left">
+            <div className="flex justify-center lg:justify-start">
+              <Link 
+                to="/terms" 
+                className="text-sm font-medium text-[hsl(350,80%,60%)] hover:underline"
+              >
+                Currently Alpha Testing
+              </Link>
+            </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
               Build Software with <br />
               <span className="text-[hsl(350,80%,60%)] relative inline-block">
