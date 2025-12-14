@@ -80,7 +80,6 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
         const { data, error } = await supabase.rpc('get_agent_sessions_with_token', {
           p_project_id: projectId,
           p_token: shareToken,
-          p_limit: 50,
         });
         
         if (error) throw error;
