@@ -1097,10 +1097,9 @@ Use them to understand context and inform your file operations.` : ''}`;
       const nonEditOps: any[] = [];
 
       for (const op of operations) {
-        // Skip invalid operations without params
+        // Skip invalid operations without params entirely - do NOT add to processing list
         if (!op || !op.params) {
-          console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify(op));
-          nonEditOps.push(op); // Still process it, will handle gracefully later
+          console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify({ type: op?.type, params_summary: op?.params ? Object.keys(op.params) : [] }));
           continue;
         }
         if (op.type === 'edit_lines') {
