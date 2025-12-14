@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import DeploymentDialog from "./DeploymentDialog";
 import DeploymentLogsDialog from "./DeploymentLogsDialog";
 import type { Database } from "@/integrations/supabase/types";
@@ -214,7 +215,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
 
   return (
     <>
-      <Card className="border">
+      <Card className={cn("border cursor-pointer transition-colors", isSelected && "border-primary ring-2 ring-primary/20")} onClick={onSelect}>
         <CardHeader className="pb-2 sm:pb-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start sm:items-center gap-3">

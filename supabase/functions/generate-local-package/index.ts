@@ -373,6 +373,8 @@ async function writeFilesToDisk(files) {
     fs.mkdirSync(APP_DIR, { recursive: true });
   }
   
+  const changedPackageJsonDirs = [];
+  
   for (const file of files) {
     const filePath = path.join(APP_DIR, file.path);
     const dirPath = path.dirname(filePath);
@@ -384,9 +386,28 @@ async function writeFilesToDisk(files) {
     
     // Write file
     fs.writeFileSync(filePath, file.content || '', 'utf8');
+    
+    // Track package.json changes for npm install
+    if (path.basename(file.path) === 'package.json') {
+      changedPackageJsonDirs.push(dirPath);
+    }
   }
   
   console.log(\`[Pronghorn] Wrote \${files.length} files to disk\`);
+  return changedPackageJsonDirs;
+}
+
+async function runNpmInstallInDirs(dirs) {
+  for (const dir of dirs) {
+    console.log(\`[Pronghorn] Running npm install in \${dir}...\`);
+    try {
+      execSync('npm install', { cwd: dir, stdio: 'inherit' });
+      console.log(\`[Pronghorn] npm install completed in \${dir}\`);
+    } catch (err) {
+      console.error(\`[Pronghorn] npm install failed in \${dir}:\`, err.message);
+      await reportLog('error', \`npm install failed in \${dir}: \${err.message}\`);
+    }
+  }
 }
 
 // ============================================
@@ -537,12 +558,19 @@ async function handleFileChange(source) {
     try {
       // Fetch and write files
       const files = await fetchAllFiles();
-      await writeFilesToDisk(files);
+      const changedPackageJsonDirs = await writeFilesToDisk(files);
       
-      // Vite/webpack handle HMR automatically, but for Node.js we restart
-      if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
+      // If any package.json files changed, stop server, run npm install, restart
+      if (changedPackageJsonDirs.length > 0) {
+        console.log(\`[Pronghorn] package.json changed in \${changedPackageJsonDirs.length} location(s)\`);
+        await stopDevServer();
+        await runNpmInstallInDirs(changedPackageJsonDirs);
+        startDevServer();
+      } else if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
+        // Node.js projects need restart for any file change
         await restartDevServer();
       } else {
+        // Vite/webpack handle HMR automatically
         console.log('[Pronghorn] Files updated - HMR should refresh automatically');
       }
       
@@ -630,7 +658,13 @@ async function main() {
     // Initial file sync
     console.log('[Pronghorn] Performing initial file sync...');
     const files = await fetchAllFiles();
-    await writeFilesToDisk(files);
+    const packageJsonDirs = await writeFilesToDisk(files);
+    
+    // Run npm install in any directories with package.json on initial load
+    if (packageJsonDirs.length > 0) {
+      console.log(\`[Pronghorn] Found \${packageJsonDirs.length} package.json file(s), installing dependencies...\`);
+      await runNpmInstallInDirs(packageJsonDirs);
+    }
     
     await reportLog('info', \`Initial sync complete (\${files.length} files)\`);
     
