@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.report-local-issue]
 verify_jwt = false
+
+[functions.staging-operations]
+verify_jwt = false

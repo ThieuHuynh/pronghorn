@@ -1475,17 +1475,29 @@ Use them to understand context and inform your file operations.` : ''}`;
         }
       }
 
-      // If any file changes occurred in this iteration, broadcast a refresh event
+      // If any file changes occurred in this iteration, broadcast refresh events
       if (filesChanged) {
         try {
-          const broadcastChannel = supabase.channel(`repo-changes-${projectId}`);
-          await broadcastChannel.send({
+          // Broadcast staging_refresh for local runner
+          const stagingChannel = supabase.channel(`repo-staging-${repoId}`);
+          await stagingChannel.send({
+            type: "broadcast",
+            event: "staging_refresh",
+            payload: { repoId, action: "agent_edit", timestamp: Date.now() },
+          });
+          await supabase.removeChannel(stagingChannel);
+          console.log(`[BROADCAST] Sent staging_refresh for repo: ${repoId}`);
+
+          // Broadcast repo_files_refresh for Build.tsx file tree
+          const filesChannel = supabase.channel(`repo-changes-${projectId}`);
+          await filesChannel.send({
             type: "broadcast",
             event: "repo_files_refresh",
             payload: { projectId, repoId },
           });
+          await supabase.removeChannel(filesChannel);
         } catch (broadcastError) {
-          console.error("Failed to broadcast repo files refresh:", broadcastError);
+          console.error("Failed to broadcast refresh events:", broadcastError);
         }
       }
 

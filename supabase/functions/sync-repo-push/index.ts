@@ -439,8 +439,6 @@ Deno.serve(async (req) => {
     console.log(`Successfully pushed to ${repo.organization}/${repo.repo} (branch: ${branch}): ${newCommitData.sha}`);
 
     // Log commit to database - conditional logic to avoid duplicates
-    // First try to mark existing pending commits as pushed (Build page workflow)
-    // If none found, create a new commit record (Repository page workflow)
     try {
       const { data: updatedCount, error: updateError } = await supabaseClient.rpc("mark_commits_pushed_with_token", {
         p_repo_id: repoId,
@@ -465,6 +463,29 @@ Deno.serve(async (req) => {
     } catch (logError) {
       console.error("Failed to log commit:", logError);
       // Don't fail the entire operation if logging fails
+    }
+
+    // Broadcast staging_refresh (staging cleared) and files_refresh (files updated) events
+    try {
+      console.log(`Broadcasting staging_refresh and files_refresh for repo: ${repoId}`);
+      const stagingChannel = supabaseClient.channel(`repo-staging-${repoId}`);
+      await stagingChannel.send({
+        type: "broadcast",
+        event: "staging_refresh",
+        payload: { repoId, action: "push", timestamp: Date.now() },
+      });
+      await supabaseClient.removeChannel(stagingChannel);
+
+      const filesChannel = supabaseClient.channel(`repo-files-${repoId}`);
+      await filesChannel.send({
+        type: "broadcast",
+        event: "files_refresh",
+        payload: { repoId, action: "push", timestamp: Date.now() },
+      });
+      await supabaseClient.removeChannel(filesChannel);
+    } catch (broadcastError) {
+      console.error("Failed to broadcast refresh events:", broadcastError);
+      // Don't fail the operation if broadcast fails
     }
 
     return new Response(

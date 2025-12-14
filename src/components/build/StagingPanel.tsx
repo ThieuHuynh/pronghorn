@@ -49,12 +49,24 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
     loadRepoAndStagedChanges();
   }, [projectId, shareToken]);
 
-  // Real-time subscription for staged changes
+  // Real-time subscription for staged changes - using broadcast pattern
   useEffect(() => {
     if (!repoId) return;
 
+    console.log(`[StagingPanel] Setting up broadcast listener for repo-staging-${repoId}`);
+
     const channel = supabase
       .channel(`repo-staging-${repoId}`)
+      // Listen for broadcasts (emitted by edge functions)
+      .on(
+        "broadcast",
+        { event: "staging_refresh" },
+        (payload) => {
+          console.log("[StagingPanel] Received staging_refresh broadcast:", payload);
+          loadRepoAndStagedChanges(false);
+        }
+      )
+      // Also keep postgres_changes as backup for direct DB changes
       .on(
         "postgres_changes",
         {
@@ -68,7 +80,9 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
           loadRepoAndStagedChanges(false);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[StagingPanel] Channel subscription status: ${status}`);
+      });
 
     return () => {
       supabase.removeChannel(channel);

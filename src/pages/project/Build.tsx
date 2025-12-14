@@ -210,8 +210,17 @@ export default function Build() {
 
     console.log("Setting up file tree real-time subscriptions for project:", projectId);
 
-    const channel = supabase
+    // Channel for repo_files changes and repo_files_refresh broadcasts
+    const filesChannel = supabase
        .channel(`repo-changes-${projectId}`)
+       .on(
+         "broadcast",
+         { event: "repo_files_refresh" },
+         (payload) => {
+           console.log("Received repo files refresh broadcast:", payload);
+           loadFiles();
+         }
+       )
        .on(
          "postgres_changes",
          {
@@ -225,51 +234,66 @@ export default function Build() {
            loadFiles();
          }
        )
-       .on(
-         "postgres_changes",
-         {
-           event: "*",
-           schema: "public",
-           table: "repo_staging",
-           filter: `repo_id=eq.${defaultRepo.id}`,
-         },
-          (payload) => {
-            console.log("Staging change detected:", payload);
-            
-            // Clear buffer for changed file so it reloads fresh from DB
-            const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
-            if (changedPath) {
-              // Clear from buffer to force fresh load on next access
-              clearFileRef.current?.(changedPath);
-            }
-            
-            loadFiles();
-            
-            // If the changed file is currently open in the editor, reload it from DB
-            if (changedPath && changedPath === currentPathRef.current) {
-              if (!hasDirtyFilesRef.current) {
-                // User has no unsaved changes - safe to reload
-                console.log("Reloading current file due to external change:", changedPath);
-                reloadCurrentFileRef.current?.();
-              } else {
-                // User has unsaved changes - notify them
-                toast.info("File updated externally - save your changes to see updates");
-              }
+       .subscribe((status) => {
+         console.log(`[Build] Files channel subscription status: ${status}`);
+       });
+
+    // Separate channel for staging changes - listens for staging_refresh broadcasts
+    const stagingChannel = supabase
+      .channel(`repo-staging-${defaultRepo.id}`)
+      .on(
+        "broadcast",
+        { event: "staging_refresh" },
+        (payload) => {
+          console.log("Received staging_refresh broadcast:", payload);
+          loadFiles();
+          
+          // If current file was affected, reload it
+          if (currentPathRef.current && !hasDirtyFilesRef.current) {
+            reloadCurrentFileRef.current?.();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repo_staging",
+          filter: `repo_id=eq.${defaultRepo.id}`,
+        },
+        (payload) => {
+          console.log("Staging change detected:", payload);
+          
+          // Clear buffer for changed file so it reloads fresh from DB
+          const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
+          if (changedPath) {
+            // Clear from buffer to force fresh load on next access
+            clearFileRef.current?.(changedPath);
+          }
+          
+          loadFiles();
+          
+          // If the changed file is currently open in the editor, reload it from DB
+          if (changedPath && changedPath === currentPathRef.current) {
+            if (!hasDirtyFilesRef.current) {
+              // User has no unsaved changes - safe to reload
+              console.log("Reloading current file due to external change:", changedPath);
+              reloadCurrentFileRef.current?.();
+            } else {
+              // User has unsaved changes - notify them
+              toast.info("File updated externally - save your changes to see updates");
             }
           }
-        )
-       .on(
-         "broadcast",
-         { event: "repo_files_refresh" },
-         (payload) => {
-           console.log("Received repo files refresh broadcast:", payload);
-           loadFiles();
-         }
-       )
-       .subscribe();
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[Build] Staging channel subscription status: ${status}`);
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(filesChannel);
+      supabase.removeChannel(stagingChannel);
     };
   }, [projectId, defaultRepo, isTokenSet, loadFiles]);
 

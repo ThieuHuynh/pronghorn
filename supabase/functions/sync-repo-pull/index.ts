@@ -268,6 +268,21 @@ Deno.serve(async (req) => {
 
     console.log(`Successfully pulled and synced ${validFiles.length} files`);
 
+    // Broadcast files_refresh event after successful pull
+    try {
+      console.log(`Broadcasting files_refresh for repo: ${repoId}`);
+      const filesChannel = supabaseClient.channel(`repo-files-${repoId}`);
+      await filesChannel.send({
+        type: "broadcast",
+        event: "files_refresh",
+        payload: { repoId, action: "pull", timestamp: Date.now() },
+      });
+      await supabaseClient.removeChannel(filesChannel);
+    } catch (broadcastError) {
+      console.error("Failed to broadcast files_refresh event:", broadcastError);
+      // Don't fail the operation if broadcast fails
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

@@ -699,69 +699,52 @@ async function initializeKnownStagedFiles() {
 }
 
 // ============================================
-// REALTIME SUBSCRIPTION
+// REALTIME SUBSCRIPTION (BROADCAST PATTERN)
 // ============================================
 
 async function setupRealtimeSubscription() {
   console.log('[Pronghorn] ========== SETTING UP REALTIME SUBSCRIPTIONS ==========');
-  console.log(\`[Pronghorn] Expected repo_id: \${CONFIG.repoId}\`);
-  console.log('[Pronghorn] DIAGNOSTIC: Subscribing to repo_staging WITHOUT filter to catch ALL events');
+  console.log(\`[Pronghorn] Repo ID: \${CONFIG.repoId}\`);
+  console.log('[Pronghorn] Using BROADCAST pattern (not postgres_changes) to avoid RLS issues');
   
   const channelName = \`local-runner-\${CONFIG.repoId}\`;
   
   const channel = supabase
     .channel(channelName)
+    // Listen for staging_refresh broadcasts (emitted by staging-operations, coding-agent-orchestrator, sync-repo-push)
     .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'repo_staging',
-        // DIAGNOSTIC: Filter removed temporarily to see ALL events
-        // filter: \`repo_id=eq.\${CONFIG.repoId}\`,
-      },
+      'broadcast',
+      { event: 'staging_refresh' },
       async (payload) => {
-        // ============ COMPREHENSIVE LOGGING ============
-        console.log('[Pronghorn] ========== STAGING EVENT RECEIVED ==========');
-        console.log('[Pronghorn] Event Type:', payload.eventType);
-        console.log('[Pronghorn] Table:', payload.table);
-        console.log('[Pronghorn] Schema:', payload.schema);
-        
-        if (payload.new) {
-          console.log('[Pronghorn] NEW record:');
-          console.log('[Pronghorn]   - id:', payload.new.id);
-          console.log('[Pronghorn]   - repo_id:', payload.new.repo_id);
-          console.log('[Pronghorn]   - file_path:', payload.new.file_path);
-          console.log('[Pronghorn]   - operation_type:', payload.new.operation_type);
-          console.log('[Pronghorn]   - is_binary:', payload.new.is_binary);
-          console.log('[Pronghorn]   - new_content length:', payload.new.new_content?.length || 0);
-        }
-        
-        if (payload.old) {
-          console.log('[Pronghorn] OLD record:');
-          console.log('[Pronghorn]   - id:', payload.old.id);
-          console.log('[Pronghorn]   - repo_id:', payload.old.repo_id);
-          console.log('[Pronghorn]   - file_path:', payload.old.file_path);
-          console.log('[Pronghorn]   - operation_type:', payload.old.operation_type);
-        }
-        
-        console.log('[Pronghorn] ============================================');
-        
-        // DIAGNOSTIC: Manual filter check since we removed server-side filter
-        const eventRepoId = payload.new?.repo_id || payload.old?.repo_id;
-        if (eventRepoId !== CONFIG.repoId) {
-          console.log(\`[Pronghorn] Event for different repo (\${eventRepoId}), ignoring\`);
-          return;
-        }
+        console.log('[Pronghorn] ========== STAGING BROADCAST RECEIVED ==========');
+        console.log('[Pronghorn] Payload:', JSON.stringify(payload.payload || {}));
         
         if (!CONFIG.rebuildOnStaging) {
-          console.log('[Pronghorn] REBUILD_ON_STAGING is false, ignoring event');
+          console.log('[Pronghorn] REBUILD_ON_STAGING is false, ignoring');
           return;
         }
         
         scheduleStagingSync();
       }
     )
+    // Listen for files_refresh broadcasts (emitted by sync-repo-push, sync-repo-pull)
+    .on(
+      'broadcast',
+      { event: 'files_refresh' },
+      async (payload) => {
+        console.log('[Pronghorn] ========== FILES BROADCAST RECEIVED ==========');
+        console.log('[Pronghorn] Payload:', JSON.stringify(payload.payload || {}));
+        
+        if (!CONFIG.rebuildOnFiles) {
+          console.log('[Pronghorn] REBUILD_ON_FILES is false, ignoring');
+          return;
+        }
+        
+        // Re-sync all files from database
+        await syncAllFilesFromDatabase();
+      }
+    )
+    // Keep postgres_changes for repo_files as fallback (these work because we filter on repo_id in the query)
     .on(
       'postgres_changes',
       {
@@ -772,7 +755,7 @@ async function setupRealtimeSubscription() {
       },
       async (payload) => {
         if (!CONFIG.rebuildOnFiles) return;
-        console.log('[Pronghorn] === FILES EVENT ===');
+        console.log('[Pronghorn] === FILES EVENT (postgres_changes) ===');
         console.log('[Pronghorn] Event type:', payload.eventType);
         await handleRepoFileChange(payload);
       }
@@ -780,9 +763,10 @@ async function setupRealtimeSubscription() {
     .subscribe((status) => {
       console.log(\`[Pronghorn] Realtime subscription status: \${status}\`);
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for file changes...');
+        console.log('[Pronghorn] ✓ Listening for changes...');
         console.log(\`[Pronghorn] ✓ Channel: \${channelName}\`);
-        console.log('[Pronghorn] ✓ Tables: repo_staging (no filter), repo_files (filtered)');
+        console.log('[Pronghorn] ✓ Broadcasts: staging_refresh, files_refresh');
+        console.log('[Pronghorn] ✓ Postgres Changes: repo_files (filtered)');
       } else if (status === 'CHANNEL_ERROR') {
         console.error('[Pronghorn] ✗ Channel error - check Supabase realtime configuration');
       } else if (status === 'TIMED_OUT') {
@@ -791,6 +775,21 @@ async function setupRealtimeSubscription() {
     });
   
   return channel;
+}
+
+async function syncAllFilesFromDatabase() {
+  console.log('[Pronghorn] Syncing all files from database...');
+  try {
+    const files = await fetchAllFiles();
+    const changedDirs = await writeFilesToDisk(files);
+    if (changedDirs.length > 0) {
+      await runNpmInstallInDirs(changedDirs);
+      await restartDevServer();
+    }
+  } catch (err) {
+    console.error('[Pronghorn] Error syncing all files:', err.message);
+    await reportLog('error', \`Failed to sync all files: \${err.message}\`);
+  }
 }
 
 async function handleRepoFileChange(payload) {
