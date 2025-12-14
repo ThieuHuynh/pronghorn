@@ -658,8 +658,10 @@ export default function Specifications() {
     
     toast.loading("Saving as artifact...", { id: "save-artifact" });
     
+    const artifactTitle = `${spec.agent_title} (v${spec.version})`;
+    
     try {
-      const { error } = await supabase.rpc("insert_artifact_with_token", {
+      const { data: artifact, error } = await supabase.rpc("insert_artifact_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_content: spec.generated_spec,
@@ -669,7 +671,20 @@ export default function Specifications() {
       });
       
       if (error) throw error;
-      toast.success(`${spec.agent_title} (v${spec.version}) saved as artifact`, { id: "save-artifact" });
+      
+      // Update the artifact with the title
+      if (artifact?.id) {
+        await supabase.rpc("update_artifact_with_token", {
+          p_id: artifact.id,
+          p_token: shareToken || null,
+          p_content: spec.generated_spec,
+          p_ai_title: artifactTitle,
+          p_ai_summary: null,
+          p_image_url: null,
+        });
+      }
+      
+      toast.success(`${artifactTitle} saved as artifact`, { id: "save-artifact" });
     } catch (error) {
       console.error("Error saving artifact:", error);
       toast.error("Failed to save as artifact", { id: "save-artifact" });
