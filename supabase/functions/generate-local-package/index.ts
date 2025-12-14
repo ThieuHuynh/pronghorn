@@ -46,11 +46,23 @@ serve(async (req) => {
       throw new Error('Deployment not found or access denied');
     }
 
-    // Get repo details
-    const { data: repo } = await supabase.rpc('get_repo_by_id_with_token', {
-      p_repo_id: deployment.repo_id,
-      p_token: shareToken || null,
-    });
+    // Get repo details - prefer deployment.repo_id, fallback to Prime repo
+    let repo = null;
+    if (deployment.repo_id) {
+      const { data: repoData } = await supabase.rpc('get_repo_by_id_with_token', {
+        p_repo_id: deployment.repo_id,
+        p_token: shareToken || null,
+      });
+      repo = repoData;
+    } else {
+      // Find Prime repo (or default, or first available) for the project
+      const { data: repos } = await supabase.rpc('get_repos_with_token', {
+        p_project_id: deployment.project_id,
+        p_token: shareToken || null,
+      });
+      repo = repos?.find((r: any) => r.is_prime) || repos?.find((r: any) => r.is_default) || repos?.[0];
+      console.log(`[generate-local-package] No repo_id on deployment, found Prime repo: ${repo?.id}`);
+    }
 
     // Get project details
     const { data: project } = await supabase.rpc('get_project_with_token', {
