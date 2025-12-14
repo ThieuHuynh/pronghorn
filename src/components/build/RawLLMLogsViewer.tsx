@@ -250,12 +250,12 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10"></TableHead>
-                <TableHead className="w-16">Iter</TableHead>
-                <TableHead className="w-32">Model</TableHead>
-                <TableHead className="w-24">Input</TableHead>
-                <TableHead className="w-24">Output</TableHead>
-                <TableHead className="w-16">Parse</TableHead>
-                <TableHead className="w-20">HTTP</TableHead>
+                <TableHead>Iter</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Input</TableHead>
+                <TableHead>Output</TableHead>
+                <TableHead>Parse</TableHead>
+                <TableHead>HTTP</TableHead>
                 <TableHead>Time</TableHead>
               </TableRow>
             </TableHeader>
@@ -287,7 +287,7 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
                       <TableCell>
                         <Badge variant="outline">{log.iteration}</Badge>
                       </TableCell>
-                      <TableCell className="text-xs font-mono truncate max-w-[120px]">
+                      <TableCell className="text-xs font-mono whitespace-nowrap">
                         {log.model}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
