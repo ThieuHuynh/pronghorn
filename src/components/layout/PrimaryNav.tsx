@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdmin } from "@/contexts/AdminContext";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -17,6 +18,7 @@ import {
 
 export function PrimaryNav() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -79,11 +81,13 @@ export function PrimaryNav() {
           <AdminAccessButton />
           {user ? (
             <>
-              <Button variant="ghost" size="icon" asChild>
-                <NavLink to="/settings/organization">
-                  <Settings className="h-4 w-4" />
-                </NavLink>
-              </Button>
+              {isAdmin && (
+                <Button variant="ghost" size="icon" asChild>
+                  <NavLink to="/settings/organization">
+                    <Settings className="h-4 w-4" />
+                  </NavLink>
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -140,7 +144,7 @@ export function PrimaryNav() {
                   <Layers className="h-5 w-5" />
                   Tech Stacks
                 </NavLink>
-                {user && (
+                {user && isAdmin && (
                   <NavLink
                     to="/settings/organization"
                     className="flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

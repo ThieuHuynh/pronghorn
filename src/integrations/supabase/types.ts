@@ -2434,6 +2434,7 @@ export type Database = {
         Args: { p_specification_id: string; p_token: string }
         Returns: undefined
       }
+      delete_user_by_email: { Args: { p_email: string }; Returns: Json }
       discard_staged_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: number
@@ -2441,6 +2442,17 @@ export type Database = {
       generate_requirement_code: {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
+      }
+      get_admin_users: {
+        Args: never
+        Returns: {
+          created_at: string
+          display_name: string
+          email: string
+          last_login: string
+          role: string
+          user_id: string
+        }[]
       }
       get_agent_llm_logs_with_token: {
         Args: { p_limit?: number; p_session_id: string; p_token: string }
@@ -3458,6 +3470,7 @@ export type Database = {
         Args: { p_project_id: string; p_token?: string }
         Returns: string
       }
+      get_user_role: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -4045,7 +4058,9 @@ export type Database = {
         }
       }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_or_superadmin: { Args: { _user_id: string }; Returns: boolean }
       is_project_owner: { Args: { p_project_id: string }; Returns: boolean }
+      is_superadmin: { Args: { _user_id: string }; Returns: boolean }
       is_valid_token_for_project: {
         Args: { p_project_id: string }
         Returns: boolean
@@ -4382,6 +4397,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_user_role_by_email: {
+        Args: { p_email: string; p_role: string }
+        Returns: Json
       }
       stage_file_change_with_token: {
         Args: {
@@ -5090,7 +5109,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "superadmin"
       audit_severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
       build_status: "RUNNING" | "COMPLETED" | "FAILED"
       database_plan:
@@ -5292,7 +5311,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "superadmin"],
       audit_severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
       build_status: ["RUNNING", "COMPLETED", "FAILED"],
       database_plan: [

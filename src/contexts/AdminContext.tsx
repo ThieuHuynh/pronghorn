@@ -2,8 +2,12 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
+type AdminRole = 'superadmin' | 'admin' | 'user' | null;
+
 interface AdminContextType {
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  role: AdminRole;
   loading: boolean;
   refreshAdminStatus: () => Promise<void>;
 }
@@ -11,35 +15,43 @@ interface AdminContextType {
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<AdminRole>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
   const checkAdminStatus = async () => {
     if (!user) {
-      setIsAdmin(false);
+      setRole(null);
       setLoading(false);
       return;
     }
 
     try {
-      // Query user_roles table for admin role
+      // Query user_roles table for all roles and get highest
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .maybeSingle();
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error checking admin status:', error);
-        setIsAdmin(false);
+        setRole(null);
+      } else if (data && data.length > 0) {
+        // Get highest role: superadmin > admin > user
+        const roles = data.map(r => r.role);
+        if (roles.includes('superadmin')) {
+          setRole('superadmin');
+        } else if (roles.includes('admin')) {
+          setRole('admin');
+        } else {
+          setRole('user');
+        }
       } else {
-        setIsAdmin(!!data);
+        setRole('user'); // Default role if no role entry
       }
     } catch (err) {
       console.error('Error checking admin status:', err);
-      setIsAdmin(false);
+      setRole(null);
     } finally {
       setLoading(false);
     }
@@ -55,8 +67,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     await checkAdminStatus();
   };
 
+  const isAdmin = role === 'admin' || role === 'superadmin';
+  const isSuperAdmin = role === 'superadmin';
+
   return (
-    <AdminContext.Provider value={{ isAdmin, loading, refreshAdminStatus }}>
+    <AdminContext.Provider value={{ isAdmin, isSuperAdmin, role, loading, refreshAdminStatus }}>
       {children}
     </AdminContext.Provider>
   );
