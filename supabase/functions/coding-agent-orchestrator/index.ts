@@ -885,7 +885,7 @@ Use them to understand context and inform your file operations.` : ''}`;
             "Content-Type": "application/json",
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
-            "anthropic-beta": "structured-outputs-2025-11-13",
+            "anthropic-beta": "structured-outputs-2025-11-13,context-1m-2025-08-07",
           },
           body: JSON.stringify({
             model: modelName,
