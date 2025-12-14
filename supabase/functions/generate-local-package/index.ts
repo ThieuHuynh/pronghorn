@@ -531,7 +531,8 @@ async function restartDevServer() {
 // ============================================
 
 async function syncStagingToLocal() {
-  console.log('[Pronghorn] Syncing all staged files to local...');
+  console.log('[Pronghorn] ========== SYNCING STAGING TO LOCAL ==========');
+  console.log(\`[Pronghorn] Fetching staged changes for repo: \${CONFIG.repoId}\`);
   
   try {
     // Fetch current staging state
@@ -543,6 +544,16 @@ async function syncStagingToLocal() {
     if (error) {
       console.error('[Pronghorn] Error fetching staging:', error.message);
       return;
+    }
+    
+    console.log(\`[Pronghorn] Fetched \${stagedFiles?.length || 0} staged files from database:\`);
+    for (const staged of (stagedFiles || [])) {
+      console.log(\`[Pronghorn]   - \${staged.file_path} (op: \${staged.operation_type}) [content length: \${staged.new_content?.length || 0}]\`);
+    }
+    
+    console.log(\`[Pronghorn] Known staged files BEFORE sync: \${knownStagedFiles.size}\`);
+    for (const [path, data] of knownStagedFiles) {
+      console.log(\`[Pronghorn]   - \${path} (op: \${data.operation_type})\`);
     }
     
     const currentStagedPaths = new Set();
@@ -559,6 +570,8 @@ async function syncStagingToLocal() {
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
           console.log(\`[Pronghorn] Deleted (staged delete): \${staged.file_path}\`);
+        } else {
+          console.log(\`[Pronghorn] File already absent (staged delete): \${staged.file_path}\`);
         }
       } else {
         // 'add' or 'edit' - write new_content
@@ -572,9 +585,10 @@ async function syncStagingToLocal() {
           existingContent = fs.readFileSync(fullPath, 'utf8');
         }
         
-        if (existingContent !== (staged.new_content || '')) {
-          fs.writeFileSync(fullPath, staged.new_content || '', 'utf8');
-          console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path}\`);
+        const newContent = staged.new_content || '';
+        if (existingContent !== newContent) {
+          fs.writeFileSync(fullPath, newContent, 'utf8');
+          console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path} [\${newContent.length} bytes]\`);
           
           // Check for package.json changes
           if (path.basename(staged.file_path) === 'package.json') {
@@ -582,6 +596,8 @@ async function syncStagingToLocal() {
             console.log('[Pronghorn] package.json changed - will run npm install');
             await runNpmInstallInDirs([dirPath]);
           }
+        } else {
+          console.log(\`[Pronghorn] No content change, skipping write: \${staged.file_path}\`);
         }
       }
     }
@@ -589,7 +605,7 @@ async function syncStagingToLocal() {
     // Check for unstaged files (were in knownStagedFiles, now absent)
     for (const [filePath, oldState] of knownStagedFiles) {
       if (!currentStagedPaths.has(filePath)) {
-        console.log(\`[Pronghorn] File unstaged: \${filePath}\`);
+        console.log(\`[Pronghorn] File unstaged: \${filePath} (was: \${oldState.operation_type})\`);
         
         // Fetch from repo_files to revert to committed version
         const { data: repoFiles, error: repoError } = await supabase.rpc('get_repo_files_with_token', {
@@ -618,6 +634,8 @@ async function syncStagingToLocal() {
           if (fs.existsSync(fullPath)) {
             fs.unlinkSync(fullPath);
             console.log(\`[Pronghorn] Deleted (staged add rolled back): \${filePath}\`);
+          } else {
+            console.log(\`[Pronghorn] Already absent (staged add rolled back): \${filePath}\`);
           }
         }
       }
@@ -632,7 +650,9 @@ async function syncStagingToLocal() {
       });
     }
     
+    console.log(\`[Pronghorn] Known staged files AFTER sync: \${knownStagedFiles.size}\`);
     console.log(\`[Pronghorn] Synced \${stagedFiles?.length || 0} staged files\`);
+    console.log('[Pronghorn] ================================================');
     
     // Handle server restart if needed
     if (needsRestart) {
@@ -647,6 +667,7 @@ async function syncStagingToLocal() {
 
 function scheduleStagingSync() {
   // Debounce to handle DELETE+INSERT pairs during updates
+  console.log('[Pronghorn] Scheduling staging sync (debounce: ' + STAGING_DEBOUNCE_MS + 'ms)...');
   clearTimeout(stagingSyncTimer);
   stagingSyncTimer = setTimeout(async () => {
     await syncStagingToLocal();
@@ -682,7 +703,9 @@ async function initializeKnownStagedFiles() {
 // ============================================
 
 async function setupRealtimeSubscription() {
-  console.log('[Pronghorn] Setting up real-time subscriptions...');
+  console.log('[Pronghorn] ========== SETTING UP REALTIME SUBSCRIPTIONS ==========');
+  console.log(\`[Pronghorn] Expected repo_id: \${CONFIG.repoId}\`);
+  console.log('[Pronghorn] DIAGNOSTIC: Subscribing to repo_staging WITHOUT filter to catch ALL events');
   
   const channelName = \`local-runner-\${CONFIG.repoId}\`;
   
@@ -694,11 +717,48 @@ async function setupRealtimeSubscription() {
         event: '*',
         schema: 'public',
         table: 'repo_staging',
-        filter: \`repo_id=eq.\${CONFIG.repoId}\`,
+        // DIAGNOSTIC: Filter removed temporarily to see ALL events
+        // filter: \`repo_id=eq.\${CONFIG.repoId}\`,
       },
       async (payload) => {
-        if (!CONFIG.rebuildOnStaging) return;
-        console.log(\`[Pronghorn] Staging event: \${payload.eventType} - scheduling sync...\`);
+        // ============ COMPREHENSIVE LOGGING ============
+        console.log('[Pronghorn] ========== STAGING EVENT RECEIVED ==========');
+        console.log('[Pronghorn] Event Type:', payload.eventType);
+        console.log('[Pronghorn] Table:', payload.table);
+        console.log('[Pronghorn] Schema:', payload.schema);
+        
+        if (payload.new) {
+          console.log('[Pronghorn] NEW record:');
+          console.log('[Pronghorn]   - id:', payload.new.id);
+          console.log('[Pronghorn]   - repo_id:', payload.new.repo_id);
+          console.log('[Pronghorn]   - file_path:', payload.new.file_path);
+          console.log('[Pronghorn]   - operation_type:', payload.new.operation_type);
+          console.log('[Pronghorn]   - is_binary:', payload.new.is_binary);
+          console.log('[Pronghorn]   - new_content length:', payload.new.new_content?.length || 0);
+        }
+        
+        if (payload.old) {
+          console.log('[Pronghorn] OLD record:');
+          console.log('[Pronghorn]   - id:', payload.old.id);
+          console.log('[Pronghorn]   - repo_id:', payload.old.repo_id);
+          console.log('[Pronghorn]   - file_path:', payload.old.file_path);
+          console.log('[Pronghorn]   - operation_type:', payload.old.operation_type);
+        }
+        
+        console.log('[Pronghorn] ============================================');
+        
+        // DIAGNOSTIC: Manual filter check since we removed server-side filter
+        const eventRepoId = payload.new?.repo_id || payload.old?.repo_id;
+        if (eventRepoId !== CONFIG.repoId) {
+          console.log(\`[Pronghorn] Event for different repo (\${eventRepoId}), ignoring\`);
+          return;
+        }
+        
+        if (!CONFIG.rebuildOnStaging) {
+          console.log('[Pronghorn] REBUILD_ON_STAGING is false, ignoring event');
+          return;
+        }
+        
         scheduleStagingSync();
       }
     )
@@ -718,9 +778,15 @@ async function setupRealtimeSubscription() {
       }
     )
     .subscribe((status) => {
-      console.log(\`[Pronghorn] Realtime subscription: \${status}\`);
+      console.log(\`[Pronghorn] Realtime subscription status: \${status}\`);
       if (status === 'SUBSCRIBED') {
         console.log('[Pronghorn] ✓ Listening for file changes...');
+        console.log(\`[Pronghorn] ✓ Channel: \${channelName}\`);
+        console.log('[Pronghorn] ✓ Tables: repo_staging (no filter), repo_files (filtered)');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('[Pronghorn] ✗ Channel error - check Supabase realtime configuration');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[Pronghorn] ✗ Channel timed out');
       }
     });
   
