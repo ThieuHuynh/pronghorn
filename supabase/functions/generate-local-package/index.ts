@@ -29,7 +29,7 @@ serve(async (req) => {
     const body: GeneratePackageRequest = await req.json();
     const { deploymentId, shareToken } = body;
 
-    console.log(`[generate-local-package] DeploymentId: ${deploymentId}`);
+    console.log(`[generate-local-package] DeploymentId: ${deploymentId}, shareToken: ${shareToken ? 'provided' : 'null'}`);
 
     // Validate access and get deployment details
     const { data: deployment, error: deploymentError } = await supabase.rpc(
@@ -56,10 +56,11 @@ serve(async (req) => {
       repo = repoData;
     } else {
       // Find Prime repo (or default, or first available) for the project
-      const { data: repos } = await supabase.rpc('get_repos_with_token', {
+      const { data: repos, error: reposError } = await supabase.rpc('get_repos_with_token', {
         p_project_id: deployment.project_id,
         p_token: shareToken || null,
       });
+      console.log(`[generate-local-package] get_repos_with_token result: ${repos?.length ?? 0} repos, error: ${reposError?.message || 'none'}`);
       repo = repos?.find((r: any) => r.is_prime) || repos?.find((r: any) => r.is_default) || repos?.[0];
       console.log(`[generate-local-package] No repo_id on deployment, found Prime repo: ${repo?.id}`);
     }
