@@ -3120,11 +3120,7 @@ export type Database = {
             }[]
           }
         | {
-            Args: {
-              p_path_prefix?: string
-              p_repo_id: string
-              p_token?: string
-            }
+            Args: { p_path_prefix: string; p_repo_id: string; p_token: string }
             Returns: {
               id: string
               is_binary: boolean
