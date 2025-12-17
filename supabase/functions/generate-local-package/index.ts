@@ -173,19 +173,24 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# ===========================================',
   ];
 
-  // Add user-defined env vars
+  // Add user-defined env vars (keys only - values stored in Render, not database)
   const envVars = deployment.env_vars || {};
-  Object.entries(envVars).forEach(([key, value]) => {
-    lines.push(`${key}=${value}`);
-  });
+  const envVarKeys = Object.keys(envVars);
+  if (envVarKeys.length > 0) {
+    lines.push('# These keys match your Render.com deployment - add your local values');
+    envVarKeys.forEach((key) => {
+      lines.push(`${key}=`);
+    });
+  }
 
-  // Add secrets (redacted - user must fill in)
+  // Add secrets (keys only - user must fill in)
   const secrets = deployment.secrets || {};
-  if (Object.keys(secrets).length > 0) {
+  const secretKeys = Object.keys(secrets);
+  if (secretKeys.length > 0) {
     lines.push('');
     lines.push('# Secrets (fill in your values)');
-    Object.keys(secrets).forEach((key) => {
-      lines.push(`# ${key}=<your-secret-value>`);
+    secretKeys.forEach((key) => {
+      lines.push(`${key}=`);
     });
   }
 
