@@ -552,30 +552,72 @@ export function ProjectSelector({
           databaseGroups.get(databaseId)!.push({ schemaName, type, name });
         }
 
-        // Get database info
-        const { data: dbData } = await supabase.rpc("get_databases_with_token", {
+        // Get both Render databases AND external connections
+        const renderDbResult = await supabase.rpc("get_databases_with_token", {
           p_project_id: projectId,
           p_token: shareToken
         });
-        const dbMap = new Map((dbData || []).map((d: any) => [d.id, d]));
 
-        // Fetch columns for selected tables
+        let externalDbData: any[] = [];
+        try {
+          const externalDbResult = await supabase.rpc("get_db_connections_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken
+          });
+          externalDbData = externalDbResult.data || [];
+        } catch {
+          // Owner-only, silently fail for non-owners
+        }
+
+        // Build combined map with source type
+        const dbMap = new Map<string, { name: string; source: 'render' | 'external' }>();
+        (renderDbResult.data || []).forEach((d: any) => dbMap.set(d.id, { name: d.name, source: 'render' }));
+        externalDbData.forEach((d: any) => dbMap.set(d.id, { name: d.name, source: 'external' }));
+
         // Fetch saved queries and migrations for each database
         const savedQueriesMap = new Map<string, any[]>();
         const migrationsMap = new Map<string, any[]>();
 
         for (const databaseId of databaseGroups.keys()) {
-          const [savedQueriesResult, migrationsResult] = await Promise.all([
-            supabase.rpc('get_saved_queries_with_token', { p_database_id: databaseId, p_token: shareToken }),
-            supabase.rpc('get_migrations_with_token', { p_database_id: databaseId, p_token: shareToken })
-          ]);
-          savedQueriesMap.set(databaseId, savedQueriesResult.data || []);
-          migrationsMap.set(databaseId, migrationsResult.data || []);
+          const dbInfo = dbMap.get(databaseId);
+          if (!dbInfo) continue;
+          
+          const isExternal = dbInfo.source === 'external';
+          
+          if (isExternal) {
+            // Use connection-based RPCs for external databases
+            const [savedQueriesResult, migrationsResult] = await Promise.all([
+              (supabase.rpc as any)('get_saved_queries_by_connection_with_token', { 
+                p_connection_id: databaseId, 
+                p_token: shareToken 
+              }),
+              (supabase.rpc as any)('get_migrations_by_connection_with_token', { 
+                p_connection_id: databaseId, 
+                p_token: shareToken 
+              })
+            ]);
+            savedQueriesMap.set(databaseId, savedQueriesResult.data || []);
+            migrationsMap.set(databaseId, migrationsResult.data || []);
+          } else {
+            // Use database-based RPCs for Render databases
+            const [savedQueriesResult, migrationsResult] = await Promise.all([
+              supabase.rpc('get_saved_queries_with_token', { p_database_id: databaseId, p_token: shareToken }),
+              supabase.rpc('get_migrations_with_token', { p_database_id: databaseId, p_token: shareToken })
+            ]);
+            savedQueriesMap.set(databaseId, savedQueriesResult.data || []);
+            migrationsMap.set(databaseId, migrationsResult.data || []);
+          }
         }
 
         for (const [databaseId, items] of databaseGroups) {
           const dbInfo = dbMap.get(databaseId);
           if (!dbInfo) continue;
+
+          const isExternal = dbInfo.source === 'external';
+          // Build base request body with correct ID parameter based on source
+          const getBaseBody = () => isExternal 
+            ? { connectionId: databaseId, shareToken }
+            : { databaseId, shareToken };
 
           for (const item of items) {
             const dbSchemaItem: DatabaseSchemaItem = {
@@ -619,8 +661,7 @@ export function ProjectSelector({
               try {
                 const structureResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_table_structure',
                     schema: item.schemaName,
                     table: item.name
@@ -637,8 +678,7 @@ export function ProjectSelector({
                 if (includeSampleData) {
                   const sampleResponse = await supabase.functions.invoke('manage-database', {
                     body: {
-                      databaseId,
-                      shareToken,
+                      ...getBaseBody(),
                       action: 'get_table_data',
                       schema: item.schemaName,
                       table: item.name,
@@ -659,8 +699,7 @@ export function ProjectSelector({
               try {
                 const viewResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_view_definition',
                     schema: item.schemaName,
                     name: item.name
@@ -679,8 +718,7 @@ export function ProjectSelector({
               try {
                 const funcResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_function_definition',
                     schema: item.schemaName,
                     name: item.name
@@ -699,8 +737,7 @@ export function ProjectSelector({
               try {
                 const triggerResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_trigger_definition',
                     schema: item.schemaName,
                     name: item.name
@@ -719,8 +756,7 @@ export function ProjectSelector({
               try {
                 const indexResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_index_definition',
                     schema: item.schemaName,
                     name: item.name
@@ -739,8 +775,7 @@ export function ProjectSelector({
               try {
                 const seqResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_sequence_info',
                     schema: item.schemaName,
                     name: item.name
@@ -759,8 +794,7 @@ export function ProjectSelector({
               try {
                 const typeResponse = await supabase.functions.invoke('manage-database', {
                   body: {
-                    databaseId,
-                    shareToken,
+                    ...getBaseBody(),
                     action: 'get_type_definition',
                     schema: item.schemaName,
                     name: item.name
