@@ -24,6 +24,7 @@ import JSZip from "jszip";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import { SavedSpecificationsPanel, SavedSpecification } from "@/components/specifications/SavedSpecificationsPanel";
 import { VersionHistoryDropdown } from "@/components/specifications/VersionHistoryDropdown";
+import { useRealtimeSpecifications } from "@/hooks/useRealtimeSpecifications";
 
 interface Agent {
   id: string;
@@ -49,7 +50,6 @@ export default function Specifications() {
   const { projectId } = useParams();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const [projectName, setProjectName] = useState<string>("project");
-  const [hasGeneratedSpec, setHasGeneratedSpec] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [projectSettings, setProjectSettings] = useState<any>(null);
@@ -62,10 +62,16 @@ export default function Specifications() {
   const [activeAgentView, setActiveAgentView] = useState<string | null>(null);
   const [customizedAgents, setCustomizedAgents] = useState<Record<string, string>>({});
   
-  // Saved specifications state
-  const [savedSpecs, setSavedSpecs] = useState<SavedSpecification[]>([]);
-  const [allVersions, setAllVersions] = useState<Record<string, SavedSpecification[]>>({});
-  const [isLoadingSavedSpecs, setIsLoadingSavedSpecs] = useState(false);
+  // Real-time specifications hook
+  const {
+    specifications: savedSpecs,
+    allVersions,
+    isLoading: isLoadingSavedSpecs,
+    refresh: loadSavedSpecifications,
+    broadcastRefresh: broadcastSpecificationRefresh,
+    hasSpecifications: hasGeneratedSpec
+  } = useRealtimeSpecifications(projectId, shareToken, isTokenSet);
+
   // Track currently selected/viewed version for each agent
   const [selectedVersions, setSelectedVersions] = useState<Record<string, SavedSpecification>>({});
 
@@ -86,104 +92,6 @@ export default function Specifications() {
     loadAgents();
   }, []);
 
-  // Load saved specifications and all versions
-  const loadSavedSpecifications = useCallback(async () => {
-    if (!projectId || !isTokenSet) return;
-    
-    setIsLoadingSavedSpecs(true);
-    try {
-      // Load ALL specifications (not just latest) to build version history
-      const { data, error } = await supabase.rpc('get_project_specifications_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-        p_agent_id: null,
-        p_latest_only: false // Get all versions
-      });
-      
-      if (error) {
-        console.error('Error loading saved specifications:', error);
-      } else if (data) {
-        const allSpecs = (data as any[]).map(s => ({
-          id: s.id,
-          agent_id: s.agent_id,
-          agent_title: s.agent_title,
-          version: s.version,
-          is_latest: s.is_latest,
-          generated_spec: s.generated_spec,
-          raw_data: s.raw_data,
-          created_at: s.created_at,
-          generated_by_user_id: s.generated_by_user_id,
-          generated_by_token: s.generated_by_token
-        }));
-        
-        // Separate latest specs from version history
-        const latestSpecs = allSpecs.filter(s => s.is_latest);
-        setSavedSpecs(latestSpecs);
-        setHasGeneratedSpec(latestSpecs.length > 0);
-        
-        // Build version history by agent_id
-        const versionsByAgent: Record<string, SavedSpecification[]> = {};
-        allSpecs.forEach(spec => {
-          if (!versionsByAgent[spec.agent_id]) {
-            versionsByAgent[spec.agent_id] = [];
-          }
-          versionsByAgent[spec.agent_id].push(spec);
-        });
-        // Sort each agent's versions by version number descending
-        Object.keys(versionsByAgent).forEach(agentId => {
-          versionsByAgent[agentId].sort((a, b) => b.version - a.version);
-        });
-        setAllVersions(versionsByAgent);
-      }
-    } catch (err) {
-      console.error('Failed to load saved specifications:', err);
-    } finally {
-      setIsLoadingSavedSpecs(false);
-    }
-  }, [projectId, shareToken, isTokenSet]);
-
-  // Load versions for a specific agent
-  const loadVersionsForAgent = useCallback(async (agentId: string) => {
-    if (!projectId || !isTokenSet) return;
-    
-    try {
-      const { data, error } = await supabase.rpc('get_specification_versions_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-        p_agent_id: agentId
-      });
-      
-      if (error) {
-        console.error('Error loading versions:', error);
-      } else if (data) {
-        const versions = (data as any[]).map(s => ({
-          id: s.id,
-          agent_id: s.agent_id,
-          agent_title: s.agent_title,
-          version: s.version,
-          is_latest: s.is_latest,
-          generated_spec: s.generated_spec,
-          raw_data: s.raw_data,
-          created_at: s.created_at,
-          generated_by_user_id: s.generated_by_user_id,
-          generated_by_token: s.generated_by_token
-        }));
-        setAllVersions(prev => ({ ...prev, [agentId]: versions }));
-      }
-    } catch (err) {
-      console.error('Failed to load versions:', err);
-    }
-  }, [projectId, shareToken, isTokenSet]);
-
-  // Broadcast refresh to other clients
-  const broadcastSpecificationRefresh = useCallback(() => {
-    const channel = supabase.channel(`specifications-broadcast-${projectId}`);
-    channel.send({
-      type: "broadcast",
-      event: "specification_refresh",
-      payload: { projectId },
-    });
-  }, [projectId]);
 
   // Save specification to database
   const saveSpecification = useCallback(async (agentId: string, agentTitle: string, content: string) => {
@@ -241,32 +149,7 @@ export default function Specifications() {
     };
 
     loadData();
-    loadSavedSpecifications();
-  }, [projectId, shareToken, isTokenSet, loadSavedSpecifications]);
-
-  // Real-time subscription for specifications
-  useEffect(() => {
-    if (!projectId || !isTokenSet) return;
-
-    const channel = supabase
-      .channel(`specifications-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "project_specifications",
-          filter: `project_id=eq.${projectId}`,
-        },
-        () => loadSavedSpecifications()
-      )
-      .on("broadcast", { event: "specification_refresh" }, () => loadSavedSpecifications())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, isTokenSet, loadSavedSpecifications]);
+  }, [projectId, shareToken, isTokenSet]);
 
   if (shareToken && !isTokenSet) {
     return (
@@ -559,7 +442,6 @@ export default function Specifications() {
     });
 
     await Promise.all(promises);
-    setHasGeneratedSpec(true);
     toast.success("All specifications generated and saved!");
   };
 
@@ -1332,7 +1214,7 @@ export default function Specifications() {
                 onDelete={handleDeleteSavedSpec}
                 onSetAsLatest={handleSetAsLatest}
                 onReturnToLatest={handleReturnToLatest}
-                onLoadVersions={loadVersionsForAgent}
+                onLoadVersions={() => {}}
                 isLoading={isLoadingSavedSpecs}
               />
             )}
