@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.staging-operations]
 verify_jwt = false
+
+[functions.project-activity]
+verify_jwt = false

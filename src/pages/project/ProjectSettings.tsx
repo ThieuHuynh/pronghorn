@@ -22,6 +22,7 @@ import { TokenManagement } from "@/components/project/TokenManagement";
 import { AccessLevelBanner } from "@/components/project/AccessLevelBanner";
 
 import { Switch } from "@/components/ui/switch";
+import { ProjectActivityHeatmap } from "@/components/project/ProjectActivityHeatmap";
 
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -472,6 +473,9 @@ export default function ProjectSettings() {
                     </Button>
                   </CardContent>
                 </Card>
+
+                {/* Project Activity Heatmap */}
+                <ProjectActivityHeatmap projectId={projectId!} shareToken={shareToken} />
 
                 {/* Danger Zone - Project Deletion (owner role required) */}
                 {isOwner && (
