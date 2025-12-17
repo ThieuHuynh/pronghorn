@@ -87,7 +87,6 @@ Deno.serve(async (req) => {
       { key: "artifacts", label: "Artifacts", table: "artifacts", dateCol: "created_at" },
       // Chat
       { key: "chat_sessions", label: "Chat Sessions", table: "chat_sessions", dateCol: "created_at" },
-      { key: "agent_sessions", label: "Agent Sessions", table: "agent_sessions", dateCol: "created_at" },
       // Requirements
       { key: "requirements", label: "Requirements", table: "requirements", dateCol: "created_at" },
       // Standards
@@ -102,7 +101,8 @@ Deno.serve(async (req) => {
       // Repository
       { key: "project_repos", label: "Repositories", table: "project_repos", dateCol: "created_at" },
       { key: "repo_files", label: "Repository Files", table: "repo_files", dateCol: "created_at" },
-      // Build (Commits)
+      // Build
+      { key: "agent_sessions", label: "Agent Sessions", table: "agent_sessions", dateCol: "created_at" },
       { key: "repo_commits", label: "Commits", table: "repo_commits", dateCol: "created_at" },
       // Database
       { key: "project_databases", label: "Databases", table: "project_databases", dateCol: "created_at" },
