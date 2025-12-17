@@ -62,6 +62,7 @@ export default function Specifications() {
   const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
   const [activeAgentView, setActiveAgentView] = useState<string | null>(null);
   const [customizedAgents, setCustomizedAgents] = useState<Record<string, string>>({});
+  const [userInstructions, setUserInstructions] = useState<string>("");
   
   // Real-time specifications hook
   const {
@@ -228,10 +229,15 @@ export default function Specifications() {
     return finalPrompt;
   };
 
-  const buildContextFromSelection = () => {
-    if (!selectedContent) return "";
-    
+  const buildContextFromSelection = (instructions?: string) => {
     const contextParts = [];
+    
+    // Prepend user instructions if provided
+    if (instructions && instructions.trim()) {
+      contextParts.push(`# User Instructions\n${instructions.trim()}`);
+    }
+    
+    if (!selectedContent) return contextParts.join('\n\n');
     
     if (selectedContent.projectMetadata) {
       contextParts.push(`# Project Metadata\n${JSON.stringify(selectedContent.projectMetadata, null, 2)}`);
@@ -399,7 +405,7 @@ export default function Specifications() {
       return;
     }
 
-    const userPrompt = buildContextFromSelection();
+    const userPrompt = buildContextFromSelection(userInstructions);
 
     const initialResults: AgentResult[] = selectedAgents.map(agentId => {
       const agent = agents.find(a => a.id === agentId);
@@ -459,7 +465,7 @@ export default function Specifications() {
     const agent = agents.find(a => a.id === agentId);
     if (!agent || !projectSettings || !hasSelectedContent()) return;
 
-    const userPrompt = buildContextFromSelection();
+    const userPrompt = buildContextFromSelection(userInstructions);
 
     setAgentResults(prev => prev.map(r => 
       r.agentId === agentId 
@@ -1036,6 +1042,23 @@ export default function Specifications() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* User Instructions Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="user-instructions" className="text-sm font-medium">
+                      Custom Instructions (Optional)
+                    </Label>
+                    <Textarea
+                      id="user-instructions"
+                      value={userInstructions}
+                      onChange={(e) => setUserInstructions(e.target.value)}
+                      placeholder="Provide specific guidance for the agents, e.g., 'Focus on security aspects and potential vulnerabilities' or 'Emphasize the API design and integration points'..."
+                      className="min-h-[100px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      These instructions will be included at the beginning of the context sent to all selected agents.
+                    </p>
+                  </div>
+
                   <Button
                     onClick={generateSpecifications}
                     disabled={!hasSelectedContent() || selectedAgents.length === 0 || isAnyAgentProcessing()}
