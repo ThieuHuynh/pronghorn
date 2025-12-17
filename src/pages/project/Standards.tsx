@@ -13,6 +13,7 @@ import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelec
 import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRealtimeProjectStandards } from "@/hooks/useRealtimeProjectStandards";
 
 interface Standard {
   id: string;
@@ -50,6 +51,19 @@ export default function Standards() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Real-time hook for project standards and tech stacks
+  const { 
+    projectStandards, 
+    projectTechStacks, 
+    broadcastRefresh 
+  } = useRealtimeProjectStandards(projectId, shareToken, isTokenSet);
+
+  // Sync selections when real-time data changes
+  useEffect(() => {
+    setSelectedStandards(new Set(projectStandards.map(ps => ps.standard_id)));
+    setSelectedTechStackItems(new Set(projectTechStacks.map(pts => pts.tech_stack_id)));
+  }, [projectStandards, projectTechStacks]);
 
   useEffect(() => {
     if (projectId && isTokenSet) {
@@ -134,26 +148,15 @@ export default function Standards() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Get existing project standards and tech stacks
-      const { data: existingStandards } = await supabase.rpc("get_project_standards_with_token", {
-        p_project_id: projectId!,
-        p_token: shareToken || null
-      });
-
-      const { data: existingTechStacks } = await supabase.rpc("get_project_tech_stacks_with_token", {
-        p_project_id: projectId!,
-        p_token: shareToken || null
-      });
-
-      // Calculate deltas for standards
-      const existingStandardIds = new Set(existingStandards?.map(ps => ps.standard_id) || []);
+      // Calculate deltas for standards using real-time data
+      const existingStandardIds = new Set(projectStandards.map(ps => ps.standard_id));
       const standardsToAdd = Array.from(selectedStandards).filter(id => !existingStandardIds.has(id));
-      const standardsToRemove = (existingStandards || []).filter(ps => !selectedStandards.has(ps.standard_id));
+      const standardsToRemove = projectStandards.filter(ps => !selectedStandards.has(ps.standard_id));
 
-      // Calculate deltas for tech stacks - save each selected item ID directly (like standards)
-      const existingTechStackIds = new Set((existingTechStacks || []).map((pts: any) => pts.tech_stack_id as string));
-      const techStacksToAdd = Array.from(selectedTechStackItems).filter((id) => !existingTechStackIds.has(id));
-      const techStacksToRemove = (existingTechStacks || []).filter((pts: any) => !selectedTechStackItems.has(pts.tech_stack_id as string));
+      // Calculate deltas for tech stacks using real-time data
+      const existingTechStackIds = new Set(projectTechStacks.map(pts => pts.tech_stack_id));
+      const techStacksToAdd = Array.from(selectedTechStackItems).filter(id => !existingTechStackIds.has(id));
+      const techStacksToRemove = projectTechStacks.filter(pts => !selectedTechStackItems.has(pts.tech_stack_id));
 
       // Delete only removed standards
       for (const existing of standardsToRemove) {
@@ -190,7 +193,7 @@ export default function Standards() {
       }
 
       toast.success("Project standards saved successfully");
-      await loadData(); // Refresh to confirm changes
+      broadcastRefresh(); // Notify other clients
     } catch (error: any) {
       console.error("Save error:", error);
       toast.error("Failed to save: " + error.message);
