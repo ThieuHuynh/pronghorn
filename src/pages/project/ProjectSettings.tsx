@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
@@ -43,7 +43,20 @@ export default function ProjectSettings() {
   const [thinkingBudget, setThinkingBudget] = useState(-1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const { data: project } = useQuery({
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Broadcast refresh to other clients
+  const broadcastRefresh = useCallback(() => {
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "project_refresh",
+        payload: { projectId },
+      });
+    }
+  }, [projectId]);
+
+  const { data: project, refetch: refetchProject } = useQuery({
     queryKey: ["project", projectId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_project_with_token", {
@@ -56,6 +69,33 @@ export default function ProjectSettings() {
     },
     enabled: !!projectId && isTokenSet,
   });
+
+  // Real-time subscription for project changes
+  useEffect(() => {
+    if (!projectId || !isTokenSet) return;
+
+    const channel = supabase
+      .channel(`project-settings-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "projects",
+          filter: `id=eq.${projectId}`,
+        },
+        () => refetchProject()
+      )
+      .on("broadcast", { event: "project_refresh" }, () => refetchProject())
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [projectId, isTokenSet, refetchProject]);
 
   // Get user's role via authorize_project_access
   const { data: userRole } = useQuery({
@@ -161,6 +201,7 @@ export default function ProjectSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      broadcastRefresh();
       toast.success("Project details updated successfully");
     },
     onError: () => {

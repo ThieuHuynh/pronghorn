@@ -175,6 +175,16 @@ export default function Specifications() {
     }
   }, [projectId, shareToken, isTokenSet]);
 
+  // Broadcast refresh to other clients
+  const broadcastSpecificationRefresh = useCallback(() => {
+    const channel = supabase.channel(`specifications-broadcast-${projectId}`);
+    channel.send({
+      type: "broadcast",
+      event: "specification_refresh",
+      payload: { projectId },
+    });
+  }, [projectId]);
+
   // Save specification to database
   const saveSpecification = useCallback(async (agentId: string, agentTitle: string, content: string) => {
     if (!projectId || !isTokenSet) return null;
@@ -198,15 +208,16 @@ export default function Specifications() {
       const savedSpec = data as any;
       toast.success(`Saved ${agentTitle} v${savedSpec.version}`);
       
-      // Reload saved specs to get updated list
+      // Reload saved specs and broadcast to other clients
       loadSavedSpecifications();
+      broadcastSpecificationRefresh();
       
       return savedSpec;
     } catch (err) {
       console.error('Failed to save specification:', err);
       return null;
     }
-  }, [projectId, shareToken, isTokenSet, selectedContent, loadSavedSpecifications]);
+  }, [projectId, shareToken, isTokenSet, selectedContent, loadSavedSpecifications, broadcastSpecificationRefresh]);
 
   // Load project settings
   useEffect(() => {
@@ -232,6 +243,30 @@ export default function Specifications() {
     loadData();
     loadSavedSpecifications();
   }, [projectId, shareToken, isTokenSet, loadSavedSpecifications]);
+
+  // Real-time subscription for specifications
+  useEffect(() => {
+    if (!projectId || !isTokenSet) return;
+
+    const channel = supabase
+      .channel(`specifications-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_specifications",
+          filter: `project_id=eq.${projectId}`,
+        },
+        () => loadSavedSpecifications()
+      )
+      .on("broadcast", { event: "specification_refresh" }, () => loadSavedSpecifications())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, isTokenSet, loadSavedSpecifications]);
 
   if (shareToken && !isTokenSet) {
     return (
@@ -646,6 +681,7 @@ export default function Specifications() {
       
       toast.success('Specification deleted');
       loadSavedSpecifications();
+      broadcastSpecificationRefresh();
     } catch (err) {
       console.error('Failed to delete specification:', err);
       toast.error('Failed to delete specification');
@@ -707,6 +743,7 @@ export default function Specifications() {
       
       toast.success('Set as latest version');
       loadSavedSpecifications();
+      broadcastSpecificationRefresh();
     } catch (err) {
       console.error('Failed to set as latest:', err);
       toast.error('Failed to set as latest');

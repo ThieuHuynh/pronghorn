@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
+import { useRealtimeDatabases } from "@/hooks/useRealtimeDatabases";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { DatabaseCard } from "@/components/deploy/DatabaseCard";
@@ -18,8 +18,11 @@ const Database = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const isMobile = useIsMobile();
-  const [databases, setDatabases] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { databases, isLoading, refresh, broadcastRefresh } = useRealtimeDatabases(
+    projectId,
+    shareToken,
+    isTokenSet
+  );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("deploy");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -47,30 +50,14 @@ const Database = () => {
     }
   };
 
-  const fetchDatabases = async () => {
-    if (!projectId || !isTokenSet) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.rpc("get_databases_with_token", {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-      });
-      
-      if (error) throw error;
-      setDatabases(data || []);
-    } catch (error: any) {
-      console.error("Error fetching databases:", error);
-      toast.error("Failed to load databases");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchDatabases();
     fetchPrimeRepoName();
   }, [projectId, isTokenSet, shareToken]);
+
+  const handleUpdate = () => {
+    refresh();
+    broadcastRefresh();
+  };
 
   const handleExploreDatabase = (database: any) => {
     setSelectedDatabase(database);
@@ -144,7 +131,7 @@ const Database = () => {
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" onClick={fetchDatabases} className="flex-1 sm:flex-none">
+                <Button variant="outline" size="sm" onClick={refresh} className="flex-1 sm:flex-none">
                   <RefreshCw className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
@@ -181,7 +168,7 @@ const Database = () => {
                           key={database.id}
                           database={database}
                           shareToken={shareToken}
-                          onRefresh={fetchDatabases}
+                          onRefresh={handleUpdate}
                           onExplore={() => handleExploreDatabase(database)}
                         />
                       ))}
@@ -224,7 +211,7 @@ const Database = () => {
                           key={database.id}
                           database={database}
                           shareToken={shareToken}
-                          onRefresh={fetchDatabases}
+                          onRefresh={handleUpdate}
                           onExplore={() => handleExploreDatabase(database)}
                           showExploreOnly
                         />
@@ -249,7 +236,7 @@ const Database = () => {
           mode="create"
           projectId={projectId || ""}
           shareToken={shareToken}
-          onSuccess={fetchDatabases}
+          onSuccess={handleUpdate}
           primeRepoName={primeRepoName}
         />
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -37,8 +37,20 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
   const [newTokenRole, setNewTokenRole] = useState<"owner" | "editor" | "viewer">("editor");
   const [newTokenExpiry, setNewTokenExpiry] = useState("");
   const [visibleTokens, setVisibleTokens] = useState<Set<string>>(new Set());
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const { data: tokens, isLoading, error } = useQuery({
+  // Broadcast refresh to other clients
+  const broadcastRefresh = useCallback(() => {
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "tokens_refresh",
+        payload: { projectId },
+      });
+    }
+  }, [projectId]);
+
+  const { data: tokens, isLoading, error, refetch } = useQuery({
     queryKey: ["project-tokens", projectId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_project_tokens_with_token" as any, {
@@ -51,6 +63,33 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     },
     enabled: !!projectId,
   });
+
+  // Real-time subscription for tokens
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`tokens-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_tokens",
+          filter: `project_id=eq.${projectId}`,
+        },
+        () => refetch()
+      )
+      .on("broadcast", { event: "tokens_refresh" }, () => refetch())
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [projectId, refetch]);
 
   const createTokenMutation = useMutation({
     mutationFn: async () => {
@@ -67,6 +106,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-tokens", projectId] });
+      broadcastRefresh();
       toast.success("Access token created");
       setIsCreateDialogOpen(false);
       setNewTokenLabel("");
@@ -89,6 +129,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-tokens", projectId] });
+      broadcastRefresh();
       toast.success("Token deleted");
     },
     onError: (error: Error) => {

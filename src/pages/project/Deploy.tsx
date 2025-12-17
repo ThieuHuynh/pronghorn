@@ -6,50 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Cloud, Laptop, Server, Plus, RefreshCw } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useRealtimeDeployments } from "@/hooks/useRealtimeDeployments";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import DeploymentCard from "@/components/deploy/DeploymentCard";
 import DeploymentDialog from "@/components/deploy/DeploymentDialog";
 import TestingLogsViewer from "@/components/deploy/TestingLogsViewer";
-import type { Database as DBTypes } from "@/integrations/supabase/types";
-
-type Deployment = DBTypes["public"]["Tables"]["project_deployments"]["Row"];
 
 const Deploy = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { deployments, isLoading, refresh, broadcastRefresh } = useRealtimeDeployments(
+    projectId,
+    shareToken,
+    isTokenSet
+  );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("cloud");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedLocalDeployment, setSelectedLocalDeployment] = useState<string | null>(null);
-
-  const fetchDeployments = async () => {
-    if (!projectId || !isTokenSet) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.rpc("get_deployments_with_token", {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-      });
-      
-      if (error) throw error;
-      setDeployments((data as Deployment[]) || []);
-    } catch (error: any) {
-      console.error("Error fetching deployments:", error);
-      toast.error("Failed to load deployments");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDeployments();
-  }, [projectId, isTokenSet, shareToken]);
 
   const cloudDeployments = deployments.filter(d => d.platform === "pronghorn_cloud");
   const localDeployments = deployments.filter(d => d.platform === "local");
@@ -60,6 +35,11 @@ const Deploy = () => {
       setSelectedLocalDeployment(localDeployments[0].id);
     }
   }, [localDeployments, selectedLocalDeployment]);
+
+  const handleUpdate = () => {
+    refresh();
+    broadcastRefresh();
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -95,7 +75,7 @@ const Deploy = () => {
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" onClick={fetchDeployments} className="flex-1 sm:flex-none">
+                <Button variant="outline" size="sm" onClick={refresh} className="flex-1 sm:flex-none">
                   <RefreshCw className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
@@ -129,7 +109,7 @@ const Deploy = () => {
                           key={deployment.id}
                           deployment={deployment}
                           shareToken={shareToken}
-                          onUpdate={fetchDeployments}
+                          onUpdate={handleUpdate}
                         />
                       ))}
                     </div>
@@ -170,7 +150,7 @@ const Deploy = () => {
                           key={deployment.id}
                           deployment={deployment}
                           shareToken={shareToken}
-                          onUpdate={fetchDeployments}
+                          onUpdate={handleUpdate}
                           onSelect={() => setSelectedLocalDeployment(deployment.id)}
                           isSelected={selectedLocalDeployment === deployment.id}
                         />
@@ -231,7 +211,7 @@ const Deploy = () => {
           shareToken={shareToken}
           mode="create"
           defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
-          onSuccess={fetchDeployments}
+          onSuccess={handleUpdate}
         />
       </div>
     </div>
