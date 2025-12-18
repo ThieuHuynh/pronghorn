@@ -51,14 +51,19 @@ export default function FieldMapper({
   // Auto-match columns on initial load or table change
   useEffect(() => {
     if (mappings.length === 0 || mappings.every(m => m.targetColumn === null)) {
-      const autoMapped = sourceHeaders.map(source => {
-        // Try exact match (case insensitive)
-        const exactMatch = targetColumns.find(
-          tc => tc.name.toLowerCase() === source.toLowerCase()
+      // Filter out undefined/null source headers
+      const validHeaders = sourceHeaders?.filter(h => h != null && h !== '') || [];
+      
+      const autoMapped = validHeaders.map(source => {
+        // Try exact match (case insensitive) with null checks
+        const exactMatch = targetColumns?.find(
+          tc => tc?.name && source && 
+               tc.name.toLowerCase() === source.toLowerCase()
         );
         
-        // Try fuzzy match (contains, underscores vs spaces)
-        const fuzzyMatch = !exactMatch ? targetColumns.find(tc => {
+        // Try fuzzy match (contains, underscores vs spaces) with null checks
+        const fuzzyMatch = !exactMatch ? targetColumns?.find(tc => {
+          if (!tc?.name || !source) return false;
           const normalizedSource = source.toLowerCase().replace(/[_\s-]/g, '');
           const normalizedTarget = tc.name.toLowerCase().replace(/[_\s-]/g, '');
           return normalizedSource === normalizedTarget ||
@@ -76,7 +81,7 @@ export default function FieldMapper({
 
       onMappingsChange(autoMapped);
     }
-  }, [selectedTable, targetColumns]);
+  }, [selectedTable, targetColumns, sourceHeaders]);
 
   const updateMapping = (idx: number, updates: Partial<ColumnMapping>) => {
     onMappingsChange(mappings.map((m, i) => 
@@ -90,8 +95,9 @@ export default function FieldMapper({
   const getMatchStatus = (mapping: ColumnMapping) => {
     if (mapping.ignored) return 'ignored';
     if (!mapping.targetColumn) return 'unmapped';
-    const isExactMatch = targetColumns.some(
-      tc => tc.name.toLowerCase() === mapping.sourceColumn.toLowerCase()
+    const isExactMatch = targetColumns?.some(
+      tc => tc?.name && mapping.sourceColumn && 
+           tc.name.toLowerCase() === mapping.sourceColumn.toLowerCase()
     );
     return isExactMatch ? 'exact' : 'fuzzy';
   };
