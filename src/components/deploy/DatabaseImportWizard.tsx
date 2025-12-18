@@ -112,6 +112,11 @@ export default function DatabaseImportWizard({
   const [targetColumns, setTargetColumns] = useState<TableColumn[]>([]);
   const [enableCasting, setEnableCasting] = useState(true);
   
+  // Memoized callback for SchemaCreator to prevent re-renders
+  const handleTableDefChange = useCallback((def: TableDefinition) => {
+    setTableDef(def);
+  }, []);
+  
   // SQL state
   const [proposedSQL, setProposedSQL] = useState<SQLStatement[]>([]);
   const [sqlReviewed, setSqlReviewed] = useState(false);
@@ -538,7 +543,7 @@ export default function DatabaseImportWizard({
                   sampleData={memoizedSampleData}
                   tableName={tableName}
                   onTableNameChange={setTableName}
-                  onTableDefChange={setTableDef}
+                  onTableDefChange={handleTableDefChange}
                   schema={schema}
                 />
               </TabsContent>

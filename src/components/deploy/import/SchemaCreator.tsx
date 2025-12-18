@@ -67,29 +67,26 @@ export default function SchemaCreator({
   const [addAutoId, setAddAutoId] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   
-  // Track if we've initialized to prevent re-running inference on every render
-  const initializedRef = useRef(false);
-  const lastHeadersRef = useRef<string[]>([]);
+  // Track the headers we've initialized with to prevent re-running inference
+  const initializedHeadersRef = useRef<string | null>(null);
+  const prevTableDefRef = useRef<string>('');
 
   // Check if source data has an "id" column (case-insensitive)
   const sourceHasIdColumn = useMemo(() => {
     return headers.some(h => h?.toLowerCase() === 'id');
   }, [headers]);
 
-  // Infer column types from sample data - only on initial load or when headers actually change
+  // Infer column types from sample data - ONLY on initial load or when headers actually change
   useEffect(() => {
-    // Check if headers have actually changed (not just reference)
-    const headersChanged = JSON.stringify(headers) !== JSON.stringify(lastHeadersRef.current);
+    const headersKey = JSON.stringify(headers);
     
-    // Only run inference on first mount or when headers actually change
-    if (!headersChanged && initializedRef.current) {
+    // Skip if already initialized with these headers or no headers
+    if (headersKey === initializedHeadersRef.current || headers.length === 0) {
       return;
     }
     
-    if (headers.length === 0) return;
-    
-    lastHeadersRef.current = headers;
-    initializedRef.current = true;
+    // Mark as initialized with these headers
+    initializedHeadersRef.current = headersKey;
 
     const inferred = headers.map((header, idx) => {
       const values = sampleData.slice(0, sampleSize).map(row => row[idx]);
@@ -110,7 +107,7 @@ export default function SchemaCreator({
         originalName: header,
         type: info.inferredType,
         nullable: info.nullable,
-        isPrimaryKey: !addAutoId && info.suggestPrimaryKey,
+        isPrimaryKey: false, // Don't auto-set PK, let user decide
         isUnique: info.uniqueRatio > 0.99 && !info.suggestPrimaryKey,
         hasIndex: info.suggestIndex,
         inferredInfo: info,
@@ -119,7 +116,7 @@ export default function SchemaCreator({
     });
 
     setColumns(inferred);
-  }, [headers, addAutoId]); // Remove sampleData and sampleSize from deps
+  }, [headers]); // Only depend on headers - NOT addAutoId
 
   // Handle addAutoId change separately - just update column names for id conflict
   useEffect(() => {
@@ -139,7 +136,7 @@ export default function SchemaCreator({
     }));
   }, [addAutoId]);
 
-  // Update parent when columns change
+  // Update parent when columns change - with deduplication to prevent loops
   useEffect(() => {
     if (columns.length === 0) return;
     
@@ -192,12 +189,19 @@ export default function SchemaCreator({
       }
     });
 
-    onTableDefChange({
+    const newDef: TableDefinition = {
       name: sanitizeTableName(tableName),
       schema,
       columns: columnDefs,
       indexes
-    });
+    };
+    
+    // Only notify parent if definition actually changed
+    const defJson = JSON.stringify(newDef);
+    if (defJson !== prevTableDefRef.current) {
+      prevTableDefRef.current = defJson;
+      onTableDefChange(newDef);
+    }
   }, [columns, tableName, schema, addAutoId, onTableDefChange]);
 
   const updateColumn = (idx: number, updates: Partial<ColumnConfig>) => {
