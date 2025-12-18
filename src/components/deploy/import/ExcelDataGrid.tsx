@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { SheetData } from '@/utils/parseExcel';
-import { CheckSquare, Square, Filter, ArrowUpDown } from 'lucide-react';
+import { CheckSquare, Square, Filter, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface ExcelDataGridProps {
   sheets: SheetData[];
@@ -19,6 +19,8 @@ interface ExcelDataGridProps {
   onSelectedRowsChange: (rows: Set<number>) => void;
   maxPreviewRows?: number;
 }
+
+const PAGE_SIZE_OPTIONS = [100, 500, 1000, 5000] as const;
 
 export default function ExcelDataGrid({
   sheets,
@@ -33,6 +35,8 @@ export default function ExcelDataGrid({
   const [filterText, setFilterText] = useState('');
   const [sortColumn, setSortColumn] = useState<number | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [currentPage, setCurrentPage] = useState(0);
 
   const currentSheet = useMemo(() => 
     sheets.find(s => s.name === selectedSheet) || sheets[0],
@@ -73,7 +77,16 @@ export default function ExcelDataGrid({
     return rows;
   }, [dataRows, filterText, sortColumn, sortDirection]);
 
-  const displayRows = filteredRows.slice(0, maxPreviewRows);
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredRows.length / pageSize);
+  const startIndex = currentPage * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredRows.length);
+  const displayRows = filteredRows.slice(startIndex, endIndex);
+
+  // Reset to first page when filter changes
+  useMemo(() => {
+    setCurrentPage(0);
+  }, [filterText]);
 
   const handleSelectAll = () => {
     if (selectedRows.size === dataRows.length) {
@@ -100,6 +113,12 @@ export default function ExcelDataGrid({
       setSortColumn(colIdx);
       setSortDirection('asc');
     }
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    const newSize = parseInt(value, 10);
+    setPageSize(newSize);
+    setCurrentPage(0);
   };
 
   const allSelected = selectedRows.size === dataRows.length && dataRows.length > 0;
@@ -169,23 +188,23 @@ export default function ExcelDataGrid({
         </div>
       </div>
 
-      {/* Data Grid */}
+      {/* Data Grid with horizontal scroll */}
       <div className="flex-1 border rounded-lg overflow-hidden bg-background min-h-0">
-        <ScrollArea className="h-full">
-          <table className="w-full text-sm">
+        <div className="h-full overflow-auto">
+          <table className="min-w-max text-sm">
             <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
               <tr>
-                <th className="w-10 px-2 py-2 border-b border-r text-center">
+                <th className="w-10 px-2 py-2 border-b border-r text-center sticky left-0 bg-muted/80 z-20">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={handleSelectAll}
                   />
                 </th>
-                <th className="w-12 px-2 py-2 border-b border-r text-center text-muted-foreground">#</th>
+                <th className="w-12 px-2 py-2 border-b border-r text-center text-muted-foreground sticky left-10 bg-muted/80 z-20">#</th>
                 {headers.map((header, idx) => (
                   <th 
                     key={idx}
-                    className="px-3 py-2 border-b border-r text-left font-medium cursor-pointer hover:bg-muted/50 transition-colors"
+                    className="px-3 py-2 border-b border-r text-left font-medium cursor-pointer hover:bg-muted/50 transition-colors min-w-[120px]"
                     onClick={() => handleSort(idx)}
                   >
                     <div className="flex items-center gap-1">
@@ -213,14 +232,14 @@ export default function ExcelDataGrid({
                     )}
                     onClick={() => handleRowSelect(originalIndex)}
                   >
-                    <td className="px-2 py-1.5 border-b border-r text-center">
+                    <td className="px-2 py-1.5 border-b border-r text-center sticky left-0 bg-background z-10">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => handleRowSelect(originalIndex)}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td className="px-2 py-1.5 border-b border-r text-center text-muted-foreground text-xs">
+                    <td className="px-2 py-1.5 border-b border-r text-center text-muted-foreground text-xs sticky left-10 bg-background z-10">
                       {originalIndex + 1}
                     </td>
                     {headers.map((_, colIdx) => (
@@ -241,13 +260,71 @@ export default function ExcelDataGrid({
               })}
             </tbody>
           </table>
+        </div>
+      </div>
 
-          {filteredRows.length > maxPreviewRows && (
-            <div className="p-3 text-center text-sm text-muted-foreground border-t bg-muted/30">
-              Showing {maxPreviewRows} of {filteredRows.length} filtered rows ({dataRows.length} total)
-            </div>
-          )}
-        </ScrollArea>
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-2">
+          <Label className="text-muted-foreground">Rows per page:</Label>
+          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+            <SelectTrigger className="w-20 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map(size => (
+                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="text-muted-foreground">
+          Showing {startIndex + 1}-{endIndex} of {filteredRows.length} rows
+          {filterText && ` (filtered from ${dataRows.length})`}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage(0)}
+            disabled={currentPage === 0}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="px-2 text-muted-foreground">
+            Page {currentPage + 1} of {totalPages || 1}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={currentPage >= totalPages - 1}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage(totalPages - 1)}
+            disabled={currentPage >= totalPages - 1}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

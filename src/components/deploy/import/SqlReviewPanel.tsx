@@ -7,13 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { SQLStatement } from '@/utils/sqlGenerator';
-import { ChevronDown, ChevronRight, Copy, Check, Database, Table2, Hash, FileInput } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Check, Database, Table2, Hash, FileInput, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SqlReviewPanelProps {
   statements: SQLStatement[];
   reviewed: boolean;
   onReviewedChange: (reviewed: boolean) => void;
+  excludedStatements?: Set<number>;
+  onExcludedChange?: (excluded: Set<number>) => void;
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -35,7 +37,9 @@ const TYPE_COLORS: Record<string, string> = {
 export default function SqlReviewPanel({
   statements,
   reviewed,
-  onReviewedChange
+  onReviewedChange,
+  excludedStatements = new Set(),
+  onExcludedChange
 }: SqlReviewPanelProps) {
   const [expandedStatements, setExpandedStatements] = useState<Set<number>>(new Set([0]));
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -50,6 +54,17 @@ export default function SqlReviewPanel({
     setExpandedStatements(newExpanded);
   };
 
+  const toggleExcluded = (idx: number) => {
+    if (!onExcludedChange) return;
+    const newExcluded = new Set(excludedStatements);
+    if (newExcluded.has(idx)) {
+      newExcluded.delete(idx);
+    } else {
+      newExcluded.add(idx);
+    }
+    onExcludedChange(newExcluded);
+  };
+
   const copyToClipboard = async (sql: string, idx: number) => {
     await navigator.clipboard.writeText(sql);
     setCopiedIdx(idx);
@@ -58,18 +73,25 @@ export default function SqlReviewPanel({
   };
 
   const copyAllToClipboard = async () => {
-    const allSql = statements.map(s => s.sql).join('\n\n');
+    const allSql = statements
+      .filter((_, i) => !excludedStatements.has(i))
+      .map(s => s.sql)
+      .join('\n\n');
     await navigator.clipboard.writeText(allSql);
-    toast.success('All SQL statements copied to clipboard');
+    toast.success('All included SQL statements copied to clipboard');
   };
 
-  // Group statements by type
+  // Group statements by type for summary
   const createStatements = statements.filter(s => s.type === 'CREATE_TABLE');
   const indexStatements = statements.filter(s => s.type === 'CREATE_INDEX');
   const insertStatements = statements.filter(s => s.type === 'INSERT');
-  const otherStatements = statements.filter(s => 
-    !['CREATE_TABLE', 'CREATE_INDEX', 'INSERT'].includes(s.type)
-  );
+
+  const excludedIndexCount = indexStatements.filter((_, i) => {
+    const fullIdx = statements.findIndex(s => s === indexStatements[i]);
+    return excludedStatements.has(fullIdx);
+  }).length;
+
+  const includedCount = statements.length - excludedStatements.size;
 
   const totalInsertRows = insertStatements.length > 0 
     ? insertStatements.reduce((acc, s) => {
@@ -77,6 +99,21 @@ export default function SqlReviewPanel({
         return match ? parseInt(match[1], 10) : acc;
       }, 0)
     : 0;
+
+  // Bulk actions
+  const includeAll = () => {
+    onExcludedChange?.(new Set());
+  };
+
+  const excludeAllIndexes = () => {
+    const indexIdxs = new Set<number>();
+    statements.forEach((s, i) => {
+      if (s.type === 'CREATE_INDEX') {
+        indexIdxs.add(i);
+      }
+    });
+    onExcludedChange?.(indexIdxs);
+  };
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -87,6 +124,9 @@ export default function SqlReviewPanel({
         </Badge>
         <Badge variant="outline" className={TYPE_COLORS['CREATE_INDEX']}>
           {indexStatements.length} CREATE INDEX
+          {excludedIndexCount > 0 && (
+            <span className="ml-1 text-muted-foreground">({excludedIndexCount} excluded)</span>
+          )}
         </Badge>
         <Badge variant="outline" className={TYPE_COLORS['INSERT']}>
           {insertStatements.length} INSERT batches
@@ -94,6 +134,18 @@ export default function SqlReviewPanel({
         </Badge>
         
         <div className="flex-1" />
+        
+        {onExcludedChange && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={includeAll}>
+              Include All
+            </Button>
+            <Button variant="outline" size="sm" onClick={excludeAllIndexes}>
+              <Ban className="h-3 w-3 mr-1" />
+              Exclude Indexes
+            </Button>
+          </div>
+        )}
         
         <Button variant="outline" size="sm" onClick={copyAllToClipboard}>
           <Copy className="h-4 w-4 mr-1" />
@@ -108,6 +160,7 @@ export default function SqlReviewPanel({
             {statements.map((stmt, idx) => {
               const isExpanded = expandedStatements.has(idx);
               const isCopied = copiedIdx === idx;
+              const isExcluded = excludedStatements.has(idx);
               
               return (
                 <Collapsible 
@@ -116,7 +169,20 @@ export default function SqlReviewPanel({
                   onOpenChange={() => toggleExpanded(idx)}
                 >
                   <CollapsibleTrigger asChild>
-                    <div className="flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer">
+                    <div className={cn(
+                      "flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer",
+                      isExcluded && "opacity-50 bg-muted/20"
+                    )}>
+                      {/* Include/Exclude checkbox */}
+                      {onExcludedChange && (
+                        <Checkbox
+                          checked={!isExcluded}
+                          onCheckedChange={() => toggleExcluded(idx)}
+                          onClick={(e) => e.stopPropagation()}
+                          title={isExcluded ? "Click to include" : "Click to exclude"}
+                        />
+                      )}
+                      
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       ) : (
@@ -131,7 +197,18 @@ export default function SqlReviewPanel({
                         {stmt.type.replace('_', ' ')}
                       </Badge>
                       
-                      <span className="flex-1 text-sm truncate">{stmt.description}</span>
+                      <span className={cn(
+                        "flex-1 text-sm truncate",
+                        isExcluded && "line-through"
+                      )}>
+                        {stmt.description}
+                      </span>
+                      
+                      {isExcluded && (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Excluded
+                        </Badge>
+                      )}
                       
                       <Button
                         variant="ghost"
@@ -153,7 +230,10 @@ export default function SqlReviewPanel({
                   
                   <CollapsibleContent>
                     <div className="px-3 pb-3">
-                      <pre className="p-3 rounded-lg bg-[#1e1e1e] text-[#d4d4d4] text-xs font-mono overflow-x-auto max-h-[300px]">
+                      <pre className={cn(
+                        "p-3 rounded-lg bg-[#1e1e1e] text-[#d4d4d4] text-xs font-mono overflow-x-auto max-h-[300px]",
+                        isExcluded && "opacity-50"
+                      )}>
                         {stmt.sql}
                       </pre>
                     </div>
@@ -164,6 +244,13 @@ export default function SqlReviewPanel({
           </div>
         </ScrollArea>
       </div>
+
+      {/* Included count */}
+      {excludedStatements.size > 0 && (
+        <div className="text-sm text-muted-foreground">
+          {includedCount} of {statements.length} statements will be executed
+        </div>
+      )}
 
       {/* Review Confirmation */}
       <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 border">

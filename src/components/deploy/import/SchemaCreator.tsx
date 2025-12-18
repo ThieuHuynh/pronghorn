@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,7 +52,7 @@ interface ColumnConfig {
   isUnique: boolean;
   hasIndex: boolean;
   inferredInfo: ColumnTypeInfo;
-  wasRenamed?: boolean; // Track if column was auto-renamed to avoid conflict
+  wasRenamed?: boolean;
 }
 
 export default function SchemaCreator({
@@ -66,14 +66,31 @@ export default function SchemaCreator({
 }: SchemaCreatorProps) {
   const [addAutoId, setAddAutoId] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
+  
+  // Track if we've initialized to prevent re-running inference on every render
+  const initializedRef = useRef(false);
+  const lastHeadersRef = useRef<string[]>([]);
 
   // Check if source data has an "id" column (case-insensitive)
   const sourceHasIdColumn = useMemo(() => {
     return headers.some(h => h?.toLowerCase() === 'id');
   }, [headers]);
 
-  // Infer column types from sample data
+  // Infer column types from sample data - only on initial load or when headers actually change
   useEffect(() => {
+    // Check if headers have actually changed (not just reference)
+    const headersChanged = JSON.stringify(headers) !== JSON.stringify(lastHeadersRef.current);
+    
+    // Only run inference on first mount or when headers actually change
+    if (!headersChanged && initializedRef.current) {
+      return;
+    }
+    
+    if (headers.length === 0) return;
+    
+    lastHeadersRef.current = headers;
+    initializedRef.current = true;
+
     const inferred = headers.map((header, idx) => {
       const values = sampleData.slice(0, sampleSize).map(row => row[idx]);
       const info = inferColumnType(values, header, sampleSize);
@@ -102,10 +119,30 @@ export default function SchemaCreator({
     });
 
     setColumns(inferred);
-  }, [headers, sampleData, sampleSize, addAutoId]);
+  }, [headers, addAutoId]); // Remove sampleData and sampleSize from deps
+
+  // Handle addAutoId change separately - just update column names for id conflict
+  useEffect(() => {
+    if (columns.length === 0) return;
+    
+    setColumns(prev => prev.map(col => {
+      const sanitizedName = sanitizeColumnName(col.originalName);
+      
+      // Check for duplicate "id" conflict when auto-ID is enabled
+      if (addAutoId && sanitizedName.toLowerCase() === 'id') {
+        return { ...col, name: 'original_id', wasRenamed: true };
+      } else if (!addAutoId && col.wasRenamed && col.name === 'original_id') {
+        // Restore original id name if auto-id is disabled
+        return { ...col, name: sanitizedName, wasRenamed: false };
+      }
+      return col;
+    }));
+  }, [addAutoId]);
 
   // Update parent when columns change
   useEffect(() => {
+    if (columns.length === 0) return;
+    
     const columnDefs: ColumnDefinition[] = [];
     const indexes: IndexDefinition[] = [];
     const usedNames = new Set<string>();
@@ -229,144 +266,146 @@ export default function SchemaCreator({
       {/* Column Configuration */}
       <div className="flex-1 border rounded-lg overflow-hidden min-h-0">
         <ScrollArea className="h-full">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
-              <tr>
-                <th className="px-3 py-2 border-b text-left font-medium">Column Name</th>
-                <th className="px-3 py-2 border-b text-left font-medium">Type</th>
-                <th className="px-3 py-2 border-b text-center font-medium w-20">Nullable</th>
-                <th className="px-3 py-2 border-b text-center font-medium w-20" title="Primary Key">
-                  <Key className="h-4 w-4 mx-auto" />
-                </th>
-                <th className="px-3 py-2 border-b text-center font-medium w-20" title="Unique">
-                  <Fingerprint className="h-4 w-4 mx-auto" />
-                </th>
-                <th className="px-3 py-2 border-b text-center font-medium w-20" title="Index">
-                  <Hash className="h-4 w-4 mx-auto" />
-                </th>
-                <th className="px-3 py-2 border-b text-left font-medium">Sample Values</th>
-              </tr>
-            </thead>
-            <tbody>
-              {addAutoId && (
-                <tr className="bg-primary/5">
-                  <td className="px-3 py-2 border-b">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono">id</span>
-                      <Badge variant="outline" className="text-xs">auto</Badge>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <span className="font-mono text-xs">UUID</span>
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox checked={false} disabled />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox checked={true} disabled />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox checked={true} disabled />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox checked={false} disabled />
-                  </td>
-                  <td className="px-3 py-2 border-b text-muted-foreground italic text-xs">
-                    gen_random_uuid()
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-max text-sm">
+              <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
+                <tr>
+                  <th className="px-3 py-2 border-b text-left font-medium min-w-[180px]">Column Name</th>
+                  <th className="px-3 py-2 border-b text-left font-medium min-w-[180px]">Type</th>
+                  <th className="px-3 py-2 border-b text-center font-medium w-20">Nullable</th>
+                  <th className="px-3 py-2 border-b text-center font-medium w-20" title="Primary Key">
+                    <Key className="h-4 w-4 mx-auto" />
+                  </th>
+                  <th className="px-3 py-2 border-b text-center font-medium w-20" title="Unique">
+                    <Fingerprint className="h-4 w-4 mx-auto" />
+                  </th>
+                  <th className="px-3 py-2 border-b text-center font-medium w-20" title="Index">
+                    <Hash className="h-4 w-4 mx-auto" />
+                  </th>
+                  <th className="px-3 py-2 border-b text-left font-medium min-w-[200px]">Sample Values</th>
                 </tr>
-              )}
-              {columns.map((col, idx) => (
-                <tr key={idx} className={cn("hover:bg-muted/30", col.wasRenamed && "bg-amber-500/5")}>
-                  <td className="px-3 py-2 border-b">
-                    <Input
-                      value={col.name}
-                      onChange={(e) => updateColumn(idx, { name: sanitizeColumnName(e.target.value), wasRenamed: false })}
-                      className="h-8 font-mono text-xs"
-                    />
-                    {(col.name !== col.originalName || col.wasRenamed) && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          from: {col.originalName}
-                        </span>
-                        {col.wasRenamed && (
-                          <Badge variant="outline" className="text-xs text-amber-600">renamed</Badge>
-                        )}
+              </thead>
+              <tbody>
+                {addAutoId && (
+                  <tr className="bg-primary/5">
+                    <td className="px-3 py-2 border-b">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">id</span>
+                        <Badge variant="outline" className="text-xs">auto</Badge>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <Select
-                      value={col.type}
-                      onValueChange={(v) => updateColumn(idx, { type: v as PostgresType })}
-                    >
-                      <SelectTrigger className="h-8 font-mono text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {POSTGRES_TYPES.map(t => (
-                          <SelectItem key={t} value={t} className="font-mono text-xs">
-                            {t}
-                          </SelectItem>
+                    </td>
+                    <td className="px-3 py-2 border-b">
+                      <span className="font-mono text-xs">UUID</span>
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox checked={false} disabled />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox checked={true} disabled />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox checked={true} disabled />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox checked={false} disabled />
+                    </td>
+                    <td className="px-3 py-2 border-b text-muted-foreground italic text-xs">
+                      gen_random_uuid()
+                    </td>
+                  </tr>
+                )}
+                {columns.map((col, idx) => (
+                  <tr key={idx} className={cn("hover:bg-muted/30", col.wasRenamed && "bg-amber-500/5")}>
+                    <td className="px-3 py-2 border-b">
+                      <Input
+                        value={col.name}
+                        onChange={(e) => updateColumn(idx, { name: sanitizeColumnName(e.target.value), wasRenamed: false })}
+                        className="h-8 font-mono text-xs"
+                      />
+                      {(col.name !== col.originalName || col.wasRenamed) && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-xs text-muted-foreground">
+                            from: {col.originalName}
+                          </span>
+                          {col.wasRenamed && (
+                            <Badge variant="outline" className="text-xs text-amber-600">renamed</Badge>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 border-b">
+                      <Select
+                        value={col.type}
+                        onValueChange={(v) => updateColumn(idx, { type: v as PostgresType })}
+                      >
+                        <SelectTrigger className="h-8 font-mono text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POSTGRES_TYPES.map(t => (
+                            <SelectItem key={t} value={t} className="font-mono text-xs">
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {col.type !== col.inferredInfo.inferredType && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          <span className="text-xs text-muted-foreground">
+                            AI suggested: {col.inferredInfo.inferredType}
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox
+                        checked={col.nullable}
+                        onCheckedChange={(checked) => updateColumn(idx, { nullable: !!checked })}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox
+                        checked={col.isPrimaryKey}
+                        onCheckedChange={(checked) => updateColumn(idx, { 
+                          isPrimaryKey: !!checked,
+                          isUnique: checked ? false : col.isUnique,
+                          hasIndex: checked ? false : col.hasIndex
+                        })}
+                        disabled={addAutoId}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox
+                        checked={col.isUnique}
+                        onCheckedChange={(checked) => updateColumn(idx, { isUnique: !!checked })}
+                        disabled={col.isPrimaryKey}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-b text-center">
+                      <Checkbox
+                        checked={col.hasIndex}
+                        onCheckedChange={(checked) => updateColumn(idx, { hasIndex: !!checked })}
+                        disabled={col.isPrimaryKey || col.isUnique}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-b">
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {col.inferredInfo.sampleValues.slice(0, 3).map((v, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs font-normal truncate max-w-[80px]">
+                            {v === null ? 'null' : String(v)}
+                          </Badge>
                         ))}
-                      </SelectContent>
-                    </Select>
-                    {col.type !== col.inferredInfo.inferredType && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Sparkles className="h-3 w-3 text-amber-500" />
-                        <span className="text-xs text-muted-foreground">
-                          AI suggested: {col.inferredInfo.inferredType}
-                        </span>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox
-                      checked={col.nullable}
-                      onCheckedChange={(checked) => updateColumn(idx, { nullable: !!checked })}
-                    />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox
-                      checked={col.isPrimaryKey}
-                      onCheckedChange={(checked) => updateColumn(idx, { 
-                        isPrimaryKey: !!checked,
-                        isUnique: checked ? false : col.isUnique,
-                        hasIndex: checked ? false : col.hasIndex
-                      })}
-                      disabled={addAutoId}
-                    />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox
-                      checked={col.isUnique}
-                      onCheckedChange={(checked) => updateColumn(idx, { isUnique: !!checked })}
-                      disabled={col.isPrimaryKey}
-                    />
-                  </td>
-                  <td className="px-3 py-2 border-b text-center">
-                    <Checkbox
-                      checked={col.hasIndex}
-                      onCheckedChange={(checked) => updateColumn(idx, { hasIndex: !!checked })}
-                      disabled={col.isPrimaryKey || col.isUnique}
-                    />
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <div className="flex flex-wrap gap-1 max-w-[200px]">
-                      {col.inferredInfo.sampleValues.slice(0, 3).map((v, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs font-normal truncate max-w-[80px]">
-                          {v === null ? 'null' : String(v)}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {Math.round(col.inferredInfo.castingSuccessRate * 100)}% cast success
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {Math.round(col.inferredInfo.castingSuccessRate * 100)}% cast success
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ScrollArea>
       </div>
 

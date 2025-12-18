@@ -115,6 +115,7 @@ export default function DatabaseImportWizard({
   // SQL state
   const [proposedSQL, setProposedSQL] = useState<SQLStatement[]>([]);
   const [sqlReviewed, setSqlReviewed] = useState(false);
+  const [excludedStatements, setExcludedStatements] = useState<Set<number>>(new Set());
   
   // Execution state
   const [executionProgress, setExecutionProgress] = useState<ExecutionProgress | null>(null);
@@ -147,6 +148,12 @@ export default function DatabaseImportWizard({
     if (selectedRows.size === 0) return dataRows;
     return dataRows.filter((_, idx) => selectedRows.has(idx));
   }, [dataRows, selectedRows]);
+
+  // Memoize sample data for SchemaCreator to prevent re-inference on every render
+  const memoizedSampleData = useMemo(() => 
+    selectedDataRows.slice(0, 1000), 
+    [selectedDataRows]
+  );
 
   // Auto-select all rows initially
   useEffect(() => {
@@ -369,7 +376,9 @@ export default function DatabaseImportWizard({
 
   // Execute import
   const executeImport = async () => {
-    if (proposedSQL.length === 0) return;
+    // Filter out excluded statements
+    const statementsToExecute = proposedSQL.filter((_, i) => !excludedStatements.has(i));
+    if (statementsToExecute.length === 0) return;
     
     setExecutionProgress({
       currentBatch: 0,
@@ -526,7 +535,7 @@ export default function DatabaseImportWizard({
               <TabsContent value="create_new" className="flex-1 mt-4">
                 <SchemaCreator
                   headers={headers}
-                  sampleData={selectedDataRows.slice(0, 1000)}
+                  sampleData={memoizedSampleData}
                   tableName={tableName}
                   onTableNameChange={setTableName}
                   onTableDefChange={setTableDef}
@@ -558,6 +567,8 @@ export default function DatabaseImportWizard({
               statements={proposedSQL}
               reviewed={sqlReviewed}
               onReviewedChange={setSqlReviewed}
+              excludedStatements={excludedStatements}
+              onExcludedChange={setExcludedStatements}
             />
           </div>
         );

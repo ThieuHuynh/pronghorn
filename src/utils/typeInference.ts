@@ -66,28 +66,57 @@ export function inferColumnType(
   const uniqueValues = new Set(nonNullValues.map(v => String(v)));
   const uniqueRatio = uniqueValues.size / nonNullValues.length;
 
+  // Check column name hints for date/time types first
+  const dateNamePatterns = /(date|time|timestamp|created|updated|modified|_at$|_on$|expires|started|ended|born|dob)/i;
+  const isLikelyDateColumn = dateNamePatterns.test(columnName);
+
   // Try each type in order of specificity
+  // DATE and TIMESTAMP are checked BEFORE numeric types to properly detect date values
   const typeTests: { type: PostgresType; test: (v: any) => boolean }[] = [
     { type: 'UUID', test: isUUID },
     { type: 'BOOLEAN', test: isBoolean },
+    // Check dates BEFORE numeric types
+    { type: 'DATE', test: isDateOnly },
+    { type: 'TIMESTAMP WITH TIME ZONE', test: isTimestamp },
+    // Then numeric types
     { type: 'INTEGER', test: isInteger },
     { type: 'BIGINT', test: isBigInt },
     { type: 'NUMERIC', test: isNumeric },
-    { type: 'DATE', test: isDateOnly },
-    { type: 'TIMESTAMP WITH TIME ZONE', test: isTimestamp },
   ];
 
   let inferredType: PostgresType = 'TEXT';
   let castingSuccessRate = 1;
 
-  for (const { type, test } of typeTests) {
-    const successCount = nonNullValues.filter(test).length;
-    const rate = successCount / nonNullValues.length;
+  // If column name suggests date/time, check those first with lower threshold
+  if (isLikelyDateColumn) {
+    const dateCount = nonNullValues.filter(v => isDateOnly(v) || isTimestamp(v)).length;
+    const dateRate = dateCount / nonNullValues.length;
     
-    if (rate >= 0.95) { // 95% threshold for type inference
-      inferredType = type;
-      castingSuccessRate = rate;
-      break;
+    if (dateRate >= 0.8) { // Lower threshold for date columns with suggestive names
+      // Determine if it's date-only or timestamp
+      const hasTimeCount = nonNullValues.filter(isTimestamp).length;
+      const dateOnlyCount = nonNullValues.filter(v => isDateOnly(v) && !isTimestamp(v)).length;
+      
+      if (hasTimeCount > dateOnlyCount) {
+        inferredType = 'TIMESTAMP WITH TIME ZONE';
+      } else {
+        inferredType = 'DATE';
+      }
+      castingSuccessRate = dateRate;
+    }
+  }
+
+  // If not determined by name hint, try standard type tests
+  if (inferredType === 'TEXT') {
+    for (const { type, test } of typeTests) {
+      const successCount = nonNullValues.filter(test).length;
+      const rate = successCount / nonNullValues.length;
+      
+      if (rate >= 0.95) { // 95% threshold for type inference
+        inferredType = type;
+        castingSuccessRate = rate;
+        break;
+      }
     }
   }
 
@@ -284,28 +313,99 @@ function isNumeric(value: any): boolean {
   return !isNaN(parseFloat(trimmed)) && isFinite(parseFloat(trimmed));
 }
 
+/**
+ * Check if value is an Excel serial date number
+ * Excel serial dates are the number of days since Dec 30, 1899
+ * Valid range: 1 (Jan 1, 1900) to 2958465 (Dec 31, 9999)
+ */
+function isExcelSerialDate(value: any): boolean {
+  if (typeof value !== 'number') return false;
+  // Excel serial dates are positive numbers in a reasonable range
+  // Exclude very small numbers that are likely not dates
+  return value >= 1 && value <= 2958465;
+}
+
+/**
+ * Check if an Excel serial date has a time component (has decimal)
+ */
+function hasTimeComponent(excelSerial: number): boolean {
+  return excelSerial % 1 !== 0;
+}
+
+/**
+ * Convert Excel serial date to JavaScript Date
+ */
+function excelSerialToDate(serial: number): Date {
+  // Excel serial date epoch is Dec 30, 1899
+  const excelEpoch = new Date(1899, 11, 30);
+  const days = Math.floor(serial);
+  const timeFraction = serial - days;
+  
+  const date = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+  
+  if (timeFraction > 0) {
+    const milliseconds = timeFraction * 24 * 60 * 60 * 1000;
+    date.setTime(date.getTime() + milliseconds);
+  }
+  
+  return date;
+}
+
 function isDateOnly(value: any): boolean {
-  if (value instanceof Date) return true;
+  // Handle Date objects
+  if (value instanceof Date) return !isNaN(value.getTime());
+  
+  // Handle Excel serial date numbers (without time component)
+  if (typeof value === 'number') {
+    if (isExcelSerialDate(value) && !hasTimeComponent(value)) {
+      return true;
+    }
+    return false;
+  }
+  
   if (typeof value !== 'string') return false;
-  // Match common date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
+  
+  // Match common date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, DD-MM-YYYY
   const datePatterns = [
-    /^\d{4}-\d{2}-\d{2}$/,
-    /^\d{2}\/\d{2}\/\d{4}$/,
-    /^\d{2}-\d{2}-\d{4}$/
+    /^\d{4}-\d{2}-\d{2}$/,          // YYYY-MM-DD
+    /^\d{2}\/\d{2}\/\d{4}$/,        // MM/DD/YYYY or DD/MM/YYYY
+    /^\d{2}-\d{2}-\d{4}$/,          // DD-MM-YYYY
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,  // M/D/YY or M/D/YYYY
   ];
+  
   const trimmed = value.trim();
+  
+  // Check if it matches a date pattern
   if (!datePatterns.some(p => p.test(trimmed))) return false;
+  
   const parsed = new Date(trimmed);
   return !isNaN(parsed.getTime());
 }
 
 function isTimestamp(value: any): boolean {
-  if (value instanceof Date) return true;
+  // Handle Date objects
+  if (value instanceof Date) return !isNaN(value.getTime());
+  
+  // Handle Excel serial date numbers WITH time component
+  if (typeof value === 'number') {
+    if (isExcelSerialDate(value) && hasTimeComponent(value)) {
+      return true;
+    }
+    return false;
+  }
+  
   if (typeof value !== 'string') return false;
-  // More permissive - includes time component
+  
   const trimmed = value.trim();
+  
+  // Must be longer than just a date (has time component)
+  // ISO format: 2024-01-15T10:30:00Z or 2024-01-15 10:30:00
   const parsed = new Date(trimmed);
-  return !isNaN(parsed.getTime()) && trimmed.length > 10;
+  if (isNaN(parsed.getTime())) return false;
+  
+  // Check if it has a time component (length > 10 for date-only)
+  // Also check for time separators
+  return trimmed.length > 10 || /[T:\s]\d{2}:\d{2}/.test(trimmed);
 }
 
 function isJsonString(value: any): boolean {
@@ -332,12 +432,32 @@ function toBoolean(value: any): boolean {
 }
 
 function toDateString(value: any): string {
-  const date = value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0];
+  }
+  
+  // Handle Excel serial date
+  if (typeof value === 'number' && isExcelSerialDate(value)) {
+    const date = excelSerialToDate(value);
+    return date.toISOString().split('T')[0];
+  }
+  
+  const date = new Date(value);
   return date.toISOString().split('T')[0];
 }
 
 function toTimestampString(value: any): string {
-  const date = value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // Handle Excel serial date with time
+  if (typeof value === 'number' && isExcelSerialDate(value)) {
+    const date = excelSerialToDate(value);
+    return date.toISOString();
+  }
+  
+  const date = new Date(value);
   return date.toISOString();
 }
 
