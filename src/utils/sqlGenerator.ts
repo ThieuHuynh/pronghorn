@@ -229,16 +229,40 @@ export function generateFullImportSQL(
     statements.push(stmt);
   });
 
-  // Insert data
-  const columnNames = tableDef.columns
-    .filter(c => !c.isPrimaryKey || c.defaultValue === undefined)
-    .map(c => c.name);
+  // Identify columns that should receive data (exclude auto-generated columns)
+  const columnsWithData: { name: string; index: number }[] = [];
+  tableDef.columns.forEach((col, originalIndex) => {
+    // Skip auto-generated primary key columns (have defaultValue like gen_random_uuid())
+    if (col.isPrimaryKey && col.defaultValue) {
+      return;
+    }
+    columnsWithData.push({ name: col.name, index: originalIndex });
+  });
+
+  // For each row, extract only the values for columns that need data
+  // The data rows correspond to the SOURCE data, not the table columns
+  // If there's an auto-ID, the first column in tableDef is 'id' but the rows don't have it
+  const hasAutoId = tableDef.columns[0]?.isPrimaryKey && tableDef.columns[0]?.defaultValue;
+  
+  const columnNames = columnsWithData.map(c => c.name);
+  
+  // Map the row data correctly - if there's an auto-ID, rows don't include it
+  const mappedRows = rows.map(row => {
+    if (hasAutoId) {
+      // Rows correspond to source columns (after the auto-ID column in tableDef)
+      // Just return the row as-is since it matches the non-auto columns
+      return row;
+    } else {
+      // No auto-ID, extract columns based on their indices
+      return columnsWithData.map(c => row[c.index]);
+    }
+  });
   
   const insertStatements = generateInsertBatchSQL(
     tableDef.name,
     tableDef.schema,
     columnNames,
-    rows,
+    mappedRows,
     batchSize
   );
   insertStatements.forEach(stmt => {

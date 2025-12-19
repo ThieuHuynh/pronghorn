@@ -364,15 +364,23 @@ export default function DatabaseImportWizard({
           if (connectionId) body.connectionId = connectionId;
           
           const { data, error } = await supabase.functions.invoke('manage-database', { body });
-          if (!error && data?.success) {
+          console.log('[Import Wizard] Target columns response:', data);
+          if (!error && data?.success && data.data?.columns) {
+            // Handle both response formats: {name, type} or {column_name, data_type}
             setTargetColumns(data.data.columns.map((c: any) => ({
-              name: c.column_name,
-              type: c.data_type,
-              nullable: c.is_nullable === 'YES'
+              name: c.name || c.column_name,
+              type: c.type || c.data_type,
+              nullable: c.nullable ?? c.is_nullable === 'YES'
             })));
+            // Reset mappings when table changes so they get re-auto-matched
+            setColumnMappings([]);
+          } else {
+            console.error('[Import Wizard] No columns in response:', data);
+            setTargetColumns([]);
           }
         } catch (e) {
           console.error('Failed to load columns:', e);
+          setTargetColumns([]);
         }
       };
       loadColumns();
