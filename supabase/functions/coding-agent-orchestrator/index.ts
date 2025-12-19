@@ -609,17 +609,20 @@ When responding, structure your response as:
     },
     {
       "type": "read_file",
-      "params": { "file_id": "UUID from list_files or search results" }
+      "params": { "path": "src/components/Example.tsx" }
+      // Use "path" (preferred) - system will resolve to correct ID automatically
+      // Alternative: "file_id" if you have a UUID from list_files
     },
     {
       "type": "edit_lines",
       "params": {
-        "file_id": "UUID from list_files or search results",
+        "path": "src/components/Example.tsx",
         "start_line": 1,
         "end_line": 5,
         "new_content": "replacement text"
       }
       // NOTE: You MUST call read_file first to see current content and count lines accurately
+      // Use "path" (preferred) - system will resolve to correct ID automatically
     },
     {
       "type": "create_file",
@@ -630,14 +633,16 @@ When responding, structure your response as:
     },
     {
       "type": "delete_file",
-      "params": { "file_id": "UUID from list_files or search results" }
+      "params": { "path": "src/old-file.tsx" }
+      // Use "path" (preferred) - system will resolve to correct ID automatically
     },
     {
       "type": "move_file",
       "params": { 
-        "file_id": "UUID from list_files or search results",
-        "new_path": "src/composables/file.ext"
+        "path": "src/old-name.tsx",
+        "new_path": "src/new-name.tsx"
       }
+      // Use "path" for source file (preferred) - system will resolve to correct ID
     }
   ],
   "blackboard_entry": {
@@ -666,8 +671,8 @@ CRITICAL RULES:
 1. If user attached files (with file_id provided), use read_file directly with those IDs - DO NOT call list_files first
 2. If no files attached, start with EITHER list_files OR wildcard_search (if you have keywords to search)
 3. Use wildcard_search when you have concepts/keywords to find (e.g., "authentication login session")
-4. Use file_id from list_files, wildcard_search, or search results for read_file, edit_lines, delete_file, and move_file operations
-5. Only use path for create_file operation
+4. PREFER "path" over "file_id" for read_file, edit_lines, delete_file, and move_file - the system resolves paths automatically
+5. Use "path" for create_file, delete_file, move_file, and optionally read_file/edit_lines
 6. Work autonomously by chaining operations together - DO NOT STOP AFTER A SINGLE OPERATION
 7. Set status to "in_progress" when you need to continue with more operations
 8. Set status to "requires_commit" when you've made changes ready to be staged
@@ -1598,102 +1603,210 @@ Use them to understand context and inform your file operations.` : ''}`;
               break;
 
             case "delete_file":
-              // Use get_file_content_with_token which queries both repo_files AND repo_staging
-              const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
-                p_file_id: op.params.file_id,
-                p_token: shareToken,
-              });
-
-              if (deleteFileData?.[0]) {
-                // Check if file was newly created (staged as "add")
-                const { data: stagedForDelete } = await supabase.rpc("get_staged_changes_with_token", {
+              // Path-first resolution: try path -> session registry -> staging -> repo_files -> file_id
+              const deletePath = op.params.path;
+              let deleteFileId = op.params.file_id;
+              let deleteFilePath: string | null = null;
+              let deleteFileContent: string | null = null;
+              
+              // 1. Try path in session registry
+              if (deletePath && sessionFileRegistry.has(deletePath)) {
+                const entry = sessionFileRegistry.get(deletePath)!;
+                deleteFileId = entry.staging_id;
+                deleteFilePath = entry.path;
+                deleteFileContent = entry.content;
+                console.log(`[SESSION] delete_file: Found ${deletePath} in session registry with ID ${deleteFileId}`);
+              }
+              
+              // 2. Try path in staging
+              if (!deleteFilePath && deletePath) {
+                const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                 });
-
-                const newlyCreated = stagedForDelete?.find(
-                  (s: any) => s.file_path === deleteFileData[0].path && s.operation_type === "add",
-                );
-
-                if (newlyCreated) {
-                  // Just unstage the add operation instead of staging a delete
-                  // FIX: Use correct parameters - repo_id and file_path, not staging_id
-                  result = await supabase.rpc("unstage_file_with_token", {
-                    p_repo_id: repoId,
-                    p_file_path: newlyCreated.file_path,
-                    p_token: shareToken,
-                  });
-                  // Remove from session registry
-                  if (sessionFileRegistry.has(newlyCreated.file_path)) {
-                    sessionFileRegistry.delete(newlyCreated.file_path);
-                    console.log(`[SESSION] Removed ${newlyCreated.file_path} from registry after delete`);
-                  }
-                  console.log(`[AGENT] Unstaged newly created file: ${newlyCreated.file_path}`);
-                } else {
-                  // Stage the delete for a committed file
-                  result = await supabase.rpc("stage_file_change_with_token", {
-                    p_repo_id: repoId,
-                    p_token: shareToken,
-                    p_operation_type: "delete",
-                    p_file_path: deleteFileData[0].path,
-                    p_old_content: deleteFileData[0].content,
-                  });
-                  console.log(`[AGENT] Staged delete for committed file: ${deleteFileData[0].path}`);
+                const matchedStaged = stagedCheck?.find((s: any) => s.file_path === deletePath);
+                if (matchedStaged) {
+                  deleteFileId = matchedStaged.id;
+                  deleteFilePath = matchedStaged.file_path;
+                  deleteFileContent = matchedStaged.new_content || matchedStaged.old_content;
+                  console.log(`[SESSION] delete_file: Found ${deletePath} in staging with ID ${deleteFileId}`);
                 }
+              }
+              
+              // 3. Try path in repo_files (committed files)
+              if (!deleteFilePath && deletePath) {
+                const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                  p_path_prefix: null,
+                });
+                const matchedFile = repoFiles?.find((f: any) => f.path === deletePath);
+                if (matchedFile) {
+                  deleteFileId = matchedFile.id;
+                  deleteFilePath = matchedFile.path;
+                  console.log(`[SESSION] delete_file: Found ${deletePath} in repo_files with ID ${deleteFileId}`);
+                }
+              }
+              
+              // 4. Fallback to file_id if path resolution failed
+              if (!deleteFilePath && deleteFileId) {
+                const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
+                  p_file_id: deleteFileId,
+                  p_token: shareToken,
+                });
+                if (deleteFileData?.[0]) {
+                  deleteFilePath = deleteFileData[0].path;
+                  deleteFileContent = deleteFileData[0].content;
+                  console.log(`[SESSION] delete_file: Resolved file_id ${deleteFileId} to path ${deleteFilePath}`);
+                }
+              }
+              
+              if (!deleteFilePath) {
+                throw new Error(`File not found: ${deletePath || deleteFileId}`);
+              }
+              
+              // Now perform the delete
+              const { data: stagedForDelete } = await supabase.rpc("get_staged_changes_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+              });
+              const newlyCreatedDelete = stagedForDelete?.find(
+                (s: any) => s.file_path === deleteFilePath && s.operation_type === "add",
+              );
+
+              if (newlyCreatedDelete) {
+                // Just unstage the add operation instead of staging a delete
+                result = await supabase.rpc("unstage_file_with_token", {
+                  p_repo_id: repoId,
+                  p_file_path: newlyCreatedDelete.file_path,
+                  p_token: shareToken,
+                });
+                // Remove from session registry
+                if (sessionFileRegistry.has(newlyCreatedDelete.file_path)) {
+                  sessionFileRegistry.delete(newlyCreatedDelete.file_path);
+                  console.log(`[SESSION] Removed ${newlyCreatedDelete.file_path} from registry after delete`);
+                }
+                console.log(`[AGENT] Unstaged newly created file: ${newlyCreatedDelete.file_path}`);
               } else {
-                throw new Error(`File not found with ID: ${op.params.file_id}`);
+                // Stage the delete for a committed file - need to fetch content if we don't have it
+                if (!deleteFileContent) {
+                  const { data: contentData } = await supabase.rpc("get_file_content_with_token", {
+                    p_file_id: deleteFileId,
+                    p_token: shareToken,
+                  });
+                  deleteFileContent = contentData?.[0]?.content || '';
+                }
+                result = await supabase.rpc("stage_file_change_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                  p_operation_type: "delete",
+                  p_file_path: deleteFilePath,
+                  p_old_content: deleteFileContent,
+                });
+                console.log(`[AGENT] Staged delete for committed file: ${deleteFilePath}`);
               }
               break;
 
             case "move_file":
-              // First, get file info (works for both repo_files and repo_staging)
-              const { data: moveFileData } = await supabase.rpc("get_file_content_with_token", {
-                p_file_id: op.params.file_id,
-                p_token: shareToken,
-              });
-
-              if (moveFileData?.[0]) {
-                // Check if file was newly created (staged as "add")
-                const { data: stagedForMove } = await supabase.rpc("get_staged_changes_with_token", {
+              // Path-first resolution: try path -> session registry -> staging -> repo_files -> file_id
+              const movePath = op.params.path;
+              let moveFileId = op.params.file_id;
+              let moveFilePath: string | null = null;
+              let moveFileContent: string | null = null;
+              
+              // 1. Try path in session registry
+              if (movePath && sessionFileRegistry.has(movePath)) {
+                const entry = sessionFileRegistry.get(movePath)!;
+                moveFileId = entry.staging_id;
+                moveFilePath = entry.path;
+                moveFileContent = entry.content;
+                console.log(`[SESSION] move_file: Found ${movePath} in session registry with ID ${moveFileId}`);
+              }
+              
+              // 2. Try path in staging
+              if (!moveFilePath && movePath) {
+                const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                 });
-
-                const newlyCreated = stagedForMove?.find(
-                  (s: any) => s.file_path === moveFileData[0].path && s.operation_type === "add",
-                );
-
-                if (newlyCreated) {
-                  const oldPath = moveFileData[0].path;
-                  // For staged "add" files, just update the staging record's file_path
-                  result = await supabase.rpc("update_staged_file_path_with_token", {
-                    p_staging_id: newlyCreated.id,
-                    p_new_path: op.params.new_path,
-                    p_token: shareToken,
-                  });
-                  
-                  // Update session registry with new path
-                  if (sessionFileRegistry.has(oldPath)) {
-                    const existingEntry = sessionFileRegistry.get(oldPath)!;
-                    sessionFileRegistry.delete(oldPath);
-                    sessionFileRegistry.set(op.params.new_path, {
-                      ...existingEntry,
-                      path: op.params.new_path,
-                    });
-                    console.log(`[SESSION] Updated registry: ${oldPath} -> ${op.params.new_path}`);
-                  }
-                  console.log(`[AGENT] Moved staged file from ${oldPath} to ${op.params.new_path}`);
-                } else {
-                  // For committed files, use the existing move logic
-                  result = await supabase.rpc("move_file_with_token", {
-                    p_file_id: op.params.file_id,
-                    p_new_path: op.params.new_path,
-                    p_token: shareToken,
-                  });
-                  console.log(`[AGENT] Moved committed file from ${moveFileData[0].path} to ${op.params.new_path}`);
+                const matchedStaged = stagedCheck?.find((s: any) => s.file_path === movePath);
+                if (matchedStaged) {
+                  moveFileId = matchedStaged.id;
+                  moveFilePath = matchedStaged.file_path;
+                  moveFileContent = matchedStaged.new_content || matchedStaged.old_content;
+                  console.log(`[SESSION] move_file: Found ${movePath} in staging with ID ${moveFileId}`);
                 }
+              }
+              
+              // 3. Try path in repo_files (committed files)
+              if (!moveFilePath && movePath) {
+                const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                  p_path_prefix: null,
+                });
+                const matchedFile = repoFiles?.find((f: any) => f.path === movePath);
+                if (matchedFile) {
+                  moveFileId = matchedFile.id;
+                  moveFilePath = matchedFile.path;
+                  console.log(`[SESSION] move_file: Found ${movePath} in repo_files with ID ${moveFileId}`);
+                }
+              }
+              
+              // 4. Fallback to file_id if path resolution failed
+              if (!moveFilePath && moveFileId) {
+                const { data: moveFileData } = await supabase.rpc("get_file_content_with_token", {
+                  p_file_id: moveFileId,
+                  p_token: shareToken,
+                });
+                if (moveFileData?.[0]) {
+                  moveFilePath = moveFileData[0].path;
+                  moveFileContent = moveFileData[0].content;
+                  console.log(`[SESSION] move_file: Resolved file_id ${moveFileId} to path ${moveFilePath}`);
+                }
+              }
+              
+              if (!moveFilePath) {
+                throw new Error(`File not found: ${movePath || moveFileId}`);
+              }
+              
+              // Now perform the move
+              const { data: stagedForMove } = await supabase.rpc("get_staged_changes_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+              });
+              const newlyCreatedMove = stagedForMove?.find(
+                (s: any) => s.file_path === moveFilePath && s.operation_type === "add",
+              );
+
+              if (newlyCreatedMove) {
+                const oldPath = moveFilePath;
+                // For staged "add" files, just update the staging record's file_path
+                result = await supabase.rpc("update_staged_file_path_with_token", {
+                  p_staging_id: newlyCreatedMove.id,
+                  p_new_path: op.params.new_path,
+                  p_token: shareToken,
+                });
+                
+                // Update session registry with new path
+                if (sessionFileRegistry.has(oldPath)) {
+                  const existingEntry = sessionFileRegistry.get(oldPath)!;
+                  sessionFileRegistry.delete(oldPath);
+                  sessionFileRegistry.set(op.params.new_path, {
+                    ...existingEntry,
+                    path: op.params.new_path,
+                  });
+                  console.log(`[SESSION] Updated registry: ${oldPath} -> ${op.params.new_path}`);
+                }
+                console.log(`[AGENT] Moved staged file from ${oldPath} to ${op.params.new_path}`);
               } else {
-                throw new Error(`File not found with ID: ${op.params.file_id}`);
+                // For committed files, use the existing move logic
+                result = await supabase.rpc("move_file_with_token", {
+                  p_file_id: moveFileId,
+                  p_new_path: op.params.new_path,
+                  p_token: shareToken,
+                });
+                console.log(`[AGENT] Moved committed file from ${moveFilePath} to ${op.params.new_path}`);
               }
               break;
 
