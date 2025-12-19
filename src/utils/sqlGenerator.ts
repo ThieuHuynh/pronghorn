@@ -30,11 +30,15 @@ export interface TableDefinition {
 }
 
 export interface SQLStatement {
-  type: 'CREATE_TABLE' | 'ALTER_TABLE' | 'CREATE_INDEX' | 'INSERT' | 'DROP_TABLE';
+  type: 'CREATE_TABLE' | 'ALTER_TABLE' | 'CREATE_INDEX' | 'INSERT' | 'DROP_TABLE' | 'BEGIN_TRANSACTION' | 'COMMIT_TRANSACTION';
   sql: string;
   description: string;
   sequence: number;
   tableName?: string;
+}
+
+export interface SmartImportOptions {
+  wrapInTransaction?: boolean;  // Default true
 }
 
 /**
@@ -628,10 +632,21 @@ export function generateSmartImportSQL(
   existingSchemas: ExistingTableSchema[],
   schema: string = 'public',
   selectedRowsByTable?: Map<string, Set<number>>,
-  tableDefsMap?: Map<string, TableDefinition>
+  tableDefsMap?: Map<string, TableDefinition>,
+  options: SmartImportOptions = { wrapInTransaction: true }
 ): SQLStatement[] {
   const statements: SQLStatement[] = [];
   let sequence = 0;
+
+  // Add transaction begin if requested
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'BEGIN_TRANSACTION',
+      sql: 'BEGIN;',
+      description: 'Start transaction (rollback all on any failure)',
+      sequence: sequence++
+    });
+  }
 
   // Build parent-child map for FK ordering
   const parentMap = new Map<string, string>();
@@ -818,10 +833,16 @@ export function generateSmartImportSQL(
         }
       }
 
-      // Add 'id' column mapping using _row_id
-      const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
+      // Check if 'id' is already mapped from the import data (e.g., _id or id column)
+      const hasIdInMapping = columnMapping.some(m => 
+        m.existingCol.toLowerCase() === 'id'
+      );
       
-      const columnNames = existingHasId 
+      // Add 'id' column mapping using _row_id only if not already mapped
+      const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
+      const shouldPrependId = existingHasId && !hasIdInMapping;
+      
+      const columnNames = shouldPrependId 
         ? ['id', ...columnMapping.map(m => m.existingCol)]
         : columnMapping.map(m => m.existingCol);
 
@@ -834,7 +855,7 @@ export function generateSmartImportSQL(
           }
           return value;
         });
-        return existingHasId ? [row['_row_id'], ...mapped] : mapped;
+        return shouldPrependId ? [row['_row_id'], ...mapped] : mapped;
       });
 
       const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
@@ -883,15 +904,20 @@ export function generateSmartImportSQL(
         }
       }
 
+      // Check if 'id' is already mapped
+      const hasIdInMapping = columnMapping.some(m => 
+        m.existingCol.toLowerCase() === 'id'
+      );
       const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
+      const shouldPrependId = existingHasId && !hasIdInMapping;
       
-      const columnNames = existingHasId 
+      const columnNames = shouldPrependId 
         ? ['id', ...columnMapping.map(m => m.existingCol)]
         : columnMapping.map(m => m.existingCol);
 
       const dataRows = selectedRows.map(row => {
         const mapped = columnMapping.map(m => row[m.importCol] ?? null);
-        return existingHasId ? [row['_row_id'], ...mapped] : mapped;
+        return shouldPrependId ? [row['_row_id'], ...mapped] : mapped;
       });
 
       const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
@@ -902,6 +928,16 @@ export function generateSmartImportSQL(
         statements.push(stmt);
       });
     }
+  }
+
+  // Add transaction commit if we started one
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'COMMIT_TRANSACTION',
+      sql: 'COMMIT;',
+      description: 'Commit transaction',
+      sequence: sequence++
+    });
   }
 
   return statements;

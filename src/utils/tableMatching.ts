@@ -161,11 +161,53 @@ function analyzeColumns(
   const matchedExisting = new Set<string>();
   
   for (const importCol of importColumns) {
-    // Skip internal columns
-    if (importCol.name === '_row_id' || importCol.name === '_parent_id') continue;
+    // Skip only internal _row_id column
+    if (importCol.name === '_row_id') continue;
     
     const normalizedImportName = importCol.name.toLowerCase();
     const fuzzyImportName = normalizedImportName.replace(/[^a-z0-9]/g, '');
+    
+    // Handle _parent_id specially - it should map to existing _parent_id
+    if (importCol.name === '_parent_id') {
+      const existingParentId = existingByName.get('_parent_id');
+      if (existingParentId) {
+        matches.push({
+          importColumn: '_parent_id',
+          existingColumn: '_parent_id',
+          typeMatch: areTypesCompatible('uuid', existingParentId.type),
+          importType: 'UUID',
+          existingType: existingParentId.type
+        });
+        matchedExisting.add('_parent_id');
+      } else {
+        // _parent_id doesn't exist in target - add to missing
+        missing.push('_parent_id');
+        matches.push({
+          importColumn: '_parent_id',
+          existingColumn: undefined,
+          typeMatch: false,
+          importType: 'UUID',
+          existingType: undefined
+        });
+      }
+      continue;
+    }
+    
+    // Handle _id (MongoDB) → id mapping
+    if (importCol.name === '_id' || importCol.name === 'id') {
+      const existingId = existingByName.get('id');
+      if (existingId) {
+        matches.push({
+          importColumn: importCol.name,
+          existingColumn: 'id',
+          typeMatch: areTypesCompatible(importCol.type, existingId.type),
+          importType: importCol.type,
+          existingType: existingId.type
+        });
+        matchedExisting.add('id');
+        continue;
+      }
+    }
     
     // Try exact match first
     let existingCol = existingByName.get(normalizedImportName);
@@ -218,7 +260,7 @@ function analyzeColumns(
   }
   
   // Calculate match score
-  const totalImportColumns = importColumns.filter(c => c.name !== '_row_id' && c.name !== '_parent_id').length;
+  const totalImportColumns = importColumns.filter(c => c.name !== '_row_id').length;
   const matchedColumns = matches.filter(m => m.existingColumn && m.typeMatch).length;
   const score = totalImportColumns > 0 ? Math.round((matchedColumns / totalImportColumns) * 100) : 0;
   

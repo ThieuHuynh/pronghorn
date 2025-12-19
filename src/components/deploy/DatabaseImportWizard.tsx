@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle, GitBranch, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle, GitBranch, ChevronDown, ChevronUp, Loader2, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ExcelData } from '@/utils/parseExcel';
 import { 
   ParsedJsonData, 
@@ -28,7 +29,8 @@ import {
   calculateBatchSize,
   generateInsertBatchSQL,
   generateMultiTableImportSQL,
-  generateSmartImportSQL
+  generateSmartImportSQL,
+  SmartImportOptions
 } from '@/utils/sqlGenerator';
 import { extractDDLStatements } from '@/lib/sqlParser';
 import { 
@@ -185,6 +187,7 @@ export default function DatabaseImportWizard({
   // Execution state
   const [executionProgress, setExecutionProgress] = useState<ExecutionProgress | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [rollbackOnFailure, setRollbackOnFailure] = useState(true);
 
   const currentStepIndex = STEPS.findIndex(s => s.key === currentStep);
   const canGoBack = currentStepIndex > 0 && executionProgress?.status !== 'running';
@@ -357,7 +360,8 @@ export default function DatabaseImportWizard({
               existingSchemas,
               schema,
               selectedRowsByTable,
-              tableDefsMap
+              tableDefsMap,
+              { wrapInTransaction: rollbackOnFailure }
             );
             setProposedSQL(statements);
           } else {
@@ -1047,6 +1051,11 @@ export default function DatabaseImportWizard({
           ? Array.from(selectedRowsByTable.values()).reduce((sum, set) => sum + set.size, 0)
           : selectedDataRows.length;
         
+        // Check if transaction statements are in the SQL
+        const hasTransactionStatements = proposedSQL.some(s => 
+          s.type === 'BEGIN_TRANSACTION' || s.type === 'COMMIT_TRANSACTION'
+        );
+        
         return (
           <div className="h-full flex flex-col">
             {executionProgress ? (
@@ -1067,6 +1076,30 @@ export default function DatabaseImportWizard({
                   {proposedSQL.length} SQL statements will be executed to import {totalRowsToImport} rows
                   {fileType === 'json' && jsonData && jsonData.tables.length > 1 && ` across ${jsonData.tables.length} tables`}.
                 </p>
+                
+                {/* Transaction control */}
+                {hasTransactionStatements && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-muted/50">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">
+                      Transaction mode enabled - all changes will rollback on any failure
+                    </span>
+                  </div>
+                )}
+                
+                {!hasTransactionStatements && fileType === 'json' && jsonData && jsonData.tables.length > 1 && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-muted/50">
+                    <Checkbox
+                      id="rollbackOnFailure"
+                      checked={rollbackOnFailure}
+                      onCheckedChange={(checked) => setRollbackOnFailure(checked === true)}
+                    />
+                    <Label htmlFor="rollbackOnFailure" className="text-sm cursor-pointer">
+                      Rollback all changes if any statement fails
+                    </Label>
+                  </div>
+                )}
+                
                 <Button onClick={executeImport} size="lg">
                   Start Import
                 </Button>
@@ -1121,7 +1154,8 @@ export default function DatabaseImportWizard({
                         existingSchemas,
                         schema,
                         selectedRowsByTable,
-                        tableDefsMap
+                        tableDefsMap,
+                        { wrapInTransaction: rollbackOnFailure }
                       );
                       setProposedSQL(statements);
                     } else {
