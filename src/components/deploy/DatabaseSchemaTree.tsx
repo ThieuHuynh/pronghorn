@@ -208,10 +208,10 @@ export function DatabaseSchemaTree({
 }: DatabaseSchemaTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Track open state for categories to prevent collapse on context menu actions
+  // Track open state for categories - migrations starts CLOSED
   const [openStates, setOpenStates] = useState<Record<string, boolean>>({
     'saved_queries': true,
-    'migrations': true,
+    'migrations': false,  // Start collapsed
     'public': true,
     'public_tables': true,
   });
@@ -300,8 +300,8 @@ export function DatabaseSchemaTree({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-2 border-b border-[#3e3e42]">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="p-2 border-b border-[#3e3e42] shrink-0">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#858585]" />
           <Input
@@ -312,7 +312,7 @@ export function DatabaseSchemaTree({
           />
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-1">
           {/* Saved Queries Section */}
           {(savedQueries.length > 0 || filteredSavedQueries.length > 0) && (
@@ -342,47 +342,53 @@ export function DatabaseSchemaTree({
             </TreeItem>
           )}
 
-          {/* Migrations Section */}
-          {migrations.length > 0 && (
-            <TreeItem
-              label="Migrations"
-              type="category"
-              icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
-              level={0}
-              count={migrations.length}
-              isOpen={openStates['migrations'] ?? true}
-              onToggle={(v) => toggleOpen('migrations', v)}
-            >
-              {/* Download All button */}
-              {migrations.length > 1 && onDownloadAllMigrations && (
-                <div className="px-2 py-1" style={{ paddingLeft: '24px' }}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDownloadAllMigrations}
-                    className="h-6 text-xs text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50 w-full justify-start gap-1.5"
-                  >
-                    <Download className="h-3 w-3" />
-                    Download All Migrations
-                  </Button>
-                </div>
-              )}
-              {filteredMigrations.map((migration) => (
-                <TreeItem
-                  key={migration.id}
-                  label={`${migration.sequence_number}. ${migration.name || `${migration.statement_type} ${migration.object_type}`}`}
-                  type="migration"
-                  icon={<GitBranch className="h-4 w-4 text-emerald-400" />}
-                  level={1}
-                  schema={migration.object_schema || ''}
-                  name={migration.name || ''}
-                  extra={migration}
-                  contextMenuProps={contextMenuProps}
-                  onClick={() => onLoadMigration?.(migration)}
-                />
-              ))}
-            </TreeItem>
-          )}
+          {/* Migrations Section - always render to preserve open state */}
+          <TreeItem
+            label="Migrations"
+            type="category"
+            icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
+            level={0}
+            count={migrations.length}
+            isOpen={openStates['migrations']}
+            onToggle={(v) => toggleOpen('migrations', v)}
+          >
+            {migrations.length === 0 ? (
+              <div className="px-2 py-1 text-xs text-[#858585]" style={{ paddingLeft: '24px' }}>
+                No migrations yet
+              </div>
+            ) : (
+              <>
+                {/* Download All button */}
+                {migrations.length > 1 && onDownloadAllMigrations && (
+                  <div className="px-2 py-1" style={{ paddingLeft: '24px' }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onDownloadAllMigrations}
+                      className="h-6 text-xs text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50 w-full justify-start gap-1.5"
+                    >
+                      <Download className="h-3 w-3" />
+                      Download All Migrations
+                    </Button>
+                  </div>
+                )}
+                {filteredMigrations.map((migration) => (
+                  <TreeItem
+                    key={migration.id}
+                    label={`${migration.sequence_number}. ${migration.name || `${migration.statement_type} ${migration.object_type}`}`}
+                    type="migration"
+                    icon={<GitBranch className="h-4 w-4 text-emerald-400" />}
+                    level={1}
+                    schema={migration.object_schema || ''}
+                    name={migration.name || ''}
+                    extra={migration}
+                    contextMenuProps={contextMenuProps}
+                    onClick={() => onLoadMigration?.(migration)}
+                  />
+                ))}
+              </>
+            )}
+          </TreeItem>
 
           {/* Schema sections */}
           {filteredSchemas.map((schema) => {
