@@ -18,6 +18,7 @@ import {
   generateInsertBatchSQL,
   generateMultiTableImportSQL
 } from '@/utils/sqlGenerator';
+import { extractDDLStatements } from '@/lib/sqlParser';
 import FileUploader from './import/FileUploader';
 import ExcelDataGrid from './import/ExcelDataGrid';
 import JsonDataViewer from './import/JsonDataViewer';
@@ -559,14 +560,38 @@ export default function DatabaseImportWizard({
         
         if (error || !data?.success) {
           errors.push({ row: i, error: data?.error || error?.message || 'Unknown error' });
-        } else if (stmt.type === 'INSERT') {
-          // Estimate rows completed from batch
-          const match = stmt.description.match(/(\d+)-(\d+)/);
-          if (match) {
-            setExecutionProgress(prev => prev ? {
-              ...prev,
-              rowsCompleted: parseInt(match[2], 10)
-            } : null);
+        } else {
+          // Capture DDL statements as migrations (same as SQL Query Editor)
+          if (databaseId || connectionId) {
+            const ddlStatements = extractDDLStatements(stmt.sql);
+            for (const ddl of ddlStatements) {
+              try {
+                await supabase.rpc("insert_migration_with_token", {
+                  p_database_id: databaseId || null,
+                  p_connection_id: connectionId || null,
+                  p_sql_content: ddl.sql,
+                  p_statement_type: ddl.statementType,
+                  p_object_type: ddl.objectType,
+                  p_token: shareToken || null,
+                  p_object_schema: ddl.objectSchema || schema,
+                  p_object_name: ddl.objectName,
+                });
+                console.log(`Migration captured: ${ddl.statementType} ${ddl.objectType} ${ddl.objectName}`);
+              } catch (e) {
+                console.error("Failed to capture migration:", e);
+              }
+            }
+          }
+          
+          // Track INSERT progress
+          if (stmt.type === 'INSERT') {
+            const match = stmt.description.match(/(\d+)-(\d+)/);
+            if (match) {
+              setExecutionProgress(prev => prev ? {
+                ...prev,
+                rowsCompleted: parseInt(match[2], 10)
+              } : null);
+            }
           }
         }
       } catch (e: any) {
