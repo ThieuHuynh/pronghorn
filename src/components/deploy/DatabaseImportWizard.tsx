@@ -15,7 +15,8 @@ import {
   TableDefinition, 
   generateFullImportSQL,
   generateTableDefinitionFromInference,
-  calculateBatchSize 
+  calculateBatchSize,
+  generateInsertBatchSQL
 } from '@/utils/sqlGenerator';
 import FileUploader from './import/FileUploader';
 import ExcelDataGrid from './import/ExcelDataGrid';
@@ -178,15 +179,98 @@ export default function DatabaseImportWizard({
       const nextStep = STEPS[currentStepIndex + 1].key;
       
       // Generate SQL when moving to review step
-      if (nextStep === 'review' && action === 'create_new' && tableDef) {
-        const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
-        const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
-        setProposedSQL(statements);
-        setSqlReviewed(false);
+      if (nextStep === 'review') {
+        if (action === 'create_new' && tableDef) {
+          const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
+          const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
+          setProposedSQL(statements);
+          setSqlReviewed(false);
+        } else if (action === 'import_existing' && targetTable && columnMappings.length > 0) {
+          // Generate INSERT statements for existing table import
+          const statements = generateExistingTableInsertSQL(
+            targetTable,
+            schema,
+            headers,
+            columnMappings,
+            selectedDataRows,
+            enableCasting,
+            targetColumns
+          );
+          setProposedSQL(statements);
+          setSqlReviewed(false);
+        }
       }
       
       setCurrentStep(nextStep);
     }
+  };
+
+  // Generate INSERT SQL for importing to an existing table
+  const generateExistingTableInsertSQL = (
+    table: string,
+    targetSchema: string,
+    sourceHeaders: string[],
+    mappings: ColumnMapping[],
+    rows: any[][],
+    castingEnabled: boolean,
+    columns: TableColumn[]
+  ): SQLStatement[] => {
+    // Get mapped columns (non-ignored with a target)
+    const activeMappings = mappings.filter(m => !m.ignored && m.targetColumn);
+    if (activeMappings.length === 0 || rows.length === 0) {
+      console.warn('[generateExistingTableInsertSQL] No active mappings or rows', { activeMappings, rowCount: rows.length });
+      return [];
+    }
+
+    // Map source column indices
+    const sourceIndices = activeMappings.map(m => sourceHeaders.indexOf(m.sourceColumn));
+    const targetColumnNames = activeMappings.map(m => m.targetColumn!);
+    
+    // Find target column types for casting
+    const targetColumnTypes = activeMappings.map(m => {
+      const col = columns.find(c => c.name === m.targetColumn);
+      return col?.type || 'text';
+    });
+
+    // Transform rows based on mappings
+    const mappedRows = rows.map(row => {
+      return sourceIndices.map((srcIdx, i) => {
+        const value = srcIdx >= 0 ? row[srcIdx] : null;
+        if (castingEnabled && activeMappings[i].castingEnabled) {
+          return castValue(value, targetColumnTypes[i]);
+        }
+        return value;
+      });
+    });
+
+    const batchSize = calculateBatchSize(targetColumnNames.length, mappedRows.length);
+    return generateInsertBatchSQL(table, targetSchema, targetColumnNames, mappedRows, batchSize);
+  };
+
+  // Simple value casting helper
+  const castValue = (value: any, targetType: string): any => {
+    if (value === null || value === undefined || value === '') return null;
+    const strVal = String(value).trim();
+    
+    if (targetType.includes('int') || targetType === 'bigint' || targetType === 'smallint') {
+      const parsed = parseInt(strVal.replace(/[^0-9-]/g, ''), 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+    if (targetType.includes('numeric') || targetType.includes('decimal') || targetType === 'real' || targetType === 'double precision') {
+      const parsed = parseFloat(strVal.replace(/[^0-9.-]/g, ''));
+      return isNaN(parsed) ? null : parsed;
+    }
+    if (targetType === 'boolean' || targetType === 'bool') {
+      const lower = strVal.toLowerCase();
+      if (['true', 'yes', '1', 'on'].includes(lower)) return true;
+      if (['false', 'no', '0', 'off'].includes(lower)) return false;
+      return null;
+    }
+    if (targetType.includes('timestamp') || targetType === 'date') {
+      const d = new Date(strVal);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return value;
   };
 
   const canProceed = useCallback(() => {
@@ -634,9 +718,27 @@ export default function DatabaseImportWizard({
           {STEPS.map((step, index) => {
             const isActive = step.key === currentStep;
             const isCompleted = index < currentStepIndex;
+            // Can navigate to completed steps or the current step
+            const canNavigate = isCompleted && executionProgress?.status !== 'running';
+            
+            const handleStepClick = () => {
+              if (canNavigate) {
+                setCurrentStep(step.key);
+              }
+            };
+            
             return (
               <React.Fragment key={step.key}>
-                <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleStepClick}
+                  disabled={!canNavigate}
+                  className={cn(
+                    "flex items-center gap-2 transition-opacity",
+                    canNavigate && "cursor-pointer hover:opacity-80",
+                    !canNavigate && "cursor-default"
+                  )}
+                >
                   <div className={cn(
                     "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
                     isActive && "border-primary bg-primary text-primary-foreground",
@@ -652,7 +754,7 @@ export default function DatabaseImportWizard({
                   )}>
                     {step.label}
                   </span>
-                </div>
+                </button>
                 {index < STEPS.length - 1 && (
                   <div className={cn("flex-1 h-0.5 mx-2", isCompleted ? "bg-primary" : "bg-muted-foreground/30")} />
                 )}
