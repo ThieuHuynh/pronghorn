@@ -320,12 +320,15 @@ function isNumeric(value: any): boolean {
  * Check if value is an Excel serial date number
  * Excel serial dates are the number of days since Dec 30, 1899
  * Valid range: 1 (Jan 1, 1900) to 2958465 (Dec 31, 9999)
+ * We use a minimum of 25569 (Jan 1, 1970 - Unix epoch) to avoid treating
+ * small integers like version numbers, IDs, or counts as dates
  */
 function isExcelSerialDate(value: any): boolean {
   if (typeof value !== 'number') return false;
   // Excel serial dates are positive numbers in a reasonable range
-  // Exclude very small numbers that are likely not dates
-  return value >= 1 && value <= 2958465;
+  // Minimum 25569 = Jan 1, 1970 to avoid treating small integers as dates
+  // Maximum 2958465 = Dec 31, 9999
+  return value >= 25569 && value <= 2958465;
 }
 
 /**

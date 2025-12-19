@@ -71,6 +71,16 @@ export interface SchemaStatistics {
 }
 
 /**
+ * Check if an object is a MongoDB Extended JSON type (for structure analysis)
+ */
+function isMongoExtendedJson(obj: any): boolean {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+  const keys = Object.keys(obj);
+  if (keys.length !== 1) return false;
+  return keys[0].startsWith('$');
+}
+
+/**
  * Analyze JSON structure to build a tree of potential tables
  * Used for the normalization selector UI
  */
@@ -115,6 +125,9 @@ export function analyzeJsonStructure(data: any, path: string = '', depth: number
       };
       nodes.push(node);
     } else if (typeof value === 'object' && value !== null) {
+      // Skip MongoDB Extended JSON wrappers - they're scalar values
+      if (isMongoExtendedJson(value)) continue;
+      
       const keys = Object.keys(value).filter(k => k !== '_id' && k !== '__v' && !k.startsWith('$'));
       const node: JsonStructureNode = {
         path: nodePath,
@@ -421,8 +434,13 @@ function processObject(
         nestedArrays.push({ key: sanitizedKey, value, path: fullPath });
       }
     } else if (value !== null && typeof value === 'object') {
-      // Check if nested object should be normalized based on strategy
-      if (shouldNormalizeObject(value, fullPath, options)) {
+      // Check if it's a MongoDB Extended JSON wrapper (e.g., {$oid: "..."}, {$date: "..."})
+      const unwrapped = unwrapMongoExtendedJson(value);
+      if (unwrapped !== null) {
+        // MongoDB Extended JSON - treat as scalar value
+        row[sanitizedKey] = unwrapped;
+      } else if (shouldNormalizeObject(value, fullPath, options)) {
+        // Object that should become a separate table
         nestedObjects.push({ key: sanitizedKey, value, path: fullPath });
       } else {
         // Flatten simple nested objects
@@ -615,11 +633,59 @@ function flattenObject(obj: Record<string, any>, prefix: string, target: Record<
   for (const [key, value] of Object.entries(obj)) {
     const newKey = `${prefix}_${sanitizeColumnName(key)}`;
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      flattenObject(value, newKey, target);
+      // Check for MongoDB Extended JSON wrapper first
+      const unwrapped = unwrapMongoExtendedJson(value);
+      if (unwrapped !== null) {
+        target[newKey] = unwrapped;
+      } else {
+        flattenObject(value, newKey, target);
+      }
     } else if (!Array.isArray(value)) {
       target[newKey] = value;
     }
     // Skip arrays - they're handled separately
+  }
+}
+
+/**
+ * Check if an object is a MongoDB Extended JSON wrapper
+ * Returns the unwrapped value if it is, otherwise null
+ */
+function unwrapMongoExtendedJson(obj: Record<string, any>): any | null {
+  const keys = Object.keys(obj);
+  if (keys.length !== 1) return null;
+  
+  const key = keys[0];
+  const value = obj[key];
+  
+  // MongoDB Extended JSON formats
+  switch (key) {
+    case '$oid':
+      // ObjectId: {"$oid": "507f1f77bcf86cd799439011"}
+      return typeof value === 'string' ? value : null;
+    case '$date':
+      // Date: {"$date": "2024-01-15T10:30:00Z"} or {"$date": {"$numberLong": "..."}}
+      if (typeof value === 'string') return value;
+      if (value && typeof value === 'object' && value['$numberLong']) {
+        return new Date(parseInt(value['$numberLong'])).toISOString();
+      }
+      return null;
+    case '$numberLong':
+    case '$numberInt':
+      // Long/Int: {"$numberLong": "123456789"}
+      return typeof value === 'string' ? parseInt(value, 10) : null;
+    case '$numberDouble':
+    case '$numberDecimal':
+      // Double/Decimal: {"$numberDouble": "123.456"}
+      return typeof value === 'string' ? parseFloat(value) : null;
+    case '$binary':
+      // Binary data - return as base64 string
+      return value?.base64 || null;
+    case '$uuid':
+      // UUID: {"$uuid": "..."}
+      return typeof value === 'string' ? value : null;
+    default:
+      return null;
   }
 }
 
