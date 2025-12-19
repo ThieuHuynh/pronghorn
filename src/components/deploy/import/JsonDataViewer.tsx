@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -12,8 +12,8 @@ interface JsonDataViewerProps {
   data: ParsedJsonData;
   selectedTable: string;
   onTableChange: (tableName: string) => void;
-  selectedRows: Set<number>;
-  onSelectedRowsChange: (rows: Set<number>) => void;
+  selectedRowsByTable: Map<string, Set<number>>;
+  onSelectedRowsByTableChange: (rows: Map<string, Set<number>>) => void;
   maxPreviewRows?: number;
 }
 
@@ -21,8 +21,8 @@ export default function JsonDataViewer({
   data,
   selectedTable,
   onTableChange,
-  selectedRows,
-  onSelectedRowsChange,
+  selectedRowsByTable,
+  onSelectedRowsByTableChange,
   maxPreviewRows = 100
 }: JsonDataViewerProps) {
   const currentTable = useMemo(() =>
@@ -42,28 +42,63 @@ export default function JsonDataViewer({
 
   const displayRows = rows.slice(0, maxPreviewRows);
 
-  const handleSelectAll = () => {
-    if (selectedRows.size === rows.length) {
-      onSelectedRowsChange(new Set());
-    } else {
-      onSelectedRowsChange(new Set(rows.map((_, i) => i)));
+  // Get selected rows for current table
+  const selectedRows = useMemo(() => 
+    selectedRowsByTable.get(currentTable?.name || '') || new Set<number>(),
+    [selectedRowsByTable, currentTable?.name]
+  );
+
+  // Auto-select all rows when table changes and has no selection
+  useEffect(() => {
+    if (currentTable && rows.length > 0) {
+      const currentSelection = selectedRowsByTable.get(currentTable.name);
+      if (!currentSelection || currentSelection.size === 0) {
+        const newMap = new Map(selectedRowsByTable);
+        newMap.set(currentTable.name, new Set(rows.map((_, i) => i)));
+        onSelectedRowsByTableChange(newMap);
+      }
     }
+  }, [currentTable?.name, rows.length]);
+
+  const handleSelectAll = () => {
+    if (!currentTable) return;
+    const newMap = new Map(selectedRowsByTable);
+    
+    if (selectedRows.size === rows.length) {
+      newMap.set(currentTable.name, new Set());
+    } else {
+      newMap.set(currentTable.name, new Set(rows.map((_, i) => i)));
+    }
+    onSelectedRowsByTableChange(newMap);
   };
 
   const handleRowSelect = (idx: number) => {
+    if (!currentTable) return;
+    const newMap = new Map(selectedRowsByTable);
     const newSelected = new Set(selectedRows);
+    
     if (newSelected.has(idx)) {
       newSelected.delete(idx);
     } else {
       newSelected.add(idx);
     }
-    onSelectedRowsChange(newSelected);
+    newMap.set(currentTable.name, newSelected);
+    onSelectedRowsByTableChange(newMap);
   };
 
   const allSelected = selectedRows.size === rows.length && rows.length > 0;
 
   // Show relationships if multiple tables
   const hasRelationships = data.relationships.length > 0;
+
+  // Calculate total selected across all tables
+  const totalSelectedRows = useMemo(() => {
+    let total = 0;
+    selectedRowsByTable.forEach((selection) => {
+      total += selection.size;
+    });
+    return total;
+  }, [selectedRowsByTable]);
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -101,9 +136,15 @@ export default function JsonDataViewer({
             {allSelected ? 'Deselect All' : 'Select All'}
           </Button>
           <span className="text-sm text-muted-foreground">
-            {selectedRows.size} of {rows.length} selected
+            {selectedRows.size} of {rows.length} selected in this table
           </span>
         </div>
+
+        {data.tables.length > 1 && (
+          <span className="text-sm text-muted-foreground border-l pl-4 ml-2">
+            {totalSelectedRows} total rows selected across {data.tables.length} tables
+          </span>
+        )}
 
         {hasRelationships && (
           <div className="flex items-center gap-1 text-sm text-muted-foreground">

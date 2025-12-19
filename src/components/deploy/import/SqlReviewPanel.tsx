@@ -4,7 +4,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { SQLStatement } from '@/utils/sqlGenerator';
 import { ChevronDown, ChevronRight, Copy, Check, Database, Table2, Hash, FileInput, Ban } from 'lucide-react';
@@ -45,13 +44,15 @@ export default function SqlReviewPanel({
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   const toggleExpanded = (idx: number) => {
-    const newExpanded = new Set(expandedStatements);
-    if (newExpanded.has(idx)) {
-      newExpanded.delete(idx);
-    } else {
-      newExpanded.add(idx);
-    }
-    setExpandedStatements(newExpanded);
+    setExpandedStatements(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(idx)) {
+        newExpanded.delete(idx);
+      } else {
+        newExpanded.add(idx);
+      }
+      return newExpanded;
+    });
   };
 
   const toggleExcluded = (idx: number) => {
@@ -86,8 +87,8 @@ export default function SqlReviewPanel({
   const indexStatements = statements.filter(s => s.type === 'CREATE_INDEX');
   const insertStatements = statements.filter(s => s.type === 'INSERT');
 
-  const excludedIndexCount = indexStatements.filter((_, i) => {
-    const fullIdx = statements.findIndex(s => s === indexStatements[i]);
+  const excludedIndexCount = indexStatements.filter((stmt) => {
+    const fullIdx = statements.indexOf(stmt);
     return excludedStatements.has(fullIdx);
   }).length;
 
@@ -163,72 +164,71 @@ export default function SqlReviewPanel({
               const isExcluded = excludedStatements.has(idx);
               
               return (
-                <Collapsible 
-                  key={idx} 
-                  open={isExpanded} 
-                  onOpenChange={() => toggleExpanded(idx)}
-                >
-                  <CollapsibleTrigger asChild>
-                    <div className={cn(
-                      "flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer",
+                <div key={idx} className="flex flex-col">
+                  {/* Header Row - Always visible */}
+                  <div 
+                    className={cn(
+                      "flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer select-none",
                       isExcluded && "opacity-50 bg-muted/20"
+                    )}
+                    onClick={() => toggleExpanded(idx)}
+                  >
+                    {/* Include/Exclude checkbox */}
+                    {onExcludedChange && (
+                      <Checkbox
+                        checked={!isExcluded}
+                        onCheckedChange={() => toggleExcluded(idx)}
+                        onClick={(e) => e.stopPropagation()}
+                        title={isExcluded ? "Click to include" : "Click to exclude"}
+                      />
+                    )}
+                    
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                    
+                    <Badge 
+                      variant="outline" 
+                      className={cn("flex items-center gap-1 shrink-0", TYPE_COLORS[stmt.type])}
+                    >
+                      {TYPE_ICONS[stmt.type]}
+                      {stmt.type.replace('_', ' ')}
+                    </Badge>
+                    
+                    <span className={cn(
+                      "flex-1 text-sm truncate",
+                      isExcluded && "line-through"
                     )}>
-                      {/* Include/Exclude checkbox */}
-                      {onExcludedChange && (
-                        <Checkbox
-                          checked={!isExcluded}
-                          onCheckedChange={() => toggleExcluded(idx)}
-                          onClick={(e) => e.stopPropagation()}
-                          title={isExcluded ? "Click to include" : "Click to exclude"}
-                        />
-                      )}
-                      
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      
-                      <Badge 
-                        variant="outline" 
-                        className={cn("flex items-center gap-1", TYPE_COLORS[stmt.type])}
-                      >
-                        {TYPE_ICONS[stmt.type]}
-                        {stmt.type.replace('_', ' ')}
+                      {stmt.description}
+                    </span>
+                    
+                    {isExcluded && (
+                      <Badge variant="outline" className="text-muted-foreground shrink-0">
+                        Excluded
                       </Badge>
-                      
-                      <span className={cn(
-                        "flex-1 text-sm truncate",
-                        isExcluded && "line-through"
-                      )}>
-                        {stmt.description}
-                      </span>
-                      
-                      {isExcluded && (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Excluded
-                        </Badge>
+                    )}
+                    
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyToClipboard(stmt.sql, idx);
+                      }}
+                    >
+                      {isCopied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
                       )}
-                      
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(stmt.sql, idx);
-                        }}
-                      >
-                        {isCopied ? (
-                          <Check className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </CollapsibleTrigger>
+                    </Button>
+                  </div>
                   
-                  <CollapsibleContent>
+                  {/* Expandable Content */}
+                  {isExpanded && (
                     <div className="px-3 pb-3">
                       <pre className={cn(
                         "p-3 rounded-lg bg-[#1e1e1e] text-[#d4d4d4] text-xs font-mono overflow-x-auto max-h-[300px]",
@@ -237,8 +237,8 @@ export default function SqlReviewPanel({
                         {stmt.sql}
                       </pre>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -58,25 +58,21 @@ function getTableNameFromFile(fileName: string): string {
     .toLowerCase();
 }
 
-// Global row ID counter per table
-let globalRowCounters: Map<string, number> = new Map();
-
-function getNextRowId(tableName: string): number {
-  const current = globalRowCounters.get(tableName) || 0;
-  const next = current + 1;
-  globalRowCounters.set(tableName, next);
-  return next;
-}
-
-function resetRowCounters(): void {
-  globalRowCounters = new Map();
+/**
+ * Generate a UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 /**
  * Parse JSON data and normalize into table structures
  */
 export function parseJsonData(data: any, tableName: string = 'imported_data'): ParsedJsonData {
-  resetRowCounters();
   const rootType = getRootType(data);
   
   if (rootType === 'primitive') {
@@ -104,10 +100,13 @@ export function parseJsonData(data: any, tableName: string = 'imported_data'): P
     processRootObject(data, tableName, tables, relationships);
   }
 
+  // Calculate totalRows as sum of all table rows
+  const totalRows = tables.reduce((sum, table) => sum + table.rows.length, 0);
+
   return {
     tables,
     rootType,
-    totalRows: tables.length > 0 ? tables[0].rows.length : 0,
+    totalRows,
     relationships
   };
 }
@@ -153,10 +152,10 @@ function processObject(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: number | null
-): number {
+  parentRowId: string | null
+): string {
   const row: Record<string, any> = {};
-  const rowId = getNextRowId(tableName);
+  const rowId = generateUUID();
   row['_row_id'] = rowId;
   
   if (parentTable && parentRowId !== null) {
@@ -211,7 +210,8 @@ function processObject(
   
   // Update columns based on this row
   for (const [key, value] of Object.entries(row)) {
-    if (key === '_row_id' || key === '_parent_id') continue;
+    // Don't skip _parent_id - we need it for FK relationships
+    if (key === '_row_id') continue;
     
     let column = table.columns.find(c => c.name === key);
     if (!column) {
@@ -219,12 +219,12 @@ function processObject(
         name: key,
         path: key,
         sampleValues: [],
-        isNested: key.includes('_'),
+        isNested: key.includes('_') && key !== '_parent_id',
         isArray: false
       };
       table.columns.push(column);
     }
-    if (column.sampleValues.length < 5) {
+    if (column.sampleValues.length < 5 && value !== undefined) {
       column.sampleValues.push(value);
     }
   }
@@ -261,7 +261,7 @@ function processArrayOfObjects(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: number | null
+  parentRowId: string | null
 ): void {
   for (const item of data) {
     if (item !== null && typeof item === 'object') {
@@ -279,7 +279,7 @@ function processPrimitiveArray(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: number | null
+  parentRowId: string | null
 ): void {
   let table = tables.find(t => t.name === tableName);
   
@@ -317,7 +317,7 @@ function processPrimitiveArray(
   // Add rows for each primitive value
   for (const value of data) {
     const row: Record<string, any> = {
-      _row_id: getNextRowId(tableName),
+      _row_id: generateUUID(),
       value
     };
     if (parentRowId !== null) {
@@ -386,16 +386,31 @@ function sanitizeColumnName(name: string): string {
 }
 
 /**
- * Get headers from parsed JSON data
+ * Get headers from parsed JSON data (excluding internal columns for display)
  */
 export function getJsonHeaders(table: JsonTable): string[] {
-  return table.columns.map(col => col.name).filter(n => !n.startsWith('_'));
+  return table.columns.map(col => col.name).filter(n => n !== '_row_id');
 }
 
 /**
- * Get rows as 2D array for grid display
+ * Get all headers including internal columns (for SQL generation)
+ */
+export function getAllJsonHeaders(table: JsonTable): string[] {
+  return table.columns.map(col => col.name);
+}
+
+/**
+ * Get rows as 2D array for grid display (excluding _row_id)
  */
 export function getJsonRowsAsArray(table: JsonTable): any[][] {
   const headers = getJsonHeaders(table);
+  return table.rows.map(row => headers.map(h => row[h] ?? null));
+}
+
+/**
+ * Get rows with all data including internal columns (for SQL generation)
+ */
+export function getAllJsonRowsAsArray(table: JsonTable): any[][] {
+  const headers = getAllJsonHeaders(table);
   return table.rows.map(row => headers.map(h => row[h] ?? null));
 }

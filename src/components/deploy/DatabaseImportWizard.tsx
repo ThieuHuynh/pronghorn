@@ -14,7 +14,8 @@ import {
   generateFullImportSQL,
   generateTableDefinitionFromInference,
   calculateBatchSize,
-  generateInsertBatchSQL
+  generateInsertBatchSQL,
+  generateMultiTableImportSQL
 } from '@/utils/sqlGenerator';
 import FileUploader from './import/FileUploader';
 import ExcelDataGrid from './import/ExcelDataGrid';
@@ -95,6 +96,7 @@ export default function DatabaseImportWizard({
   const [selectedSheet, setSelectedSheet] = useState<string>('');
   const [headerRow, setHeaderRow] = useState<number>(0);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [selectedRowsByTable, setSelectedRowsByTable] = useState<Map<string, Set<number>>>(new Map());
   const [selectedJsonTable, setSelectedJsonTable] = useState<string>('');
   
   // AI mode
@@ -178,7 +180,17 @@ export default function DatabaseImportWizard({
       
       // Generate SQL when moving to review step
       if (nextStep === 'review') {
-        if (action === 'create_new' && tableDef) {
+        if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+          // Multi-table JSON import
+          const statements = generateMultiTableImportSQL(
+            jsonData.tables,
+            jsonData.relationships,
+            schema,
+            selectedRowsByTable
+          );
+          setProposedSQL(statements);
+          setSqlReviewed(false);
+        } else if (action === 'create_new' && tableDef) {
           const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
           const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
           setProposedSQL(statements);
@@ -574,8 +586,8 @@ export default function DatabaseImportWizard({
                 data={jsonData}
                 selectedTable={selectedJsonTable}
                 onTableChange={setSelectedJsonTable}
-                selectedRows={selectedRows}
-                onSelectedRowsChange={setSelectedRows}
+                selectedRowsByTable={selectedRowsByTable}
+                onSelectedRowsByTableChange={setSelectedRowsByTable}
               />
             ) : excelData ? (
               <ExcelDataGrid

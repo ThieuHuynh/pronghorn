@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -6,6 +6,8 @@ import ReactFlow, {
   Controls,
   MarkerType,
   Position,
+  useNodesState,
+  useEdgesState,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { TableProperties } from 'lucide-react';
@@ -61,7 +63,7 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
   relationships = [],
   onTableClick,
 }) => {
-  const { nodes, edges } = useMemo(() => {
+  const { initialNodes, initialEdges } = useMemo(() => {
     const nodeList: Node[] = [];
     const edgeList: Edge[] = [];
     
@@ -82,7 +84,6 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
     
     // Find root tables (no parent)
     const rootTables = tables.filter(t => !parentChildMap.has(t.name));
-    const childTables = tables.filter(t => parentChildMap.has(t.name));
     
     // Position nodes in a hierarchical layout
     const levelWidth = 280;
@@ -112,6 +113,13 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
     
     rootTables.forEach(t => assignLevel(t.name, 0));
     
+    // Handle orphan tables (tables not in the hierarchy)
+    tables.forEach(t => {
+      if (!nodeLevels.has(t.name)) {
+        assignLevel(t.name, 0);
+      }
+    });
+    
     // Position nodes based on their level
     nodesByLevel.forEach((tableNames, level) => {
       const totalWidth = (tableNames.length - 1) * levelWidth;
@@ -132,22 +140,20 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
           },
           sourcePosition: Position.Bottom,
           targetPosition: Position.Top,
+          draggable: true,
         });
       });
     });
     
-    // Create edges
-    parentChildMap.forEach((parentName, childName) => {
-      const rel = relationships.find(r => r.childTable === childName && r.parentTable === parentName);
-      const fkLabel = rel ? `FK: ${rel.childColumn}` : '1:N';
-      
+    // Create edges from relationships
+    relationships.forEach((rel) => {
       edgeList.push({
-        id: `${parentName}-${childName}`,
-        source: parentName,
-        target: childName,
+        id: `${rel.parentTable}-${rel.childTable}`,
+        source: rel.parentTable,
+        target: rel.childTable,
         type: 'smoothstep',
         animated: true,
-        label: fkLabel,
+        label: `FK: ${rel.childColumn}`,
         labelStyle: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
         labelBgStyle: { fill: 'hsl(var(--background))' },
         markerEnd: {
@@ -158,8 +164,37 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
       });
     });
     
-    return { nodes: nodeList, edges: edgeList };
+    // Also create edges from parentChildMap for tables without explicit relationships
+    parentChildMap.forEach((parentName, childName) => {
+      const existingEdge = edgeList.find(e => e.source === parentName && e.target === childName);
+      if (!existingEdge) {
+        edgeList.push({
+          id: `${parentName}-${childName}`,
+          source: parentName,
+          target: childName,
+          type: 'smoothstep',
+          animated: true,
+          label: '1:N',
+          labelStyle: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+          labelBgStyle: { fill: 'hsl(var(--background))' },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: 'hsl(var(--primary))',
+          },
+          style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+        });
+      }
+    });
+    
+    return { initialNodes: nodeList, initialEdges: edgeList };
   }, [tables, relationships]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    onTableClick?.(node.id);
+  }, [onTableClick]);
 
   if (tables.length === 0) {
     return (
@@ -174,12 +209,17 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
-        onNodeClick={(_, node) => onTableClick?.(node.id)}
+        onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.5}
         maxZoom={1.5}
+        nodesDraggable={true}
+        nodesConnectable={false}
+        elementsSelectable={true}
         attributionPosition="bottom-left"
       >
         <Background color="hsl(var(--muted))" gap={16} />

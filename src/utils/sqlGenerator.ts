@@ -1,6 +1,7 @@
 // SQL generation utilities for database import
 
 import { PostgresType, ColumnTypeInfo } from './typeInference';
+import { JsonTable, ForeignKeyRelationship, getAllJsonHeaders } from './parseJson';
 
 export interface ColumnDefinition {
   name: string;
@@ -33,6 +34,7 @@ export interface SQLStatement {
   sql: string;
   description: string;
   sequence: number;
+  tableName?: string;
 }
 
 /**
@@ -98,7 +100,8 @@ export function generateCreateTableSQL(
     type: 'CREATE_TABLE',
     sql,
     description: `Create table ${sanitizedName}`,
-    sequence: 0
+    sequence: 0,
+    tableName: sanitizedName
   };
 }
 
@@ -124,7 +127,8 @@ export function generateIndexSQL(
       type: 'CREATE_INDEX' as const,
       sql,
       description: `Create ${index.unique ? 'unique ' : ''}index on ${index.columns.join(', ')}`,
-      sequence: i + 1
+      sequence: i + 1,
+      tableName: sanitizedTable
     };
   });
 }
@@ -160,8 +164,9 @@ export function generateInsertBatchSQL(
     statements.push({
       type: 'INSERT',
       sql,
-      description: `Insert rows ${i + 1}-${Math.min(i + batchSize, rows.length)} of ${rows.length} (batch ${batchNum}/${totalBatches})`,
-      sequence: batchNum
+      description: `Insert rows ${i + 1}-${Math.min(i + batchSize, rows.length)} of ${rows.length} total (batch ${batchNum}/${totalBatches})`,
+      sequence: batchNum,
+      tableName: sanitizedTable
     });
   }
 
@@ -269,6 +274,165 @@ export function generateFullImportSQL(
     stmt.sequence = sequence++;
     statements.push(stmt);
   });
+
+  return statements;
+}
+
+/**
+ * Infer PostgreSQL type from sample values
+ */
+function inferTypeFromValues(values: any[]): PostgresType {
+  const nonNullValues = values.filter(v => v !== null && v !== undefined);
+  if (nonNullValues.length === 0) return 'TEXT';
+  
+  const sample = nonNullValues[0];
+  
+  if (typeof sample === 'boolean') return 'BOOLEAN';
+  if (typeof sample === 'number') {
+    if (Number.isInteger(sample)) return 'INTEGER';
+    return 'NUMERIC';
+  }
+  if (typeof sample === 'string') {
+    // Check if it looks like a UUID
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sample)) {
+      return 'UUID';
+    }
+    // Check if it looks like a date
+    if (!isNaN(Date.parse(sample)) && sample.length > 8) {
+      return 'TIMESTAMP WITH TIME ZONE';
+    }
+    return 'TEXT';
+  }
+  
+  return 'TEXT';
+}
+
+/**
+ * Generate SQL for multiple JSON tables with proper FK ordering
+ * Tables are created in parent-to-child order
+ * INSERTs are done in parent-to-child order to satisfy FK constraints
+ */
+export function generateMultiTableImportSQL(
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[],
+  schema: string = 'public',
+  selectedRowsByTable?: Map<string, Set<number>>
+): SQLStatement[] {
+  const statements: SQLStatement[] = [];
+  let sequence = 0;
+
+  // Build parent-child map
+  const parentMap = new Map<string, string>();
+  relationships.forEach(rel => {
+    parentMap.set(rel.childTable, rel.parentTable);
+  });
+
+  // Sort tables: parents first, then children
+  const sortedTables = [...tables].sort((a, b) => {
+    // Count how many ancestors each table has
+    const getDepth = (tableName: string): number => {
+      let depth = 0;
+      let current = tableName;
+      while (parentMap.has(current)) {
+        depth++;
+        current = parentMap.get(current)!;
+      }
+      return depth;
+    };
+    return getDepth(a.name) - getDepth(b.name);
+  });
+
+  // Generate CREATE TABLE for each table
+  for (const table of sortedTables) {
+    const columns: ColumnDefinition[] = [];
+    
+    // Add UUID primary key
+    columns.push({
+      name: 'id',
+      type: 'UUID',
+      nullable: false,
+      isPrimaryKey: true,
+      isUnique: true,
+      defaultValue: 'gen_random_uuid()'
+    });
+
+    // Add columns from JSON data
+    for (const col of table.columns) {
+      // Skip internal _row_id column
+      if (col.name === '_row_id') continue;
+      
+      // Handle _parent_id as a UUID FK
+      if (col.name === '_parent_id') {
+        const parentTable = parentMap.get(table.name);
+        columns.push({
+          name: '_parent_id',
+          type: 'UUID',
+          nullable: false,
+          isPrimaryKey: false,
+          isUnique: false,
+          references: parentTable ? {
+            table: sanitizeTableName(parentTable),
+            column: 'id'
+          } : undefined
+        });
+        continue;
+      }
+
+      // Infer type from sample values
+      const inferredType = inferTypeFromValues(col.sampleValues);
+      
+      columns.push({
+        name: col.name,
+        type: inferredType,
+        nullable: true,
+        isPrimaryKey: false,
+        isUnique: false
+      });
+    }
+
+    const tableDef: TableDefinition = {
+      name: table.name,
+      schema,
+      columns,
+      indexes: []
+    };
+
+    const createStmt = generateCreateTableSQL(tableDef);
+    createStmt.sequence = sequence++;
+    statements.push(createStmt);
+  }
+
+  // Generate INSERT statements for each table (in order)
+  for (const table of sortedTables) {
+    // Get selected rows for this table
+    let selectedRows = table.rows;
+    if (selectedRowsByTable) {
+      const selection = selectedRowsByTable.get(table.name);
+      if (selection && selection.size > 0) {
+        selectedRows = table.rows.filter((_, idx) => selection.has(idx));
+      }
+    }
+
+    if (selectedRows.length === 0) continue;
+
+    // Get columns (excluding _row_id, but including _parent_id)
+    const columnNames = table.columns
+      .filter(c => c.name !== '_row_id')
+      .map(c => c.name);
+
+    // Map rows to values
+    const dataRows = selectedRows.map(row => {
+      return columnNames.map(colName => row[colName] ?? null);
+    });
+
+    const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
+    const insertStmts = generateInsertBatchSQL(table.name, schema, columnNames, dataRows, batchSize);
+    
+    insertStmts.forEach(stmt => {
+      stmt.sequence = sequence++;
+      statements.push(stmt);
+    });
+  }
 
   return statements;
 }
@@ -383,6 +547,7 @@ export function generateDropTableSQL(tableName: string, schema: string): SQLStat
     type: 'DROP_TABLE',
     sql: `DROP TABLE IF EXISTS ${fullTableName} CASCADE;`,
     description: `Drop table ${sanitizedTable}`,
-    sequence: 0
+    sequence: 0,
+    tableName: sanitizedTable
   };
 }
