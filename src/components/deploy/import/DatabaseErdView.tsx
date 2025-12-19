@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -11,11 +11,13 @@ import ReactFlow, {
   Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { TableProperties, Key, Plus, ArrowDownToLine, AlertTriangle, Minus, Check } from 'lucide-react';
+import { TableProperties, Key, Plus, ArrowDownToLine, AlertTriangle, Minus, LayoutGrid } from 'lucide-react';
 import { ForeignKeyRelationship, JsonTable, getJsonHeaders } from '@/utils/parseJson';
 import { TableMatchResult, ExistingTableSchema } from '@/utils/tableMatching';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DatabaseErdViewProps {
   existingTables: ExistingTableSchema[];
@@ -158,6 +160,84 @@ const nodeTypes = {
   tableNode: TableNode,
 };
 
+/**
+ * Calculate hierarchical tree layout for import tables
+ * Places parent tables on left, children branching to the right
+ */
+function calculateTreeLayout(
+  importTables: JsonTable[],
+  relationships: ForeignKeyRelationship[]
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  
+  // Build parent-child map
+  const parentMap = new Map<string, string>();
+  const childrenMap = new Map<string, string[]>();
+  
+  relationships.forEach(rel => {
+    parentMap.set(rel.childTable, rel.parentTable);
+    const children = childrenMap.get(rel.parentTable) || [];
+    children.push(rel.childTable);
+    childrenMap.set(rel.parentTable, children);
+  });
+  
+  // Find root tables (no parent)
+  const roots = importTables.filter(t => !parentMap.has(t.name));
+  
+  const NODE_WIDTH = 200;
+  const NODE_HEIGHT = 150;
+  const HORIZONTAL_GAP = 80;
+  const VERTICAL_GAP = 30;
+  
+  let currentY = 0;
+  
+  // Recursive function to layout a subtree
+  const layoutSubtree = (tableName: string, depth: number, startY: number): number => {
+    const children = childrenMap.get(tableName) || [];
+    const x = depth * (NODE_WIDTH + HORIZONTAL_GAP);
+    
+    if (children.length === 0) {
+      // Leaf node
+      positions.set(tableName, { x, y: startY });
+      return startY + NODE_HEIGHT + VERTICAL_GAP;
+    }
+    
+    // Layout children first to calculate total height
+    let childY = startY;
+    const childPositions: number[] = [];
+    
+    for (const child of children) {
+      childPositions.push(childY);
+      childY = layoutSubtree(child, depth + 1, childY);
+    }
+    
+    // Position this node at the center of its children
+    const firstChildY = childPositions[0];
+    const lastChildY = childPositions[childPositions.length - 1];
+    const centerY = (firstChildY + lastChildY) / 2;
+    
+    positions.set(tableName, { x, y: centerY });
+    
+    return childY;
+  };
+  
+  // Layout each root tree
+  for (const root of roots) {
+    currentY = layoutSubtree(root.name, 0, currentY);
+  }
+  
+  // Handle orphan tables (in import but not in relationships)
+  const positionedTables = new Set(positions.keys());
+  const orphans = importTables.filter(t => !positionedTables.has(t.name));
+  
+  for (const orphan of orphans) {
+    positions.set(orphan.name, { x: 0, y: currentY });
+    currentY += NODE_HEIGHT + VERTICAL_GAP;
+  }
+  
+  return positions;
+}
+
 export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
   existingTables,
   importTables,
@@ -167,6 +247,10 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
   showLegend = true,
   height = 400,
 }) => {
+  // Track user-modified positions
+  const userPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const isInitializedRef = useRef(false);
+  
   const { initialNodes, initialEdges } = useMemo(() => {
     const nodeList: Node[] = [];
     const edgeList: Edge[] = [];
@@ -208,18 +292,10 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
       hasParentSet.add(childName.toLowerCase());
     });
     
-    // Also check existing tables for relationships
-    existingTables.forEach(et => {
-      // This is simplified - in a real scenario you'd query FK relationships
-    });
+    // Calculate tree layout for import tables
+    const treePositions = calculateTreeLayout(importTables, relationships);
     
-    // Position layout
-    const IMPORT_COL_X = 0;
-    const EXISTING_COL_X = 350;
-    const ROW_HEIGHT = 140;
-    
-    // Add import table nodes
-    let importY = 0;
+    // Add import table nodes using tree layout
     importTables.forEach((table) => {
       const match = matchesByImport.get(table.name.toLowerCase());
       const status: NodeStatus = match?.status === 'new' ? 'new' 
@@ -227,10 +303,16 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
         : match?.status === 'insert' ? 'insert' 
         : 'new';
       
+      // Use user position if available, otherwise use calculated tree position
+      const nodeId = `import-${table.name}`;
+      const userPos = userPositionsRef.current.get(nodeId);
+      const treePos = treePositions.get(table.name) || { x: 0, y: 0 };
+      const position = userPos || treePos;
+      
       nodeList.push({
-        id: `import-${table.name}`,
+        id: nodeId,
         type: 'tableNode',
-        position: { x: IMPORT_COL_X, y: importY },
+        position,
         data: {
           label: table.name,
           columns: getJsonHeaders(table).filter(c => c !== '_row_id'),
@@ -249,9 +331,15 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
         targetPosition: Position.Top,
         draggable: true,
       });
-      
-      importY += ROW_HEIGHT;
     });
+    
+    // Find the rightmost position of import tables
+    let maxImportX = 0;
+    treePositions.forEach(pos => {
+      maxImportX = Math.max(maxImportX, pos.x);
+    });
+    const EXISTING_COL_X = maxImportX + 350;
+    const ROW_HEIGHT = 140;
     
     // Add existing table nodes (unaffected ones)
     let existingY = 0;
@@ -264,10 +352,14 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
         return;
       }
       
+      const nodeId = `existing-${table.name}`;
+      const userPos = userPositionsRef.current.get(nodeId);
+      const position = userPos || { x: EXISTING_COL_X, y: existingY };
+      
       nodeList.push({
-        id: `existing-${table.name}`,
+        id: nodeId,
         type: 'tableNode',
-        position: { x: EXISTING_COL_X, y: existingY },
+        position,
         data: {
           label: table.name,
           columns: table.columns.map(c => c.name),
@@ -330,11 +422,51 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Update nodes when props change
+  // Update nodes when props change, but preserve user positions
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
+    if (!isInitializedRef.current) {
+      // First render - use initial nodes directly
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      isInitializedRef.current = true;
+    } else {
+      // Subsequent renders - merge with user positions
+      setNodes(prevNodes => {
+        // Save current user positions
+        prevNodes.forEach(n => {
+          userPositionsRef.current.set(n.id, n.position);
+        });
+        
+        // Apply user positions to new nodes
+        return initialNodes.map(newNode => {
+          const userPos = userPositionsRef.current.get(newNode.id);
+          if (userPos) {
+            return { ...newNode, position: userPos };
+          }
+          return newNode;
+        });
+      });
+      setEdges(initialEdges);
+    }
   }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  // Track node position changes
+  const handleNodesChange = useCallback((changes: any) => {
+    onNodesChange(changes);
+    
+    // Update user positions for dragged nodes
+    changes.forEach((change: any) => {
+      if (change.type === 'position' && change.position) {
+        userPositionsRef.current.set(change.id, change.position);
+      }
+    });
+  }, [onNodesChange]);
+
+  // Reset layout button handler
+  const handleResetLayout = useCallback(() => {
+    userPositionsRef.current.clear();
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const isImport = node.id.startsWith('import-');
@@ -351,7 +483,7 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
   }
 
   return (
-    <div className="w-full border rounded-lg bg-background" style={{ height }}>
+    <div className="w-full border rounded-lg bg-background relative" style={{ height }}>
       {showLegend && (
         <div className="absolute top-2 left-2 z-10 flex gap-2 flex-wrap p-2 bg-background/90 rounded-lg border shadow-sm">
           <div className="flex items-center gap-1 text-xs">
@@ -372,10 +504,31 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
           </div>
         </div>
       )}
+      
+      {/* Reset Layout Button */}
+      <div className="absolute top-2 right-2 z-10">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetLayout}
+              className="h-8 px-2 bg-background/90"
+            >
+              <LayoutGrid className="h-4 w-4 mr-1" />
+              Reset Layout
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reset to automatic tree layout</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}

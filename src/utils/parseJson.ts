@@ -71,6 +71,70 @@ export interface SchemaStatistics {
 }
 
 /**
+ * Check if a value is a MongoDB ObjectId (24-char hex string)
+ */
+function isMongoObjectId(value: any): boolean {
+  if (typeof value !== 'string') return false;
+  return /^[0-9a-f]{24}$/i.test(value);
+}
+
+/**
+ * Generate a UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
+ * ID Mapping Context - tracks MongoDB ObjectId → UUID conversions
+ * Used to ensure parent-child relationships are preserved
+ */
+class IdMappingContext {
+  private mappings = new Map<string, string>(); // originalId → convertedUuid
+  
+  /**
+   * Get or create a UUID for a given original ID
+   * If the ID is a MongoDB ObjectId, convert it to a UUID
+   * If it's already a UUID, use it as-is
+   * For other formats, generate a new UUID
+   */
+  getOrCreateUuid(originalId: string | undefined | null): string {
+    if (!originalId) {
+      return generateUUID();
+    }
+    
+    // Check if we already have a mapping for this ID
+    const existing = this.mappings.get(originalId);
+    if (existing) {
+      return existing;
+    }
+    
+    // Check if it's already a valid UUID
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(originalId)) {
+      this.mappings.set(originalId, originalId);
+      return originalId;
+    }
+    
+    // Generate a new UUID and store the mapping
+    const newUuid = generateUUID();
+    this.mappings.set(originalId, newUuid);
+    return newUuid;
+  }
+  
+  /**
+   * Resolve a parent ID to its UUID
+   */
+  resolveParentId(originalParentId: string | undefined | null): string | null {
+    if (!originalParentId) return null;
+    return this.mappings.get(originalParentId) ?? originalParentId;
+  }
+}
+
+/**
  * Check if an object is a MongoDB Extended JSON type (for structure analysis)
  */
 function isMongoExtendedJson(obj: any): boolean {
@@ -288,17 +352,6 @@ function getTableNameFromFile(fileName: string): string {
 }
 
 /**
- * Generate a UUID v4
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-/**
  * Parse JSON data and normalize into table structures
  */
 export function parseJsonData(
@@ -320,17 +373,20 @@ export function parseJsonData(
   const tables: JsonTable[] = [];
   const relationships: ForeignKeyRelationship[] = [];
   
+  // Create ID mapping context to track MongoDB ObjectId → UUID conversions
+  const idContext = new IdMappingContext();
+  
   if (rootType === 'array') {
     // Array of objects - most common case
     if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
-      processArrayOfObjects(data, tableName, tables, relationships, null, null, options, '');
+      processArrayOfObjects(data, tableName, tables, relationships, null, null, options, '', idContext);
     } else if (data.length > 0) {
       // Array of primitives
-      processPrimitiveArray(data, tableName, tables, relationships, null, null);
+      processPrimitiveArray(data, tableName, tables, relationships, null, null, idContext);
     }
   } else if (rootType === 'object') {
     // Single object - check if it's a wrapper object
-    processRootObject(data, tableName, tables, relationships, options);
+    processRootObject(data, tableName, tables, relationships, options, idContext);
   }
 
   // Calculate totalRows as sum of all table rows
@@ -352,7 +408,8 @@ function processRootObject(
   tableName: string,
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
-  options: NormalizationOptions
+  options: NormalizationOptions,
+  idContext: IdMappingContext
 ): void {
   const keys = Object.keys(data);
   
@@ -364,17 +421,17 @@ function processRootObject(
     
     if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
       // Single key with array of objects - use the key as the table name
-      processArrayOfObjects(value, childTableName, tables, relationships, null, null, options, '');
+      processArrayOfObjects(value, childTableName, tables, relationships, null, null, options, '', idContext);
       return;
     } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       // Single key with nested object - descend into it
-      processRootObject(value, childTableName, tables, relationships, options);
+      processRootObject(value, childTableName, tables, relationships, options, idContext);
       return;
     }
   }
   
   // Process as a regular object
-  processObject(data, tableName, tables, relationships, null, null, options, '');
+  processObject(data, tableName, tables, relationships, null, null, options, '', idContext);
 }
 
 /**
@@ -401,6 +458,28 @@ function shouldNormalizeObject(
 }
 
 /**
+ * Extract the document ID from source data
+ * Handles MongoDB _id, id, or other ID fields
+ * Returns the original ID value (before conversion to UUID)
+ */
+function extractDocumentId(data: Record<string, any>): string | null {
+  // Check for MongoDB _id first
+  if (data._id !== undefined) {
+    const rawId = unwrapMongoExtendedJson(data._id);
+    if (rawId !== null) return String(rawId);
+    if (typeof data._id === 'string') return data._id;
+    if (typeof data._id === 'object' && data._id.$oid) return data._id.$oid;
+  }
+  
+  // Check for regular id field
+  if (data.id !== undefined) {
+    if (typeof data.id === 'string') return data.id;
+  }
+  
+  return null;
+}
+
+/**
  * Process a single object, extracting scalar values and processing nested arrays/objects
  */
 function processObject(
@@ -411,13 +490,22 @@ function processObject(
   parentTable: string | null,
   parentRowId: string | null,
   options: NormalizationOptions,
-  currentPath: string
+  currentPath: string,
+  idContext: IdMappingContext
 ): string {
   const row: Record<string, any> = {};
-  const rowId = generateUUID();
+  
+  // Extract the original document ID (MongoDB _id or id)
+  const originalDocId = extractDocumentId(data);
+  
+  // Generate or lookup the UUID for this row
+  // This ensures MongoDB ObjectIds are converted to UUIDs and tracked
+  const rowId = idContext.getOrCreateUuid(originalDocId || undefined);
   row['_row_id'] = rowId;
   
+  // Handle parent relationship
   if (parentTable && parentRowId !== null) {
+    // parentRowId is already a UUID (from the parent's processing)
     row['_parent_id'] = parentRowId;
   }
   
@@ -426,6 +514,9 @@ function processObject(
   
   // First pass: separate scalar values from nested structures
   for (const [key, value] of Object.entries(data)) {
+    // Skip _id and id fields - we handle them separately via _row_id
+    if (key === '_id' || key === 'id') continue;
+    
     const sanitizedKey = sanitizeColumnName(key);
     const fullPath = currentPath ? `${currentPath}.${key}` : key;
     
@@ -438,16 +529,26 @@ function processObject(
       const unwrapped = unwrapMongoExtendedJson(value);
       if (unwrapped !== null) {
         // MongoDB Extended JSON - treat as scalar value
-        row[sanitizedKey] = unwrapped;
+        // If it's an ObjectId reference (like a FK), convert to UUID
+        if (isMongoObjectId(unwrapped)) {
+          row[sanitizedKey] = idContext.getOrCreateUuid(unwrapped);
+        } else {
+          row[sanitizedKey] = unwrapped;
+        }
       } else if (shouldNormalizeObject(value, fullPath, options)) {
         // Object that should become a separate table
         nestedObjects.push({ key: sanitizedKey, value, path: fullPath });
       } else {
         // Flatten simple nested objects
-        flattenObject(value, sanitizedKey, row);
+        flattenObject(value, sanitizedKey, row, idContext);
       }
     } else {
-      row[sanitizedKey] = value;
+      // Handle scalar values - check if they're MongoDB ObjectIds
+      if (isMongoObjectId(value)) {
+        row[sanitizedKey] = idContext.getOrCreateUuid(value);
+      } else {
+        row[sanitizedKey] = value;
+      }
     }
   }
   
@@ -498,7 +599,7 @@ function processObject(
   
   // Process nested objects that have their own structure
   for (const { key, value, path } of nestedObjects) {
-    processObject(value, key, tables, relationships, tableName, rowId, options, path);
+    processObject(value, key, tables, relationships, tableName, rowId, options, path, idContext);
   }
   
   // Process nested arrays
@@ -507,10 +608,10 @@ function processObject(
     
     if (typeof value[0] === 'object' && value[0] !== null) {
       // Array of objects
-      processArrayOfObjects(value, childTableName, tables, relationships, tableName, rowId, options, path);
+      processArrayOfObjects(value, childTableName, tables, relationships, tableName, rowId, options, path, idContext);
     } else {
       // Array of primitives (like skills: ["Python", "React"])
-      processPrimitiveArray(value, childTableName, tables, relationships, tableName, rowId);
+      processPrimitiveArray(value, childTableName, tables, relationships, tableName, rowId, idContext);
     }
   }
   
@@ -528,11 +629,12 @@ function processArrayOfObjects(
   parentTable: string | null,
   parentRowId: string | null,
   options: NormalizationOptions,
-  currentPath: string
+  currentPath: string,
+  idContext: IdMappingContext
 ): void {
   for (const item of data) {
     if (item !== null && typeof item === 'object') {
-      processObject(item, tableName, tables, relationships, parentTable, parentRowId, options, currentPath);
+      processObject(item, tableName, tables, relationships, parentTable, parentRowId, options, currentPath, idContext);
     }
   }
 }
@@ -546,7 +648,8 @@ function processPrimitiveArray(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: string | null
+  parentRowId: string | null,
+  idContext: IdMappingContext
 ): void {
   let table = tables.find(t => t.name === tableName);
   
@@ -584,7 +687,7 @@ function processPrimitiveArray(
   // Add rows for each primitive value
   for (const value of data) {
     const row: Record<string, any> = {
-      _row_id: generateUUID(),
+      _row_id: idContext.getOrCreateUuid(undefined), // Generate new UUID for each primitive row
       value
     };
     if (parentRowId !== null) {
@@ -629,19 +732,34 @@ function getRootType(data: any): 'object' | 'array' | 'primitive' {
 /**
  * Flatten a nested object with key prefix
  */
-function flattenObject(obj: Record<string, any>, prefix: string, target: Record<string, any>): void {
+function flattenObject(
+  obj: Record<string, any>, 
+  prefix: string, 
+  target: Record<string, any>,
+  idContext: IdMappingContext
+): void {
   for (const [key, value] of Object.entries(obj)) {
     const newKey = `${prefix}_${sanitizeColumnName(key)}`;
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       // Check for MongoDB Extended JSON wrapper first
       const unwrapped = unwrapMongoExtendedJson(value);
       if (unwrapped !== null) {
-        target[newKey] = unwrapped;
+        // Convert MongoDB ObjectIds to UUIDs
+        if (isMongoObjectId(unwrapped)) {
+          target[newKey] = idContext.getOrCreateUuid(unwrapped);
+        } else {
+          target[newKey] = unwrapped;
+        }
       } else {
-        flattenObject(value, newKey, target);
+        flattenObject(value, newKey, target, idContext);
       }
     } else if (!Array.isArray(value)) {
-      target[newKey] = value;
+      // Convert MongoDB ObjectIds to UUIDs
+      if (isMongoObjectId(value)) {
+        target[newKey] = idContext.getOrCreateUuid(value);
+      } else {
+        target[newKey] = value;
+      }
     }
     // Skip arrays - they're handled separately
   }
@@ -652,6 +770,8 @@ function flattenObject(obj: Record<string, any>, prefix: string, target: Record<
  * Returns the unwrapped value if it is, otherwise null
  */
 function unwrapMongoExtendedJson(obj: Record<string, any>): any | null {
+  if (!obj || typeof obj !== 'object') return null;
+  
   const keys = Object.keys(obj);
   if (keys.length !== 1) return null;
   

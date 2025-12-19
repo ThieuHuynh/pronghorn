@@ -431,18 +431,18 @@ export function generateMultiTableImportSQL(
         // Handle _parent_id as a UUID FK
         if (col.name === '_parent_id') {
           const parentTable = parentMap.get(table.name);
-          columns.push({
-            name: '_parent_id',
-            type: 'UUID',
-            nullable: false,
-            isPrimaryKey: false,
-            isUnique: false,
-            references: parentTable ? {
-              table: sanitizeTableName(parentTable),
-              column: 'id'
-            } : undefined
-          });
-          continue;
+            columns.push({
+              name: '_parent_id',
+              type: 'UUID',
+              nullable: false,
+              isPrimaryKey: false,
+              isUnique: false, // NOT unique - multiple children can have same parent
+              references: parentTable ? {
+                table: sanitizeTableName(parentTable),
+                column: 'id'
+              } : undefined
+            });
+            continue;
         }
 
         // Infer type from sample values
@@ -796,7 +796,7 @@ export function generateSmartImportSQL(
               type: 'UUID',
               nullable: false,
               isPrimaryKey: false,
-              isUnique: false,
+              isUnique: false, // NOT unique - multiple children can have same parent
               references: parentTable ? {
                 table: sanitizeTableName(parentTable),
                 column: 'id'
