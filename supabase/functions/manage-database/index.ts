@@ -9,10 +9,13 @@ const corsHeaders = {
 const RENDER_API_URL = "https://api.render.com/v1";
 
 interface ManageDatabaseRequest {
-  action: 'get_schema' | 'execute_sql' | 'get_table_data' | 'get_table_columns' | 'export_table' 
+  action: 'get_schema' | 'execute_sql' | 'execute_sql_batch' | 'get_table_data' | 'get_table_columns' | 'export_table' 
     | 'get_table_definition' | 'get_view_definition' | 'get_function_definition' 
     | 'get_trigger_definition' | 'get_index_definition' | 'get_sequence_info' | 'get_type_definition'
     | 'get_table_structure' | 'test_connection';
+  // For execute_sql_batch
+  statements?: { sql: string; description: string }[];
+  wrapInTransaction?: boolean;
   // Either databaseId (Render) OR connectionId (external) must be provided
   databaseId?: string;
   connectionId?: string;
@@ -315,6 +318,21 @@ Deno.serve(async (req) => {
         }
         result = await getTableStructure(connectionString, body.schema, body.table);
         break;
+      case 'execute_sql_batch':
+        // Require editor role for SQL batch execution
+        if (role !== 'owner' && role !== 'editor') {
+          throw new Error("Editor or owner role required for SQL batch execution");
+        }
+        if (!body.statements || !Array.isArray(body.statements) || body.statements.length === 0) {
+          throw new Error("statements array is required for batch execution");
+        }
+        console.log(`[manage-database] Executing batch of ${body.statements.length} statements, transaction=${body.wrapInTransaction !== false}`);
+        result = await executeSqlBatch(
+          connectionString, 
+          body.statements, 
+          body.wrapInTransaction !== false
+        );
+        break;
       case 'test_connection':
         // Already handled above for connectionId
         throw new Error("test_connection requires connectionId or connectionString");
@@ -456,6 +474,113 @@ async function getSchema(connectionString: string) {
     }
 
     return { schemas };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Execute multiple SQL statements in a single connection with proper transaction handling.
+ * This ensures that CREATE TABLE, ALTER, and INSERT statements are all rolled back together
+ * if any statement fails.
+ */
+async function executeSqlBatch(
+  connectionString: string, 
+  statements: { sql: string; description: string }[],
+  wrapInTransaction: boolean = true
+) {
+  const client = new Client(connectionString);
+  await client.connect();
+  
+  const results: {
+    index: number;
+    success: boolean;
+    description: string;
+    sql: string;
+    rowCount?: number;
+    executionTime: number;
+    error?: string;
+  }[] = [];
+  
+  let hasError = false;
+  let errorMessage = '';
+  let errorIndex = -1;
+
+  try {
+    if (wrapInTransaction) {
+      console.log("[manage-database] Starting transaction for batch execution");
+      await client.queryObject("BEGIN");
+    }
+    
+    for (let i = 0; i < statements.length; i++) {
+      const stmt = statements[i];
+      const startTime = Date.now();
+      
+      try {
+        console.log(`[manage-database] Executing statement ${i + 1}/${statements.length}: ${stmt.description}`);
+        const result = await client.queryObject(stmt.sql);
+        results.push({
+          index: i,
+          success: true,
+          description: stmt.description,
+          sql: stmt.sql,
+          rowCount: result.rows.length,
+          executionTime: Date.now() - startTime
+        });
+      } catch (stmtError: unknown) {
+        const stmtErrorMsg = stmtError instanceof Error ? stmtError.message : String(stmtError);
+        console.error(`[manage-database] Statement ${i + 1} failed: ${stmtErrorMsg}`);
+        
+        results.push({
+          index: i,
+          success: false,
+          description: stmt.description,
+          sql: stmt.sql,
+          executionTime: Date.now() - startTime,
+          error: stmtErrorMsg
+        });
+        
+        hasError = true;
+        errorMessage = stmtErrorMsg;
+        errorIndex = i;
+        break; // Stop on first error
+      }
+    }
+    
+    if (wrapInTransaction) {
+      if (hasError) {
+        console.log("[manage-database] Rolling back transaction due to error");
+        await client.queryObject("ROLLBACK");
+      } else {
+        console.log("[manage-database] Committing transaction");
+        await client.queryObject("COMMIT");
+      }
+    }
+    
+    return {
+      success: !hasError,
+      results,
+      completedCount: results.filter(r => r.success).length,
+      totalCount: statements.length,
+      error: hasError ? {
+        message: errorMessage,
+        statementIndex: errorIndex,
+        statementDescription: statements[errorIndex]?.description
+      } : undefined
+    };
+    
+  } catch (error: unknown) {
+    // Connection-level error
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[manage-database] Batch execution connection error:", errorMsg);
+    
+    if (wrapInTransaction) {
+      try {
+        await client.queryObject("ROLLBACK");
+      } catch { /* ignore rollback errors */ }
+    }
+    
+    throw new Error(`Batch execution failed: ${errorMsg}`);
   } finally {
     await client.end();
   }

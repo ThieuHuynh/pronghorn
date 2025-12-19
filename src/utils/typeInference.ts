@@ -20,6 +20,7 @@ export interface ColumnTypeInfo {
   castingSuccessRate: number;
   suggestPrimaryKey: boolean;
   suggestIndex: boolean;
+  totalRowsAnalyzed?: number; // Total rows analyzed for accurate success rate reporting
 }
 
 export interface CastingResult {
@@ -38,16 +39,17 @@ export interface CastingRule {
 }
 
 /**
- * Infer the PostgreSQL type for a column based on sample values
+ * Infer the PostgreSQL type for a column based on ALL values (not just a sample)
+ * This ensures accurate type detection across the entire dataset
  */
 export function inferColumnType(
   values: any[],
   columnName: string,
-  sampleSize: number = 1000
+  _sampleSize?: number // Deprecated - now uses all values
 ): ColumnTypeInfo {
-  const sample = values.slice(0, sampleSize);
-  const nonNullValues = sample.filter(v => v !== null && v !== undefined && v !== '');
-  const nullable = nonNullValues.length < sample.length;
+  // Use ALL values for inference, not just a sample
+  const nonNullValues = values.filter(v => v !== null && v !== undefined && v !== '');
+  const nullable = nonNullValues.length < values.length;
   
   if (nonNullValues.length === 0) {
     return {
@@ -55,10 +57,11 @@ export function inferColumnType(
       inferredType: 'TEXT',
       nullable: true,
       uniqueRatio: 0,
-      sampleValues: sample.slice(0, 5),
+      sampleValues: values.slice(0, 5),
       castingSuccessRate: 1,
       suggestPrimaryKey: false,
-      suggestIndex: false
+      suggestIndex: false,
+      totalRowsAnalyzed: values.length
     };
   }
 
@@ -145,7 +148,8 @@ export function inferColumnType(
     sampleValues: nonNullValues.slice(0, 5),
     castingSuccessRate,
     suggestPrimaryKey,
-    suggestIndex
+    suggestIndex,
+    totalRowsAnalyzed: values.length
   };
 }
 

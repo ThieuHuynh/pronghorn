@@ -44,7 +44,7 @@ import {
 import FileUploader from './import/FileUploader';
 import ExcelDataGrid from './import/ExcelDataGrid';
 import JsonDataViewer from './import/JsonDataViewer';
-import SchemaCreator from './import/SchemaCreator';
+import SchemaCreator, { ColumnConfig } from './import/SchemaCreator';
 import FieldMapper from './import/FieldMapper';
 import SqlReviewPanel from './import/SqlReviewPanel';
 import ImportProgressTracker from './import/ImportProgressTracker';
@@ -149,8 +149,14 @@ export default function DatabaseImportWizard({
   const [targetColumns, setTargetColumns] = useState<TableColumn[]>([]);
   const [enableCasting, setEnableCasting] = useState(true);
   
+  // Schema column state - persisted across tab switches
+  const [schemaColumns, setSchemaColumns] = useState<ColumnConfig[] | null>(null);
+  
   // Per-table definitions for multi-table JSON import
   const [tableDefsMap, setTableDefsMap] = useState<Map<string, TableDefinition>>(new Map());
+  
+  // Per-table column configs for multi-table JSON import (persisted across tab switches)
+  const [multiTableColumns, setMultiTableColumns] = useState<Map<string, ColumnConfig[]>>(new Map());
   
   // Smart table matching state
   const [existingSchemas, setExistingSchemas] = useState<ExistingTableSchema[]>([]);
@@ -1068,6 +1074,8 @@ export default function DatabaseImportWizard({
                         onTableNameChange={() => {}}
                         onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
                         schema={schema}
+                        initialColumns={multiTableColumns.get(selectedJsonTable) || undefined}
+                        onColumnsChange={(cols) => setMultiTableColumns(prev => new Map(prev).set(selectedJsonTable, cols))}
                       />
                     </div>
                   )}
@@ -1116,6 +1124,8 @@ export default function DatabaseImportWizard({
                     onTableNameChange={setTableName}
                     onTableDefChange={handleTableDefChange}
                     schema={schema}
+                    initialColumns={schemaColumns || undefined}
+                    onColumnsChange={setSchemaColumns}
                   />
                 </TabsContent>
                 

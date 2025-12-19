@@ -39,10 +39,13 @@ interface SchemaCreatorProps {
   onTableNameChange: (name: string) => void;
   onTableDefChange: (def: TableDefinition) => void;
   schema?: string;
-  sampleSize?: number;
+  // Props to preserve state across tab switches
+  initialColumns?: ColumnConfig[];
+  onColumnsChange?: (cols: ColumnConfig[]) => void;
 }
 
-interface ColumnConfig {
+// Export the ColumnConfig interface for parent state management
+export interface ColumnConfig {
   name: string;
   originalName: string;
   type: PostgresType;
@@ -61,10 +64,11 @@ export default function SchemaCreator({
   onTableNameChange,
   onTableDefChange,
   schema = 'public',
-  sampleSize = 1000
+  initialColumns,
+  onColumnsChange
 }: SchemaCreatorProps) {
   const [addAutoId, setAddAutoId] = useState(true);
-  const [columns, setColumns] = useState<ColumnConfig[]>([]);
+  const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns || []);
   
   // Track the headers we've initialized with to prevent re-running inference
   const initializedHeadersRef = useRef<string | null>(null);
@@ -75,7 +79,8 @@ export default function SchemaCreator({
     return headers.some(h => h?.toLowerCase() === 'id');
   }, [headers]);
 
-  // Infer column types from sample data - ONLY on initial load or when headers actually change
+  // Infer column types from ALL data - ONLY on initial load or when headers actually change
+  // Skip if initialColumns were provided (preserve state across tab switches)
   useEffect(() => {
     const headersKey = JSON.stringify(headers);
     
@@ -84,12 +89,19 @@ export default function SchemaCreator({
       return;
     }
     
+    // Skip inference if we already have columns from parent (preserves tab switch state)
+    if (initialColumns && initialColumns.length > 0) {
+      initializedHeadersRef.current = headersKey;
+      return;
+    }
+    
     // Mark as initialized with these headers
     initializedHeadersRef.current = headersKey;
 
+    // Use ALL rows for type inference, not just a sample
     const inferred = headers.map((header, idx) => {
-      const values = sampleData.slice(0, sampleSize).map(row => row[idx]);
-      const info = inferColumnType(values, header, sampleSize);
+      const values = sampleData.map(row => row[idx]); // ALL rows
+      const info = inferColumnType(values, header);
       
       // Sanitize column name
       let sanitizedName = sanitizeColumnName(header);
@@ -115,7 +127,14 @@ export default function SchemaCreator({
     });
 
     setColumns(inferred);
-  }, [headers]); // Only depend on headers - NOT addAutoId
+  }, [headers, initialColumns]); // Depend on headers and initialColumns
+
+  // Notify parent when columns change (for state preservation across tab switches)
+  useEffect(() => {
+    if (columns.length > 0 && onColumnsChange) {
+      onColumnsChange(columns);
+    }
+  }, [columns, onColumnsChange]);
 
   // Handle addAutoId change separately - just update column names for id conflict
   useEffect(() => {
@@ -401,6 +420,9 @@ export default function SchemaCreator({
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {Math.round(col.inferredInfo.castingSuccessRate * 100)}% cast success
+                    {col.inferredInfo.totalRowsAnalyzed && (
+                      <span className="ml-1">({col.inferredInfo.totalRowsAnalyzed.toLocaleString()} rows)</span>
+                    )}
                   </div>
                 </td>
               </tr>
