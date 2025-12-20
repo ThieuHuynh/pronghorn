@@ -16,6 +16,7 @@ interface CollaborationEditorProps {
   isSaving: boolean;
   hasUnsavedChanges: boolean;
   readOnly?: boolean;
+  highlightedLines?: { start: number; end: number }[];
 }
 
 export function CollaborationEditor({
@@ -26,9 +27,12 @@ export function CollaborationEditor({
   isSaving,
   hasUnsavedChanges,
   readOnly = false,
+  highlightedLines = [],
 }: CollaborationEditorProps) {
   const [viewMode, setViewMode] = useState<'rendered' | 'source'>(isMarkdown ? 'rendered' : 'source');
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const decorationsRef = useRef<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-save on blur or after idle period
@@ -42,42 +46,55 @@ export function CollaborationEditor({
 
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    // Apply initial decorations
+    if (highlightedLines.length > 0) {
+      applyHighlightDecorations(editor, monaco, highlightedLines);
+    }
   };
+  
+  const applyHighlightDecorations = (editor: any, monaco: any, lines: { start: number; end: number }[]) => {
+    if (!editor || !monaco) return;
+    
+    const decorations = lines.map(({ start, end }) => ({
+      range: new monaco.Range(start, 1, end, 1),
+      options: {
+        isWholeLine: true,
+        className: 'collaboration-highlighted-line',
+        linesDecorationsClassName: 'collaboration-highlighted-gutter',
+      },
+    }));
+
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
+  };
+  
+  // Update decorations when highlightedLines change
+  useEffect(() => {
+    if (editorRef.current && monacoRef.current) {
+      if (highlightedLines.length > 0) {
+        applyHighlightDecorations(editorRef.current, monacoRef.current, highlightedLines);
+      } else {
+        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+      }
+    }
+  }, [highlightedLines]);
 
   const handleContentChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       onChange(value);
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      // Set new auto-save timeout (5 seconds of idle)
-      saveTimeoutRef.current = setTimeout(() => {
-        if (hasUnsavedChanges) {
-          onSave();
-        }
-      }, 5000);
+      // Just mark as changed, no auto-save (user should manually save)
     }
-  }, [onChange, onSave, hasUnsavedChanges]);
-
-  const handleBlur = useCallback(() => {
-    if (hasUnsavedChanges) {
-      // Clear the auto-save timeout since we're saving now
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      onSave();
-    }
-  }, [hasUnsavedChanges, onSave]);
+  }, [onChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
-      onSave();
+      if (hasUnsavedChanges) {
+        onSave();
+      }
     }
-  }, [onSave]);
+  }, [onSave, hasUnsavedChanges]);
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown}>
@@ -161,6 +178,18 @@ export function CollaborationEditor({
           />
         )}
       </div>
+      
+      {/* CSS for highlighted lines */}
+      <style>{`
+        .collaboration-highlighted-line {
+          background-color: rgba(34, 197, 94, 0.15) !important;
+        }
+        .collaboration-highlighted-gutter {
+          background-color: rgb(34, 197, 94);
+          width: 3px !important;
+          margin-left: 3px;
+        }
+      `}</style>
     </div>
   );
 }
