@@ -576,7 +576,7 @@ export function ArtifactCollaborator({
       </div>
 
       {/* Main content */}
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
+      <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0 overflow-hidden">
         {/* Editor panel */}
         <ResizablePanel defaultSize={60} minSize={40}>
           <div className="flex flex-col h-full">
@@ -606,14 +606,16 @@ export function ArtifactCollaborator({
         <ResizableHandle withHandle />
 
         {/* Chat panel */}
-        <ResizablePanel defaultSize={40} minSize={25}>
-          <CollaborationChat
-            messages={chatMessages}
-            blackboard={blackboardEntries}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent}
-            onSendMessage={handleSendMessage}
-          />
+        <ResizablePanel defaultSize={40} minSize={20}>
+          <div className="h-full min-h-0 overflow-hidden">
+            <CollaborationChat
+              messages={chatMessages}
+              blackboard={blackboardEntries}
+              isStreaming={isStreaming}
+              streamingContent={streamingContent}
+              onSendMessage={handleSendMessage}
+            />
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
 
