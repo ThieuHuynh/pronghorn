@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip } from 'lucide-react';
+import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -33,6 +33,7 @@ interface CollaborationChatProps {
   showBlackboard?: boolean;
   attachedCount?: number;
   onAttach?: () => void;
+  onClearContext?: () => void;
 }
 
 export function CollaborationChat({
@@ -45,6 +46,7 @@ export function CollaborationChat({
   showBlackboard = true,
   attachedCount = 0,
   onAttach,
+  onClearContext,
 }: CollaborationChatProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -212,6 +214,22 @@ export function CollaborationChat({
       </ScrollArea>
 
       <form onSubmit={handleFormSubmit} className="border-t p-2 flex-shrink-0">
+        {/* Attached Context Display */}
+        {attachedCount > 0 && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2 px-1">
+            <Paperclip className="h-4 w-4" />
+            <span>{attachedCount} context item(s) attached</span>
+            {onClearContext && (
+              <button
+                type="button"
+                onClick={onClearContext}
+                className="ml-auto p-1 hover:text-destructive rounded-sm hover:bg-destructive/10 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
@@ -227,7 +245,7 @@ export function CollaborationChat({
               type="submit"
               size="icon"
               disabled={!input.trim() || isStreaming || disabled}
-              className="h-[21px] w-[36px]"
+              className="h-8 w-8"
             >
               {isStreaming ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -242,17 +260,9 @@ export function CollaborationChat({
                 variant="outline"
                 onClick={onAttach}
                 disabled={isStreaming || disabled}
-                className="h-[21px] w-[36px] relative"
+                className="h-8 w-8"
               >
                 <Paperclip className="h-3 w-3" />
-                {attachedCount > 0 && (
-                  <Badge
-                    variant="destructive"
-                    className="absolute -top-1.5 -right-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]"
-                  >
-                    {attachedCount}
-                  </Badge>
-                )}
               </Button>
             )}
           </div>

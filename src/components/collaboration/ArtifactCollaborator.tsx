@@ -723,6 +723,7 @@ export function ArtifactCollaborator({
               onSendMessage={handleSendMessage}
               attachedCount={totalAttachments}
               onAttach={() => setIsProjectSelectorOpen(true)}
+              onClearContext={() => setAttachedContext(null)}
             />
           </TabsContent>
 
@@ -851,6 +852,7 @@ export function ArtifactCollaborator({
               onSendMessage={handleSendMessage}
               attachedCount={totalAttachments}
               onAttach={() => setIsProjectSelectorOpen(true)}
+              onClearContext={() => setAttachedContext(null)}
             />
           </div>
         </ResizablePanel>
