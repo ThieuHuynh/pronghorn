@@ -111,9 +111,9 @@ export function CollaborationChat({
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
-    <div className="flex flex-col h-full">
-      <ScrollArea className="flex-1 p-3" ref={scrollRef}>
-        <div className="space-y-3">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <ScrollArea className="flex-1 p-3 min-h-0" ref={scrollRef}>
+        <div className="space-y-3 min-w-0">
           {combinedTimeline.length === 0 && !isStreaming && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Start a conversation to collaborate on this artifact
@@ -160,14 +160,14 @@ export function CollaborationChat({
                   </div>
                 )}
                 <div
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  className={`min-w-[80px] max-w-[85%] rounded-lg px-3 py-2 text-sm break-words ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
                   }`}
                 >
                   {message.role === 'assistant' ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_pre]:overflow-x-auto [&_pre]:max-w-full">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
