@@ -112,8 +112,8 @@ export function CollaborationChat({
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
-      <ScrollArea className="flex-1 p-3 min-h-0" ref={scrollRef}>
-        <div className="space-y-3 min-w-0">
+      <ScrollArea className="flex-1 p-3 min-h-0">
+        <div className="space-y-3">
           {combinedTimeline.length === 0 && !isStreaming && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Start a conversation to collaborate on this artifact
@@ -127,19 +127,19 @@ export function CollaborationChat({
                 <Collapsible key={`bb-${entry.id}`} open={expandedBlackboard.has(entry.id)}>
                   <CollapsibleTrigger
                     onClick={() => toggleBlackboard(entry.id)}
-                    className={`w-full text-left px-3 py-2 rounded-md border text-xs ${getBlackboardColor(entry.entry_type)}`}
+                    className={`w-full text-left px-2 py-1.5 rounded-md border text-xs ${getBlackboardColor(entry.entry_type)}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
                       {getBlackboardIcon(entry.entry_type)}
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0">
                         {entry.entry_type}
                       </Badge>
-                      <span className="truncate flex-1 opacity-80">
-                        {entry.content.slice(0, 80)}...
+                      <span className="truncate opacity-80 text-xs">
+                        {entry.content.slice(0, 50)}...
                       </span>
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="px-3 py-2 text-xs text-muted-foreground">
+                  <CollapsibleContent className="px-2 py-1.5 text-xs text-muted-foreground break-words">
                     {entry.content}
                   </CollapsibleContent>
                 </Collapsible>
@@ -147,40 +147,38 @@ export function CollaborationChat({
             }
 
             const message = item as CollaborationMessage & { _type: 'message' };
+            const isUser = message.role === 'user';
+            
             return (
-              <div
-                key={message.id}
-                className={`flex gap-2 min-w-0 ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {message.role === 'assistant' && (
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-3 w-3 text-primary" />
-                  </div>
-                )}
+              <div key={message.id}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  {isUser ? (
+                    <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  ) : (
+                    <Bot className="h-3 w-3 text-primary flex-shrink-0" />
+                  )}
+                  <span className="text-xs font-medium">{isUser ? 'You' : 'Agent'}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(message.created_at).toLocaleTimeString()}
+                  </span>
+                </div>
                 <div
-                  className={`rounded-lg px-2 py-1.5 text-sm min-w-0 max-w-full overflow-hidden ${
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
+                  className={`p-2 rounded-lg text-sm ${
+                    isUser
+                      ? 'bg-primary/5 border border-primary/10'
+                      : 'bg-muted/30 border'
                   }`}
                 >
-                  {message.role === 'assistant' ? (
-                    <div className="text-sm break-words overflow-hidden [&_p]:m-0 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:text-xs [&_code]:text-xs [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
+                  {isUser ? (
+                    <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                  ) : (
+                    <div className="text-sm whitespace-pre-wrap break-words [&_p]:m-0 [&_pre]:overflow-x-auto [&_pre]:text-xs [&_code]:text-xs">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
                     </div>
-                  ) : (
-                    <p className="whitespace-pre-wrap break-words m-0">{message.content}</p>
                   )}
                 </div>
-                {message.role === 'user' && (
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
-                    <User className="h-3 w-3 text-secondary-foreground" />
-                  </div>
-                )}
               </div>
             );
           })}
