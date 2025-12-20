@@ -81,7 +81,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: true, 
         data: envContent,
-        filename: `${deployment.environment}-${deployment.name}.env`,
+        filename: '.env',
         contentType: 'text/plain'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -164,7 +164,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# ===========================================',
     '# CORE IDENTIFICATION (REQUIRED)',
     '# ===========================================',
-    `SUPABASE_URL=${supabaseUrl}`,
+    `SUPABASE_URL=https://api.pronghorn.red`,
     `SUPABASE_ANON_KEY=${supabaseAnonKey}`,
     `PRONGHORN_PROJECT_ID=${deployment.project_id}`,
     repo ? `PRONGHORN_REPO_ID=${repo.id}` : '# PRONGHORN_REPO_ID=<repo-uuid>',
@@ -270,11 +270,9 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# ===========================================',
     '# REBUILD_ON_STAGING: Rebuild when files are staged (immediate, before commit)',
     '# REBUILD_ON_FILES: Rebuild when files are committed (after commit)',
-    '# REBUILD_ON_GIT: Rebuild when GitHub repo changes (requires PAT)',
     '',
     'REBUILD_ON_STAGING=true',
     'REBUILD_ON_FILES=true',
-    'REBUILD_ON_GIT=false',
     '',
     '# PUSH_LOCAL_CHANGES: Push local file edits back to Pronghorn staging',
     'PUSH_LOCAL_CHANGES=true',
@@ -291,13 +289,6 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# ===========================================',
     `APP_ENVIRONMENT=${deployment.environment}`,
     'APP_PORT=3000',
-    '',
-    '# ===========================================',
-    '# GIT CONFIGURATION (only if REBUILD_ON_GIT=true)',
-    '# ===========================================',
-    repo ? `# GITHUB_REPO=${repo.organization}/${repo.repo}` : '# GITHUB_REPO=org/repo',
-    `# GITHUB_BRANCH=${deployment.branch || 'main'}`,
-    '# GITHUB_PAT=your_personal_access_token',
     '',
     '# ===========================================',
     '# USER ENVIRONMENT VARIABLES',
@@ -339,7 +330,7 @@ function generateEnvExample(): string {
 # CORE IDENTIFICATION (REQUIRED)
 # Get these from your Pronghorn deployment
 # ===========================================
-SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_URL=https://api.pronghorn.red
 SUPABASE_ANON_KEY=your-anon-key
 PRONGHORN_PROJECT_ID=your-project-uuid
 PRONGHORN_REPO_ID=your-repo-uuid
@@ -362,7 +353,6 @@ BUILD_FOLDER=dist
 # ===========================================
 REBUILD_ON_STAGING=true
 REBUILD_ON_FILES=true
-REBUILD_ON_GIT=false
 PUSH_LOCAL_CHANGES=true
 
 # ===========================================
@@ -376,13 +366,6 @@ PUSH_LOCAL_CHANGES=true
 # ===========================================
 APP_ENVIRONMENT=development
 APP_PORT=3000
-
-# ===========================================
-# GIT CONFIGURATION (only if REBUILD_ON_GIT=true)
-# ===========================================
-# GITHUB_REPO=org/repo
-# GITHUB_BRANCH=main
-# GITHUB_PAT=your_personal_access_token
 `;
 }
 
@@ -456,7 +439,6 @@ const CONFIG = {
   // Sync settings
   rebuildOnStaging: process.env.REBUILD_ON_STAGING !== 'false',
   rebuildOnFiles: process.env.REBUILD_ON_FILES !== 'false',
-  rebuildOnGit: process.env.REBUILD_ON_GIT === 'true',
   pushLocalChanges: process.env.PUSH_LOCAL_CHANGES !== 'false',
   
   // Project data sync
@@ -466,11 +448,6 @@ const CONFIG = {
   // App settings
   appEnvironment: process.env.APP_ENVIRONMENT || 'development',
   appPort: process.env.APP_PORT || '3000',
-  
-  // Git config (for REBUILD_ON_GIT)
-  githubRepo: process.env.GITHUB_REPO,
-  githubBranch: process.env.GITHUB_BRANCH || 'main',
-  githubPat: process.env.GITHUB_PAT,
 };
 
 const APP_DIR = path.join(process.cwd(), 'app');
@@ -1186,46 +1163,6 @@ async function pushLocalChangeToCloud(relativePath, operationType, content) {
 }
 
 // ============================================
-// GIT POLLING (if REBUILD_ON_GIT enabled)
-// ============================================
-
-let lastCommitSha = null;
-
-async function pollGitHub() {
-  if (!CONFIG.rebuildOnGit || !CONFIG.githubRepo || !CONFIG.githubPat) {
-    return;
-  }
-  
-  try {
-    const fetch = (await import('node-fetch')).default;
-    const [owner, repo] = CONFIG.githubRepo.split('/');
-    const url = \`https://api.github.com/repos/\${owner}/\${repo}/commits/\${CONFIG.githubBranch}\`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': \`token \${CONFIG.githubPat}\`,
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(\`GitHub API error: \${response.status}\`);
-    }
-    
-    const data = await response.json();
-    
-    if (lastCommitSha && lastCommitSha !== data.sha) {
-      console.log(\`[Pronghorn] New GitHub commit detected: \${data.sha.slice(0, 7)}\`);
-      await reportLog('info', \`GitHub commit detected: \${data.sha.slice(0, 7)}\`);
-    }
-    
-    lastCommitSha = data.sha;
-  } catch (err) {
-    console.error('[Pronghorn] GitHub polling error:', err.message);
-  }
-}
-
-// ============================================
 // MAIN
 // ============================================
 
@@ -1241,7 +1178,6 @@ async function main() {
   console.log('╠══════════════════════════════════════════════════════════════════╣');
   console.log(\`║  Rebuild on Staging: \${CONFIG.rebuildOnStaging ? 'YES' : 'NO '}                                           ║\`);
   console.log(\`║  Rebuild on Files: \${CONFIG.rebuildOnFiles ? 'YES' : 'NO '}                                             ║\`);
-  console.log(\`║  Rebuild on Git: \${CONFIG.rebuildOnGit ? 'YES' : 'NO '}                                               ║\`);
   console.log(\`║  Push Local Changes: \${CONFIG.pushLocalChanges ? 'YES' : 'NO '}                                          ║\`);
   console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
@@ -1286,12 +1222,6 @@ async function main() {
       await setupLocalFileWatcher();
     } else {
       console.log('[Pronghorn] Local → Cloud sync disabled (PUSH_LOCAL_CHANGES=false)');
-    }
-    
-    // Start GitHub polling if enabled
-    if (CONFIG.rebuildOnGit) {
-      setInterval(pollGitHub, 30000); // Poll every 30 seconds
-      pollGitHub(); // Initial poll
     }
     
     // Start dev server
@@ -1361,7 +1291,6 @@ INSTALL_COMMAND=npm install
 |----------|---------|-------------|
 | \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged |
 | \`REBUILD_ON_FILES\` | \`true\` | Sync when files are committed |
-| \`REBUILD_ON_GIT\` | \`false\` | Poll GitHub for changes |
 | \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local edits back to cloud |
 
 ### Multi-Runtime Support
