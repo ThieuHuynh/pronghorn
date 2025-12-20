@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Play, Square, Trash2, ExternalLink, Settings, 
   RefreshCw, Cloud, Laptop, Server, GitBranch,
-  Rocket, CheckCircle, Clock, XCircle, Download, Eye, RotateCcw, Copy, Check
+  Rocket, CheckCircle, Clock, XCircle, Download, Eye, RotateCcw, Copy, Check, FileText, Terminal
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -290,10 +290,17 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
               </div>
             )}
             {deployment.platform === "local" && (
-              <span className="flex items-center gap-1">
-                <Laptop className="h-3 w-3 shrink-0" />
-                <span className="truncate">Run: {deployment.run_command}</span>
-              </span>
+              <div className="space-y-2">
+                <span className="flex items-center gap-1">
+                  <Terminal className="h-3 w-3 shrink-0" />
+                  <span className="truncate">Run: {deployment.run_command}</span>
+                </span>
+                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 space-y-1">
+                  <p className="font-medium text-foreground">Two ways to run locally:</p>
+                  <p><strong>Full Package:</strong> Download ZIP → Extract → <code className="bg-muted px-1 rounded">npm i</code> → <code className="bg-muted px-1 rounded">npm start</code></p>
+                  <p><strong>.env Only:</strong> <code className="bg-muted px-1 rounded">git clone github.com/pronghorn-red/pronghorn-runner</code> → Drop in .env → <code className="bg-muted px-1 rounded">npm i</code> → <code className="bg-muted px-1 rounded">npm start</code></p>
+                </div>
+              </div>
             )}
             {deployment.last_deployed_at && (
               <span className="block mt-1">
@@ -421,6 +428,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
                   onClick={() => handleDownloadPackage('full')}
                   disabled={isActionLoading === 'download-full'}
                   className="text-xs"
+                  title="Download complete ZIP with runner code + .env"
                 >
                   {isActionLoading === 'download-full' ? (
                     <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
@@ -430,17 +438,17 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
                   Full Package
                 </Button>
                 <Button 
-                  variant="ghost" 
+                  variant="default" 
                   size="sm" 
                   onClick={() => handleDownloadPackage('env-only')}
                   disabled={isActionLoading === 'download-env'}
-                  className="text-xs"
-                  title="Download .env file only (use with pronghorn-runner)"
+                  className="text-xs bg-blue-600 hover:bg-blue-700"
+                  title="Download .env config file only (use with pronghorn-runner git clone)"
                 >
                   {isActionLoading === 'download-env' ? (
                     <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                   ) : (
-                    <Settings className="h-3 w-3 mr-1" />
+                    <FileText className="h-3 w-3 mr-1" />
                   )}
                   .env Only
                 </Button>
