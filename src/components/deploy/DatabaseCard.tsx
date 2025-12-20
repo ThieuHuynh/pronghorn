@@ -167,103 +167,197 @@ export function DatabaseCard({ database, shareToken, onRefresh, onExplore, showE
   return (
     <>
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Database className="h-5 w-5 text-primary" />
+        <CardHeader className="pb-3">
+          {/* Mobile: stack vertically, Desktop: horizontal */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Top row on mobile: icon, status, menu */}
+            <div className="flex items-center justify-between sm:hidden">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                  <Database className="h-5 w-5 text-primary" />
+                </div>
+                {getStatusBadge()}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isLoading}>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MoreVertical className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canCreate && (
+                    <DropdownMenuItem onClick={handleCreate}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Create Database
+                    </DropdownMenuItem>
+                  )}
+                  {canGetConnection && (
+                    <DropdownMenuItem onClick={handleGetConnectionInfo}>
+                      <Key className="h-4 w-4 mr-2" />
+                      Get Connection String
+                    </DropdownMenuItem>
+                  )}
+                  {canExplore && onExplore && (
+                    <DropdownMenuItem onClick={onExplore}>
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Explore Database
+                    </DropdownMenuItem>
+                  )}
+                  {canSync && (
+                    <DropdownMenuItem onClick={handleSyncStatus}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Sync Status
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit Configuration
+                  </DropdownMenuItem>
+                  {database.dashboard_url && (
+                    <DropdownMenuItem asChild>
+                      <a href={database.dashboard_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Dashboard
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  {canSuspend && (
+                    <DropdownMenuItem onClick={handleSuspend}>
+                      <Pause className="h-4 w-4 mr-2" />
+                      Suspend
+                    </DropdownMenuItem>
+                  )}
+                  {canResume && (
+                    <DropdownMenuItem onClick={handleResume}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Resume
+                    </DropdownMenuItem>
+                  )}
+                  {canRestart && (
+                    <DropdownMenuItem onClick={handleRestart}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Restart
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setShowDeleteDialog(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div>
-              <CardTitle className="text-lg">{database.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">
+
+            {/* Title and subtitle - full width on mobile */}
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base sm:text-lg break-words">{database.name}</CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
                 {database.provider === "render_postgres" ? "Render PostgreSQL" : "Supabase"} • {database.plan}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" disabled={isLoading}>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MoreVertical className="h-4 w-4" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canCreate && (
-                  <DropdownMenuItem onClick={handleCreate}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Create Database
-                  </DropdownMenuItem>
-                )}
-                {canGetConnection && (
-                  <DropdownMenuItem onClick={handleGetConnectionInfo}>
-                    <Key className="h-4 w-4 mr-2" />
-                    Get Connection String
-                  </DropdownMenuItem>
-                )}
-                {canExplore && onExplore && (
-                  <DropdownMenuItem onClick={onExplore}>
-                    <Terminal className="h-4 w-4 mr-2" />
-                    Explore Database
-                  </DropdownMenuItem>
-                )}
-                {canSync && (
-                  <DropdownMenuItem onClick={handleSyncStatus}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Sync Status
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Edit Configuration
-                </DropdownMenuItem>
-                {database.dashboard_url && (
-                  <DropdownMenuItem asChild>
-                    <a href={database.dashboard_url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Open Dashboard
-                    </a>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                {canSuspend && (
-                  <DropdownMenuItem onClick={handleSuspend}>
-                    <Pause className="h-4 w-4 mr-2" />
-                    Suspend
-                  </DropdownMenuItem>
-                )}
-                {canResume && (
-                  <DropdownMenuItem onClick={handleResume}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Resume
-                  </DropdownMenuItem>
-                )}
-                {canRestart && (
-                  <DropdownMenuItem onClick={handleRestart}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Restart
-                  </DropdownMenuItem>
-                )}
-                {canDelete && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setShowDeleteDialog(true)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
+
+            {/* Desktop only: icon, status, menu in row */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Database className="h-5 w-5 text-primary" />
+              </div>
+              {getStatusBadge()}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isLoading}>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MoreVertical className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canCreate && (
+                    <DropdownMenuItem onClick={handleCreate}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Create Database
                     </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  )}
+                  {canGetConnection && (
+                    <DropdownMenuItem onClick={handleGetConnectionInfo}>
+                      <Key className="h-4 w-4 mr-2" />
+                      Get Connection String
+                    </DropdownMenuItem>
+                  )}
+                  {canExplore && onExplore && (
+                    <DropdownMenuItem onClick={onExplore}>
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Explore Database
+                    </DropdownMenuItem>
+                  )}
+                  {canSync && (
+                    <DropdownMenuItem onClick={handleSyncStatus}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Sync Status
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit Configuration
+                  </DropdownMenuItem>
+                  {database.dashboard_url && (
+                    <DropdownMenuItem asChild>
+                      <a href={database.dashboard_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Dashboard
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  {canSuspend && (
+                    <DropdownMenuItem onClick={handleSuspend}>
+                      <Pause className="h-4 w-4 mr-2" />
+                      Suspend
+                    </DropdownMenuItem>
+                  )}
+                  {canResume && (
+                    <DropdownMenuItem onClick={handleResume}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Resume
+                    </DropdownMenuItem>
+                  )}
+                  {canRestart && (
+                    <DropdownMenuItem onClick={handleRestart}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Restart
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setShowDeleteDialog(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {showExploreOnly ? (
             // Simplified view for Manage tab - just show explore button
             <div className="flex items-center justify-between">

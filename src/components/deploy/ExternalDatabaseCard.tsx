@@ -127,61 +127,114 @@ export function ExternalDatabaseCard({
 
   return (
     <>
-      <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Link className="h-5 w-5 text-primary" />
+      <Card className="bg-card border-border overflow-hidden">
+        <CardHeader className="pb-3">
+          {/* Mobile: stack vertically, Desktop: horizontal */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Top row on mobile: icon, status, menu */}
+            <div className="flex items-center justify-between sm:hidden">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                  <Link className="h-5 w-5 text-primary" />
+                </div>
+                {getStatusBadge()}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isLoading}>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MoreVertical className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canExplore && onExplore && (
+                    <DropdownMenuItem onClick={onExplore}>
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Explore Database
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleTestConnection}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Test Connection
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit Connection
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div>
-              <CardTitle className="text-lg">{connection.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">
+
+            {/* Title and subtitle - full width on mobile */}
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base sm:text-lg break-words">{connection.name}</CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5 break-all">
                 External PostgreSQL
-                {connection.host && ` • ${connection.host}`}
-                {connection.port && connection.port !== 5432 && `:${connection.port}`}
+                {connection.host && (
+                  <span className="block sm:inline sm:before:content-['_•_']">
+                    {connection.host}
+                    {connection.port && connection.port !== 5432 && `:${connection.port}`}
+                  </span>
+                )}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" disabled={isLoading}>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MoreVertical className="h-4 w-4" />
+
+            {/* Desktop only: icon, status, menu in row */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Link className="h-5 w-5 text-primary" />
+              </div>
+              {getStatusBadge()}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isLoading}>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MoreVertical className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canExplore && onExplore && (
+                    <DropdownMenuItem onClick={onExplore}>
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Explore Database
+                    </DropdownMenuItem>
                   )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canExplore && onExplore && (
-                  <DropdownMenuItem onClick={onExplore}>
-                    <Terminal className="h-4 w-4 mr-2" />
-                    Explore Database
+                  <DropdownMenuItem onClick={handleTestConnection}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Test Connection
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={handleTestConnection}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Test Connection
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Edit Connection
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit Connection
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {showExploreOnly ? (
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
