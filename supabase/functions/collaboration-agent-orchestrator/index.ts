@@ -136,6 +136,17 @@ serve(async (req) => {
       .slice(-10)
       .map((b: any) => `[${b.entry_type}] ${b.content}`)
       .join("\n");
+    
+    // Get chat history for context
+    const { data: chatHistory } = await supabase.rpc(
+      "get_collaboration_messages_with_token",
+      { p_collaboration_id: collaborationId, p_token: shareToken }
+    );
+
+    const chatContext = (chatHistory || [])
+      .slice(-20)
+      .map((m: any) => `${m.role}: ${m.content.slice(0, 200)}`)
+      .join("\n");
 
     // Build system prompt
     const systemPrompt = `You are CollaborationAgent, a collaborative document editing assistant.
@@ -160,6 +171,9 @@ ${historyContext || "No edits yet"}
 
 AGENT REASONING HISTORY:
 ${blackboardContext || "No entries yet"}
+
+CONVERSATION HISTORY:
+${chatContext || "No messages yet"}
 
 RESPONSE FORMAT:
 {

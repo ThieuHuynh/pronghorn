@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useRealtimeCollaboration } from '@/hooks/useRealtimeCollaboration';
 import { CollaborationEditor } from './CollaborationEditor';
-import { CollaborationChat, CollaborationMessage } from './CollaborationChat';
+import { CollaborationChat, CollaborationMessage, BlackboardEntry } from './CollaborationChat';
 import { CollaborationTimeline, HistoryEntry } from './CollaborationTimeline';
 import { CollaborationHeatmap } from './CollaborationHeatmap';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -84,6 +84,7 @@ export function ArtifactCollaborator({
     insertEdit,
     restoreToVersion,
     addBlackboardEntry,
+    refresh,
   } = useRealtimeCollaboration(collaborationId || undefined, shareToken, !!collaborationId);
 
   // Detect if content is markdown
@@ -146,12 +147,23 @@ export function ArtifactCollaborator({
     initCollaboration();
   }, [projectId, artifact.id, artifact.content, artifact.ai_title, shareToken]);
 
-  // Update local content when collaboration loads
+  // Update local content when collaboration loads (only if we haven't made changes)
+  // We also track the "last synced version" to prevent stale overwrites
+  const lastSyncedVersionRef = useRef<number>(0);
+  
   useEffect(() => {
     if (collaboration?.current_content && !hasUnsavedChanges) {
-      setLocalContent(collaboration.current_content);
+      // Only update if we're not in the middle of saving or viewing a specific version
+      if (!isSaving && viewingVersion === null) {
+        setLocalContent(collaboration.current_content);
+        // Update synced version based on latest history
+        const latestHistoryVersion = history.length > 0 
+          ? Math.max(...history.map(h => h.version_number))
+          : 0;
+        lastSyncedVersionRef.current = latestHistoryVersion;
+      }
     }
-  }, [collaboration?.current_content, hasUnsavedChanges]);
+  }, [collaboration?.current_content, hasUnsavedChanges, isSaving, viewingVersion, history]);
 
   // Handle content changes
   const handleContentChange = useCallback((content: string) => {
@@ -366,6 +378,14 @@ export function ArtifactCollaborator({
     created_at: m.created_at,
     metadata: m.metadata,
   }));
+  
+  // Map blackboard to the expected format
+  const blackboardEntries: BlackboardEntry[] = blackboard.map(b => ({
+    id: b.id,
+    entry_type: b.entry_type,
+    content: b.content,
+    created_at: b.created_at,
+  }));
 
   // Map history to the expected format
   const historyEntries: HistoryEntry[] = history.map(h => ({
@@ -381,6 +401,16 @@ export function ArtifactCollaborator({
     narrative: h.narrative,
     created_at: h.created_at,
   }));
+  
+  // Calculate highlighted lines (diff between current and previous version)
+  const highlightedLines = useMemo(() => {
+    if (historyEntries.length === 0) return [];
+    const latestEntry = historyEntries.find(h => h.version_number === latestVersion);
+    if (latestEntry && latestEntry.start_line && latestEntry.end_line) {
+      return [{ start: latestEntry.start_line, end: latestEntry.end_line }];
+    }
+    return [];
+  }, [historyEntries, latestVersion]);
 
   // Mobile layout
   if (isMobile) {
@@ -448,6 +478,7 @@ export function ArtifactCollaborator({
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
                 readOnly={viewingVersion !== null && viewingVersion < latestVersion}
+                highlightedLines={highlightedLines}
               />
               {history.length > 0 && (
                 <CollaborationTimeline
@@ -465,6 +496,7 @@ export function ArtifactCollaborator({
           <TabsContent value="chat" className="flex-1 m-0 min-h-0">
             <CollaborationChat
               messages={chatMessages}
+              blackboard={blackboardEntries}
               isStreaming={isStreaming}
               streamingContent={streamingContent}
               onSendMessage={handleSendMessage}
@@ -554,6 +586,7 @@ export function ArtifactCollaborator({
               isSaving={isSaving}
               hasUnsavedChanges={hasUnsavedChanges}
               readOnly={viewingVersion !== null && viewingVersion < latestVersion}
+              highlightedLines={highlightedLines}
             />
             {history.length > 0 && (
               <CollaborationTimeline
@@ -574,6 +607,7 @@ export function ArtifactCollaborator({
         <ResizablePanel defaultSize={40} minSize={25}>
           <CollaborationChat
             messages={chatMessages}
+            blackboard={blackboardEntries}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
             onSendMessage={handleSendMessage}
