@@ -84,20 +84,19 @@ export function CollaborationEditor({
       {/* Toolbar */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          {isMarkdown && (
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source')}>
-              <TabsList className="h-8">
-                <TabsTrigger value="rendered" className="text-xs h-6 px-2">
-                  <Eye className="h-3 w-3 mr-1" />
-                  Preview
-                </TabsTrigger>
-                <TabsTrigger value="source" className="text-xs h-6 px-2">
-                  <Code className="h-3 w-3 mr-1" />
-                  Source
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          {/* Always show toggle for switching between rendered and source view */}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source')}>
+            <TabsList className="h-8">
+              <TabsTrigger value="rendered" className="text-xs h-6 px-2">
+                <Eye className="h-3 w-3 mr-1" />
+                Preview
+              </TabsTrigger>
+              <TabsTrigger value="source" className="text-xs h-6 px-2">
+                <Code className="h-3 w-3 mr-1" />
+                Source
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="flex items-center gap-2">
           {hasUnsavedChanges && (
@@ -124,10 +123,10 @@ export function CollaborationEditor({
 
       {/* Editor Content */}
       <div className="flex-1 min-h-0">
-        {isMarkdown && viewMode === 'rendered' ? (
+        {viewMode === 'rendered' ? (
           <ScrollArea className="h-full">
             <div 
-              className="p-4 prose prose-sm dark:prose-invert max-w-none"
+              className="p-4 prose prose-sm dark:prose-invert max-w-none cursor-pointer"
               onClick={() => !readOnly && setViewMode('source')}
             >
               {content ? (

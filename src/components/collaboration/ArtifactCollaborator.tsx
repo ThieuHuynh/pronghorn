@@ -120,7 +120,7 @@ export function ArtifactCollaborator({
           setCollaborationId(activeCollab.id);
           setLocalContent(activeCollab.current_content);
         } else {
-          // Create new collaboration
+          // Create new collaboration - the RPC will use artifact's current content as base
           const { data: newCollab, error: createError } = await supabase.rpc(
             'create_artifact_collaboration_with_token',
             {
@@ -128,7 +128,6 @@ export function ArtifactCollaborator({
               p_artifact_id: artifact.id,
               p_token: shareToken || null,
               p_title: `Collaboration on ${artifact.ai_title || 'Artifact'}`,
-              p_base_content: artifact.content,
             }
           );
 
@@ -169,10 +168,9 @@ export function ArtifactCollaborator({
       const currentContent = collaboration?.current_content || artifact.content;
       
       // Simple diff - for now just track as a single edit
-      // In a more sophisticated version, we'd compute line-level diffs
       const lines = localContent.split('\n');
       
-      await insertEdit(
+      const result = await insertEdit(
         'edit',
         1,
         lines.length,
@@ -184,8 +182,12 @@ export function ArtifactCollaborator({
         'User'
       );
       
-      setHasUnsavedChanges(false);
-      toast.success('Changes saved');
+      if (result) {
+        setHasUnsavedChanges(false);
+        toast.success('Changes saved');
+      } else {
+        toast.error('Failed to save changes');
+      }
     } catch (error) {
       console.error('Error saving changes:', error);
       toast.error('Failed to save changes');

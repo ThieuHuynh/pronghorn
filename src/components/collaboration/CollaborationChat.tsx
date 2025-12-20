@@ -38,17 +38,23 @@ export function CollaborationChat({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isStreaming || disabled) return;
-    onSendMessage(input.trim());
+  const handleSubmit = () => {
+    const trimmedInput = input.trim();
+    if (!trimmedInput || isStreaming || disabled) return;
+    onSendMessage(trimmedInput);
     setInput('');
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSubmit();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      e.stopPropagation();
+      handleSubmit();
     }
   };
 
@@ -125,7 +131,7 @@ export function CollaborationChat({
         </div>
       </ScrollArea>
 
-      <form onSubmit={handleSubmit} className="border-t p-3">
+      <form onSubmit={handleFormSubmit} className="border-t p-3">
         <div className="flex gap-2">
           <Textarea
             value={input}
