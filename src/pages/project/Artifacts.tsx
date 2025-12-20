@@ -262,11 +262,11 @@ ${artifact.content}`;
   // Collaboration sub-view
   if (collaboratingArtifact) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
         <PrimaryNav />
-        <div className="flex flex-1 relative overflow-hidden">
+        <div className="flex flex-1 relative min-h-0">
           <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
-          <main className="flex-1 overflow-hidden">
+          <main className="flex-1 min-h-0 overflow-hidden">
             <ArtifactCollaborator
               projectId={projectId!}
               artifact={collaboratingArtifact}

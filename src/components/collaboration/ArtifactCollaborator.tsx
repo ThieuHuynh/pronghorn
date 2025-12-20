@@ -528,7 +528,7 @@ export function ArtifactCollaborator({
 
   // Desktop layout
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full min-h-0 bg-background overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <div className="flex items-center gap-3">

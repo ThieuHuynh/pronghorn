@@ -160,11 +160,12 @@ export function CollaborationChat({
                   </div>
                 )}
                 <div
-                  className={`min-w-[80px] max-w-[85%] rounded-lg px-3 py-2 text-sm break-words ${
+                  className={`rounded-lg px-3 py-2 text-sm break-words overflow-hidden ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
                   }`}
+                  style={{ maxWidth: '90%', minWidth: '60px', wordBreak: 'break-word' }}
                 >
                   {message.role === 'assistant' ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_pre]:overflow-x-auto [&_pre]:max-w-full">
@@ -209,22 +210,22 @@ export function CollaborationChat({
         </div>
       </ScrollArea>
 
-      <form onSubmit={handleFormSubmit} className="border-t p-3">
+      <form onSubmit={handleFormSubmit} className="border-t p-2 flex-shrink-0">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask the AI to help edit this artifact..."
-            className="min-h-[60px] max-h-[120px] resize-none"
+            placeholder="Ask the AI..."
+            className="min-h-[44px] max-h-[80px] resize-none text-sm"
             disabled={isStreaming || disabled}
           />
           <Button
             type="submit"
             size="icon"
             disabled={!input.trim() || isStreaming || disabled}
-            className="flex-shrink-0 h-[60px] w-[60px]"
+            className="flex-shrink-0 h-[44px] w-[44px]"
           >
             {isStreaming ? (
               <Loader2 className="h-4 w-4 animate-spin" />
