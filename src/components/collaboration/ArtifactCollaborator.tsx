@@ -158,22 +158,28 @@ export function ArtifactCollaborator({
   }, [projectId, artifact.id, artifact.content, artifact.ai_title, shareToken]);
 
   // Update local content when collaboration loads (only if we haven't made changes)
-  // We also track the "last synced version" to prevent stale overwrites
-  const lastSyncedVersionRef = useRef<number>(0);
+  // Track when we just saved to prevent the sync from overwriting our content
+  const justSavedRef = useRef<boolean>(false);
+  const justSavedContentRef = useRef<string>('');
   
   useEffect(() => {
     if (collaboration?.current_content && !hasUnsavedChanges) {
+      // Skip sync if we just saved - our content is already correct
+      if (justSavedRef.current) {
+        // Only clear the flag once the DB content matches what we saved
+        if (collaboration.current_content === justSavedContentRef.current) {
+          justSavedRef.current = false;
+          justSavedContentRef.current = '';
+        }
+        return;
+      }
+      
       // Only update if we're not in the middle of saving or viewing a specific version
       if (!isSaving && viewingVersion === null) {
         setLocalContent(collaboration.current_content);
-        // Update synced version based on latest history
-        const latestHistoryVersion = history.length > 0 
-          ? Math.max(...history.map(h => h.version_number))
-          : 0;
-        lastSyncedVersionRef.current = latestHistoryVersion;
       }
     }
-  }, [collaboration?.current_content, hasUnsavedChanges, isSaving, viewingVersion, history]);
+  }, [collaboration?.current_content, hasUnsavedChanges, isSaving, viewingVersion]);
 
   // Handle content changes
   const handleContentChange = useCallback((content: string) => {
@@ -185,20 +191,25 @@ export function ArtifactCollaborator({
   const handleSave = useCallback(async () => {
     if (!collaborationId || !hasUnsavedChanges) return;
     
+    // Store the content we're about to save to prevent sync from overwriting
+    const contentToSave = localContent;
+    justSavedRef.current = true;
+    justSavedContentRef.current = contentToSave;
+    
     setIsSaving(true);
     try {
       const currentContent = collaboration?.current_content || artifact.content;
       
       // Simple diff - for now just track as a single edit
-      const lines = localContent.split('\n');
+      const lines = contentToSave.split('\n');
       
       const result = await insertEdit(
         'edit',
         1,
         lines.length,
         currentContent,
-        localContent,
-        localContent,
+        contentToSave,
+        contentToSave,
         'User edit',
         'human',
         'User'
@@ -208,14 +219,16 @@ export function ArtifactCollaborator({
         setHasUnsavedChanges(false);
         // Reset viewing version to null so slider follows latest
         setViewingVersion(null);
-        // Refresh history to show new version - this won't cause UI flicker
+        // Refresh history to show new version
         await refreshHistory();
         toast.success('Changes saved');
       } else {
+        justSavedRef.current = false;
         toast.error('Failed to save changes');
       }
     } catch (error) {
       console.error('Error saving changes:', error);
+      justSavedRef.current = false;
       toast.error('Failed to save changes');
     } finally {
       setIsSaving(false);
@@ -285,6 +298,10 @@ export function ArtifactCollaborator({
         return;
       }
       
+      // Store the content we're about to save to prevent sync from overwriting
+      justSavedRef.current = true;
+      justSavedContentRef.current = restoredContent;
+      
       const lines = restoredContent.split('\n');
       
       // Insert a new edit with the restored content (this creates a new version)
@@ -307,10 +324,12 @@ export function ArtifactCollaborator({
         await refreshHistory(); // Refresh to get the new version
         toast.success(`Created new version from v${version}`);
       } else {
+        justSavedRef.current = false;
         toast.error('Failed to restore version');
       }
     } catch (error) {
       console.error('Error restoring version:', error);
+      justSavedRef.current = false;
       toast.error('Failed to restore version');
     }
   }, [collaborationId, shareToken, artifact.content, insertEdit, refreshHistory]);
