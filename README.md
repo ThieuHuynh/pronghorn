@@ -765,6 +765,106 @@ export function useRealtimeCanvas(projectId: string, shareToken: string | null) 
 3. **Use `channelRef.current.send()`** - Not `supabase.channel().send()`
 4. **Clean up on unmount** - Unsubscribe and null the ref
 
+### Security Model
+
+Pronghorn's real-time subscriptions use two distinct security models:
+
+#### 1. `postgres_changes` Events (RLS-Protected)
+
+Database change events are **fully secured** by Row Level Security (RLS):
+
+| Security Layer | Description |
+|----------------|-------------|
+| **Token Validation** | `set_share_token()` RPC call configures session context |
+| **RLS Policies** | All tables have policies that check `app.share_token` |
+| **Server-Side Filtering** | Supabase only sends events the client is authorized to see |
+
+```typescript
+// Before subscribing, the token is set in the session
+await supabase.rpc('set_share_token', { token: shareToken });
+
+// postgres_changes events respect RLS - unauthorized clients receive nothing
+.on('postgres_changes', { 
+  event: '*', 
+  schema: 'public', 
+  table: 'canvas_nodes',
+  filter: `project_id=eq.${projectId}`  // Server enforces this + RLS
+}, handleChange)
+```
+
+**Security Guarantee**: A client with only the `projectId` but no valid `share_token` cannot receive `postgres_changes` events.
+
+#### 2. Broadcast Events (Public Channels)
+
+Broadcast channels are intentionally **not private**:
+
+| Aspect | Status |
+|--------|--------|
+| **Channel Privacy** | Public (no `private: true` flag) |
+| **Data Sensitivity** | **None** - broadcasts carry only refresh signals |
+| **Actual Data Access** | Still requires valid token via RPC calls |
+
+```typescript
+// Broadcast sends NO sensitive data - just a refresh signal
+channelRef.current?.send({
+  type: 'broadcast',
+  event: 'canvas_refresh',
+  payload: {}  // Empty payload - no data exposed
+});
+
+// Client must still call RPC with valid token to get actual data
+const { data } = await supabase.rpc('get_canvas_nodes_with_token', {
+  p_project_id: projectId,
+  p_token: shareToken  // Token validated server-side
+});
+```
+
+**Security Analysis**:
+- Someone knowing only the `projectId` could technically subscribe to broadcast channels
+- However, they would only receive "refresh" signals with empty payloads
+- All actual data fetching requires a valid `share_token` validated by RLS
+- **Risk Assessment**: Minimal - no data leakage occurs
+
+#### Why Not Use Private Channels?
+
+Supabase's private channel feature requires:
+1. RLS policies on `realtime.messages` table
+2. JWT-based authentication via `supabase.realtime.setAuth()`
+3. Authenticated users (not anonymous/token-based access)
+
+Our token-based RBAC system is incompatible with Supabase's private channel authorization model. Since broadcasts carry no sensitive data, the current architecture is secure without requiring private channels.
+
+#### Summary: Defense in Depth
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Real-Time Security Layers                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ postgres_changes                                         │    │
+│  │ ✅ RLS-protected via share_token                        │    │
+│  │ ✅ Server-side filtering                                │    │
+│  │ ✅ No unauthorized data access possible                 │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Broadcast Events                                         │    │
+│  │ ⚠️  Public channels (by design)                         │    │
+│  │ ✅ Zero sensitive data in payloads                      │    │
+│  │ ✅ Data fetching still requires valid token             │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Data Access (RPC Functions)                              │    │
+│  │ ✅ All *_with_token functions validate share_token      │    │
+│  │ ✅ SECURITY DEFINER with controlled search_path         │    │
+│  │ ✅ Role-based permission checks                         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Getting Started
