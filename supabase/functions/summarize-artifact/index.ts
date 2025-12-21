@@ -76,6 +76,17 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
+    // Broadcast artifacts_refresh for multi-user sync
+    try {
+      await supabase.channel(`artifacts-${artifact.project_id}`).send({
+        type: 'broadcast',
+        event: 'artifacts_refresh',
+        payload: { projectId: artifact.project_id, action: 'update', artifactId }
+      });
+    } catch (broadcastError) {
+      console.warn('Failed to broadcast artifacts_refresh:', broadcastError);
+    }
+
     return new Response(
       JSON.stringify({ title: result.title, summary: result.summary }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

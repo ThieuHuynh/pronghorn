@@ -254,6 +254,19 @@ Deno.serve(async (req) => {
 
     console.log(`[ingest-artifacts] Completed: ${successCount} success, ${failureCount} failed in ${elapsed}ms`);
 
+    // Broadcast artifacts_refresh for multi-user sync
+    if (successCount > 0) {
+      try {
+        await supabase.channel(`artifacts-${projectId}`).send({
+          type: 'broadcast',
+          event: 'artifacts_refresh',
+          payload: { projectId, action: 'ingest', count: successCount }
+        });
+      } catch (broadcastError) {
+        console.warn('Failed to broadcast artifacts_refresh:', broadcastError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: failureCount === 0,

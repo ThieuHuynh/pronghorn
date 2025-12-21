@@ -270,6 +270,17 @@ Deno.serve(async (req) => {
       throw new Error("Failed to link repository to project");
     }
 
+    // Broadcast repos_refresh for multi-user sync
+    try {
+      await supabase.channel(`project_repos-${projectId}`).send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: { projectId }
+      });
+    } catch (broadcastError) {
+      console.warn('Failed to broadcast repos_refresh:', broadcastError);
+    }
+
     // Pull files into database
     const { error: pullError } = await supabase.functions.invoke("sync-repo-pull", {
       body: {

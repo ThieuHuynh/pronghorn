@@ -306,6 +306,17 @@ Format the output in clear, professional markdown with proper headings, bullet p
         // Don't throw, just log - we still want to return the spec to the user
       } else {
         console.log('Specification saved successfully');
+        
+        // Broadcast specification_refresh for multi-user sync
+        try {
+          await supabase.channel(`specifications-${projectId}`).send({
+            type: 'broadcast',
+            event: 'specification_refresh',
+            payload: { projectId }
+          });
+        } catch (broadcastError) {
+          console.warn('Failed to broadcast specification_refresh:', broadcastError);
+        }
       }
     } catch (saveErr) {
       console.error('Exception saving specification:', saveErr);

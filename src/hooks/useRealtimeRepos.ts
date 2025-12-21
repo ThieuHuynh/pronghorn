@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface ProjectRepo {
   id: string;
@@ -16,8 +17,9 @@ interface ProjectRepo {
 export function useRealtimeRepos(projectId: string | undefined | null, shareToken?: string | null) {
   const [repos, setRepos] = useState<ProjectRepo[]>([]);
   const [loading, setLoading] = useState(true);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
-  const loadRepos = async () => {
+  const loadRepos = useCallback(async () => {
     if (!projectId) return;
 
     try {
@@ -33,7 +35,17 @@ export function useRealtimeRepos(projectId: string | undefined | null, shareToke
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, shareToken]);
+
+  const broadcastRefresh = useCallback(async () => {
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: {}
+      });
+    }
+  }, []);
 
   useEffect(() => {
     loadRepos();
@@ -59,19 +71,13 @@ export function useRealtimeRepos(projectId: string | undefined | null, shareToke
       })
       .subscribe();
     
-    // Broadcast helper for triggering refreshes
-    const broadcastRefresh = async () => {
-      await channel.send({
-        type: 'broadcast',
-        event: 'repos_refresh',
-        payload: {}
-      });
-    };
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, loadRepos]);
 
-  return { repos, loading, refetch: loadRepos };
+  return { repos, loading, refetch: loadRepos, broadcastRefresh };
 }
