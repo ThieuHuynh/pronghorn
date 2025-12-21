@@ -402,8 +402,9 @@ export function useRealtimeCollaboration(
         { event: "collaboration_edit" },
         (payload) => {
           console.log("Received collaboration edit broadcast:", payload);
-          // Reload collaboration to get updated content
+          // Reload collaboration content AND history for version slider
           loadCollaboration();
+          loadHistory();
         }
       )
       .on(
@@ -412,6 +413,22 @@ export function useRealtimeCollaboration(
         (payload) => {
           console.log("Received collaboration restore broadcast:", payload);
           loadAll();
+        }
+      )
+      .on(
+        "broadcast",
+        { event: "collaboration_message" },
+        (payload) => {
+          console.log("Received collaboration message broadcast:", payload);
+          loadMessages();
+        }
+      )
+      .on(
+        "broadcast",
+        { event: "collaboration_blackboard" },
+        (payload) => {
+          console.log("Received collaboration blackboard broadcast:", payload);
+          loadBlackboard();
         }
       )
       .subscribe((status) => {
@@ -465,7 +482,7 @@ export function useRealtimeCollaboration(
       channelRef.current = null;
       presenceChannelRef.current = null;
     };
-  }, [collaborationId, isTokenSet, loadAll, loadCollaboration]);
+  }, [collaborationId, isTokenSet, loadAll, loadCollaboration, loadHistory, loadMessages, loadBlackboard]);
 
   // Get content at a specific version
   const getContentAtVersion = useCallback((versionNumber: number): string | null => {

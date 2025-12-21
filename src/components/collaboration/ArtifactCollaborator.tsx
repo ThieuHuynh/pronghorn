@@ -97,6 +97,7 @@ export function ArtifactCollaborator({
     history,
     blackboard,
     isLoading,
+    latestVersion: latestVersionFromHook,
     sendMessage,
     insertEdit,
     restoreToVersion,
@@ -556,10 +557,36 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory, attachedContext]);
 
-  const latestVersion = useMemo(() => 
-    history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0,
-    [history]
+  // Use hook's latestVersion for real-time sync - fallback to local calculation for safety
+  const latestVersion = latestVersionFromHook || (
+    history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0
   );
+
+  // Track previous latest version to detect external updates
+  const prevLatestVersionRef = useRef<number>(latestVersion);
+  
+  // Auto-follow latest version when another user pushes a new version
+  // Only auto-advance if we're already following latest (viewingVersion === null)
+  // or if we're viewing what was previously the latest
+  useEffect(() => {
+    if (latestVersion > prevLatestVersionRef.current) {
+      // A new version arrived (from another user or agent)
+      const wasFollowingLatest = viewingVersion === null || 
+        viewingVersion === prevLatestVersionRef.current;
+      
+      if (wasFollowingLatest && !isAgentEditingRef.current) {
+        // Auto-follow: keep viewing the latest
+        setViewingVersion(null);
+        
+        // Also sync the content if we're not in the middle of editing
+        if (!hasUnsavedChanges && !justSavedRef.current) {
+          // Content will be synced via the collaboration.current_content useEffect
+        }
+      }
+      
+      prevLatestVersionRef.current = latestVersion;
+    }
+  }, [latestVersion, viewingVersion, hasUnsavedChanges]);
 
   const currentVersion = viewingVersion || latestVersion;
 
