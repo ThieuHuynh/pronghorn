@@ -69,8 +69,15 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  
+  // Get authorization header for user context
+  const authHeader = req.headers.get("Authorization");
+  
+  // Create client with user's auth for RLS-aware operations
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    global: { headers: authHeader ? { Authorization: authHeader } : {} }
+  });
 
   try {
     const { collaborationId, projectId, userMessage, shareToken, maxIterations = 25, currentContent: clientContent, attachedContext } = 
@@ -78,6 +85,22 @@ serve(async (req) => {
 
     console.log(`Starting collaboration agent for collab ${collaborationId}`);
     console.log(`Attached context received:`, attachedContext ? 'yes' : 'no');
+
+    // Validate editor-level access (collaboration editing requires editor role)
+    const { data: role, error: roleError } = await supabase.rpc(
+      "require_role",
+      { p_project_id: projectId, p_token: shareToken || null, p_min_role: "editor" }
+    );
+
+    if (roleError || !role) {
+      console.error("[collaboration-agent-orchestrator] Access denied:", roleError?.message);
+      return new Response(
+        JSON.stringify({ error: "Editor access required for collaboration" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[collaboration-agent-orchestrator] Access validated with role: ${role}`);
 
     // Get collaboration details
     const { data: collaboration, error: collabError } = await supabase.rpc(

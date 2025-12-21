@@ -38,29 +38,38 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
+    // Get authorization header for user context
+    const authHeader = req.headers.get("Authorization");
+    
+    // Create client with user's auth for RLS-aware operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: authHeader ? { Authorization: authHeader } : {} }
+    });
 
-    // Validate access (viewer+ allowed)
-    const { data: role, error: authError } = await supabase.rpc("authorize_project_access", {
+    // Validate access using require_role (viewer+ allowed for activity viewing)
+    const { data: role, error: authError } = await supabase.rpc("require_role", {
       p_project_id: projectId,
       p_token: shareToken || null,
+      p_min_role: "viewer",
     });
 
     if (authError || !role) {
-      console.error("Auth error:", authError);
+      console.error("[project-activity] Auth error:", authError?.message);
       return new Response(JSON.stringify({ error: "Access denied" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch project creation date
-    const { data: projectData, error: projectError } = await supabase
-      .from("projects")
-      .select("created_at")
-      .eq("id", projectId)
-      .single();
+    console.log(`[project-activity] Access validated with role: ${role}`);
+
+    // Fetch project creation date using token-based RPC
+    const { data: projectData, error: projectError } = await supabase.rpc(
+      "get_project_with_token",
+      { p_project_id: projectId, p_token: shareToken || null }
+    );
 
     if (projectError || !projectData) {
       console.error("Project fetch error:", projectError);
