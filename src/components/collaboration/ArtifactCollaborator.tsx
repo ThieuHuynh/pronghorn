@@ -617,12 +617,22 @@ export function ArtifactCollaborator({
     if (latestVersion > prevLatestVersionRef.current) {
       // A new version arrived (from another user or agent)
       
-      // If we were waiting for our save to confirm, but a NEW version arrived
-      // (not our save), clear the justSaved state - we need to accept their changes
-      if (justSavedRef.current && collaboration?.current_content !== justSavedContentRef.current) {
-        // Another user's save arrived - clear our "just saved" state
-        justSavedRef.current = false;
-        justSavedContentRef.current = '';
+      if (justSavedRef.current) {
+        // We just saved - check if this is our content being confirmed
+        if (collaboration?.current_content === justSavedContentRef.current) {
+          // This is our save being confirmed - clear justSavedRef
+          justSavedRef.current = false;
+          justSavedContentRef.current = '';
+          console.log('Our save confirmed by DB');
+        } else {
+          // Another user saved while we were waiting for our save to confirm
+          // DON'T update our content, DON'T clear justSavedRef (timeout will handle it)
+          // Our content is correct - we just saved it
+          console.log('Another version arrived while waiting for our save to confirm - keeping our content');
+        }
+        // Either way, update the version ref but don't sync content
+        prevLatestVersionRef.current = latestVersion;
+        return;
       }
       
       if (hasUnsavedChanges) {
@@ -638,7 +648,7 @@ export function ArtifactCollaborator({
           // Auto-follow: keep viewing the latest
           setViewingVersion(null);
           
-          // Explicitly sync content - now this will run since we cleared justSavedRef above
+          // Sync content from DB - safe because we're not editing
           if (collaboration?.current_content) {
             isSyncingContentRef.current = true;
             setLocalContent(collaboration.current_content);
