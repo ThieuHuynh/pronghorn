@@ -13,7 +13,6 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (newPassword: string) => Promise<{ error: any }>;
-  verifyOtp: (tokenHash: string, type: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,7 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    // Call edge function which will create user and send branded email with proper token
+    // Call edge function which will create user via admin API and send branded email
+    // The user clicks the Supabase action_link which verifies and redirects back
     try {
       const response = await supabase.functions.invoke('send-auth-email', {
         body: {
@@ -156,15 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const verifyOtp = async (tokenHash: string, type: string) => {
-    // Verify the OTP token from email link
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: type as 'signup' | 'recovery' | 'email',
-    });
-    return { error };
-  };
-
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -176,8 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithAzure, 
       signOut, 
       resetPassword, 
-      updatePassword,
-      verifyOtp 
+      updatePassword
     }}>
       {children}
     </AuthContext.Provider>

@@ -13,14 +13,13 @@ import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle } from "lucide-react
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, signInWithGoogle, signInWithAzure, resetPassword, updatePassword, verifyOtp } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithAzure, resetPassword, updatePassword, session } = useAuth();
   
   // Loading states
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [azureLoading, setAzureLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [verifyingToken, setVerifyingToken] = useState(false);
   
   // Form states
   const [loginEmail, setLoginEmail] = useState("");
@@ -48,41 +47,31 @@ export default function Auth() {
   // Email verification success state
   const [verificationSuccess, setVerificationSuccess] = useState(false);
 
-  // Handle token verification from email links
+  // Handle URL params after Supabase redirect
   useEffect(() => {
-    const handleTokenVerification = async () => {
-      const tokenHash = searchParams.get('token_hash');
-      const type = searchParams.get('type');
-      
-      if (tokenHash && type) {
-        setVerifyingToken(true);
-        
-        try {
-          const { error } = await verifyOtp(tokenHash, type);
-          
-          if (error) {
-            console.error("Token verification error:", error);
-            toast.error(error.message || "Verification failed. The link may have expired.");
-          } else {
-            if (type === 'signup' || type === 'email') {
-              setVerificationSuccess(true);
-              toast.success("Email verified successfully! You can now sign in.");
-            } else if (type === 'recovery') {
-              setResetMode(true);
-              toast.success("Email verified! Please set your new password.");
-            }
-          }
-        } catch (e: any) {
-          console.error("Token verification exception:", e);
-          toast.error("Verification failed. Please try again.");
-        } finally {
-          setVerifyingToken(false);
-        }
-      }
-    };
+    const verified = searchParams.get('verified');
+    const recovery = searchParams.get('recovery');
+    
+    if (verified === 'true') {
+      // User was redirected after email verification
+      setVerificationSuccess(true);
+      toast.success("Email verified successfully! You can now sign in.");
+    }
+    
+    if (recovery === 'true') {
+      // User was redirected after clicking password reset link
+      // They should now have a valid session to update their password
+      setResetMode(true);
+      toast.success("Please set your new password.");
+    }
+  }, [searchParams]);
 
-    handleTokenVerification();
-  }, [searchParams, verifyOtp]);
+  // Redirect to dashboard if already authenticated (except in reset mode)
+  useEffect(() => {
+    if (session && !resetMode) {
+      navigate("/dashboard");
+    }
+  }, [session, navigate, resetMode]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -215,22 +204,6 @@ export default function Auth() {
       </AlertDescription>
     </Alert>
   );
-
-  // Show loading while verifying token
-  if (verifyingToken) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-muted-foreground">Verifying your email...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Reset password form (when user comes back from email link)
   if (resetMode) {
