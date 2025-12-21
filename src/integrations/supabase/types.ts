@@ -2579,13 +2579,33 @@ export type Database = {
           share_token: string
         }[]
       }
-      clone_published_project: {
-        Args: { p_new_name?: string; p_published_id: string }
-        Returns: {
-          id: string
-          share_token: string
-        }[]
-      }
+      clone_published_project:
+        | {
+            Args: { p_new_name?: string; p_published_id: string }
+            Returns: {
+              id: string
+              share_token: string
+            }[]
+          }
+        | {
+            Args: {
+              p_clone_artifacts?: boolean
+              p_clone_canvas?: boolean
+              p_clone_chat?: boolean
+              p_clone_databases?: boolean
+              p_clone_repo_files?: boolean
+              p_clone_requirements?: boolean
+              p_clone_specifications?: boolean
+              p_clone_standards?: boolean
+              p_clone_tech_stacks?: boolean
+              p_new_name: string
+              p_published_id: string
+            }
+            Returns: {
+              id: string
+              share_token: string
+            }[]
+          }
       commit_staged_with_token: {
         Args: {
           p_branch?: string
@@ -3856,6 +3876,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_published_project_content_summary: {
+        Args: { p_published_id: string }
+        Returns: Json
       }
       get_published_projects: {
         Args: {

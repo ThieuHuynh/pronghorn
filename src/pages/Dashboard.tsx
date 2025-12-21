@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, LogIn, AlertTriangle, Users, FolderOpen } from "lucide-react";
+import { Search, LogIn, AlertTriangle, Users, FolderOpen, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -255,6 +255,10 @@ export default function Dashboard() {
                     {linkedProjects.length > 0 && (
                       <Badge variant="secondary" className="text-xs ml-1">{linkedProjects.length}</Badge>
                     )}
+                  </TabsTrigger>
+                  <TabsTrigger value="gallery" className="flex items-center gap-2" onClick={() => navigate('/gallery')}>
+                    <Sparkles className="h-4 w-4" />
+                    Gallery
                   </TabsTrigger>
                 </TabsList>
 

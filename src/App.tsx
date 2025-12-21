@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import Artifacts from "./pages/project/Artifacts";
 import Chat from "./pages/project/Chat";
 import { ScrollToTop } from "./components/ScrollToTop";
+import Gallery from "./pages/Gallery";
 
 const App = () => (
   <>
@@ -30,6 +31,7 @@ const App = () => (
     <Route path="/" element={<Landing />} />
     <Route path="/auth" element={<Auth />} />
     <Route path="/dashboard" element={<Dashboard />} />
+    <Route path="/gallery" element={<Gallery />} />
     <Route path="/standards" element={<Standards />} />
     <Route path="/tech-stacks" element={<TechStacks />} />
     <Route path="/terms" element={<Terms />} />
