@@ -50,12 +50,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Generate signup confirmation link using admin API
+      // The action_link goes to Supabase's verify endpoint, which then redirects to our app
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'signup',
         email: email,
         password: password,
         options: {
-          redirectTo: `${baseUrl}/auth`
+          redirectTo: `${baseUrl}/auth?verified=true`
         }
       });
 
@@ -64,19 +65,11 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error(`Failed to generate verification link: ${linkError.message}`);
       }
 
-      // Extract the verification URL from the action_link
-      // The action_link contains the full URL with token_hash and type
+      // Use the action_link directly - it goes to Supabase's /auth/v1/verify endpoint
+      // which verifies the token and then redirects to our redirectTo URL
       actionUrl = linkData.properties.action_link;
       
-      // Modify the redirect to go to our auth page
-      const url = new URL(actionUrl);
-      const token_hash = url.searchParams.get('token_hash') || url.searchParams.get('token');
-      const linkType = url.searchParams.get('type');
-      
-      // Build our custom verification URL
-      actionUrl = `${baseUrl}/auth?token_hash=${token_hash}&type=${linkType}`;
-      
-      console.log("Generated verification URL:", actionUrl);
+      console.log("Generated verification action_link:", actionUrl);
 
       subject = "Verify your Pronghorn account";
       heading = "Welcome to Pronghorn!";
@@ -89,7 +82,7 @@ const handler = async (req: Request): Promise<Response> => {
         type: 'recovery',
         email: email,
         options: {
-          redirectTo: `${baseUrl}/auth`
+          redirectTo: `${baseUrl}/auth?recovery=true`
         }
       });
 
@@ -98,18 +91,10 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error(`Failed to generate recovery link: ${linkError.message}`);
       }
 
-      // Extract the recovery URL
+      // Use the action_link directly
       actionUrl = linkData.properties.action_link;
       
-      // Modify the redirect to go to our auth page
-      const url = new URL(actionUrl);
-      const token_hash = url.searchParams.get('token_hash') || url.searchParams.get('token');
-      const linkType = url.searchParams.get('type');
-      
-      // Build our custom recovery URL
-      actionUrl = `${baseUrl}/auth?token_hash=${token_hash}&type=${linkType}`;
-      
-      console.log("Generated recovery URL:", actionUrl);
+      console.log("Generated recovery action_link:", actionUrl);
 
       subject = "Reset your Pronghorn password";
       heading = "Password Reset Request";
