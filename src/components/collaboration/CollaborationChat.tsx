@@ -156,7 +156,7 @@ export function CollaborationChat({
             const isUser = message.role === 'user';
             
             return (
-              <div key={message.id} className="min-w-0 overflow-hidden">
+              <div key={message.id} className="min-w-0 w-full">
                 <div className="flex items-center gap-1.5 mb-1 min-w-0">
                   {isUser ? (
                     <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
@@ -169,16 +169,16 @@ export function CollaborationChat({
                   </span>
                 </div>
                 <div
-                  className={`p-2 rounded-lg text-sm min-w-0 overflow-hidden ${
+                  className={`p-2 rounded-lg text-sm max-w-full ${
                     isUser
                       ? 'bg-primary/5 border border-primary/10'
                       : 'bg-muted/30 border'
                   }`}
                 >
                   {isUser ? (
-                    <p className="whitespace-pre-wrap break-words text-sm overflow-hidden">{message.content}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm max-w-full" style={{ overflowWrap: 'anywhere' }}>{message.content}</p>
                   ) : (
-                    <div className="text-sm whitespace-pre-wrap break-words overflow-hidden [&_p]:m-0 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:text-xs [&_code]:text-xs [&_code]:break-all">
+                    <div className="text-sm max-w-full [&_p]:m-0 [&_p]:whitespace-pre-wrap [&_p]:break-words [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:text-xs [&_code]:text-xs [&_code]:break-all [&>*]:max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
