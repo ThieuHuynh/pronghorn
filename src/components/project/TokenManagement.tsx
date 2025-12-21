@@ -76,6 +76,29 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     },
     enabled: !!projectId,
   });
+  
+  // Validate cached token against fetched tokens and fix if stale
+  useEffect(() => {
+    if (!tokens || tokens.length === 0) return;
+    
+    const currentToken = activeToken || shareToken;
+    if (!currentToken) return;
+    
+    // Check if our cached token exists in the list of valid tokens
+    const tokenExists = tokens.some(t => t.token === currentToken);
+    
+    if (!tokenExists) {
+      // Our cached token is stale! Find an owner token to use instead
+      const ownerToken = tokens.find(t => t.role === 'owner');
+      if (ownerToken) {
+        console.log('Detected stale cached token, updating to valid owner token');
+        setProjectToken(projectId, ownerToken.token);
+        setActiveToken(ownerToken.token);
+        // Update the Supabase session with the new token
+        Promise.resolve(supabase.rpc("set_share_token", { token: ownerToken.token })).catch(console.error);
+      }
+    }
+  }, [tokens, activeToken, shareToken, projectId]);
 
   // Real-time subscription for tokens
   useEffect(() => {
