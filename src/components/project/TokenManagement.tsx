@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Key, Plus, Copy, Trash2, Eye, EyeOff, Link2, RefreshCw } from "lucide-react";
@@ -348,116 +348,107 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
         {isLoading ? (
           <div className="text-center py-4 text-muted-foreground">Loading tokens...</div>
         ) : tokens && tokens.length > 0 ? (
-          <div className="border rounded-md overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="min-w-[320px]">Token</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tokens.map((token) => (
-                  <TableRow key={token.id}>
-                    <TableCell className="font-medium">
+          <div className="space-y-3">
+            {tokens.map((token) => (
+              <div key={token.id} className="border rounded-lg p-4 bg-card">
+                {/* Row 1: Label, Role, and Actions */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-medium truncate">
                       {token.label || <span className="text-muted-foreground italic">Unnamed</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getRoleBadgeVariant(token.role)}>
-                        {token.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      <div className="flex items-center gap-2">
-                        {visibleTokens.has(token.id) ? (
-                          <code className="bg-muted px-2 py-1 rounded text-xs select-all break-all">
-                            {token.token}
-                          </code>
-                        ) : (
-                          <span className="text-muted-foreground">••••••••••••••••••••</span>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0"
-                          onClick={() => toggleTokenVisibility(token.id)}
-                        >
-                          {visibleTokens.has(token.id) ? (
-                            <EyeOff className="h-3 w-3" />
-                          ) : (
-                            <Eye className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(token.last_used_at)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {token.expires_at ? formatDate(token.expires_at) : "Never"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    </span>
+                    <Badge variant={getRoleBadgeVariant(token.role)} className="shrink-0">
+                      {token.role}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => copyTokenUrl(token.token)}
+                      title="Copy URL"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => copyTokenUrl(token.token)}
-                          title="Copy URL"
+                          title="Regenerate token"
                         >
-                          <Copy className="h-4 w-4" />
+                          <RefreshCw className="h-4 w-4" />
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title="Regenerate token"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Regenerate Token?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will generate a new token and invalidate the old one. 
-                                Anyone using the old token URL will lose access immediately.
-                                The new token URL will be copied to your clipboard.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => rollTokenMutation.mutate(token.id)}
-                                disabled={rollTokenMutation.isPending}
-                              >
-                                {rollTokenMutation.isPending ? "Regenerating..." : "Regenerate"}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => deleteTokenMutation.mutate(token.id)}
-                          disabled={deleteTokenMutation.isPending}
-                          title="Delete token"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Regenerate Token?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will generate a new token and invalidate the old one. 
+                            Anyone using the old token URL will lose access immediately.
+                            The new token URL will be copied to your clipboard.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => rollTokenMutation.mutate(token.id)}
+                            disabled={rollTokenMutation.isPending}
+                          >
+                            {rollTokenMutation.isPending ? "Regenerating..." : "Regenerate"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => deleteTokenMutation.mutate(token.id)}
+                      disabled={deleteTokenMutation.isPending}
+                      title="Delete token"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Row 2: Token with visibility */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 min-w-0">
+                    {visibleTokens.has(token.id) ? (
+                      <code className="block bg-muted px-3 py-2 rounded text-xs font-mono select-all break-all">
+                        {token.token}
+                      </code>
+                    ) : (
+                      <div className="bg-muted px-3 py-2 rounded text-xs text-muted-foreground">
+                        ••••••••••••••••••••••••••••••••••••
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => toggleTokenVisibility(token.id)}
+                  >
+                    {visibleTokens.has(token.id) ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Row 3: Metadata */}
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>Last used: {formatDate(token.last_used_at)}</span>
+                  <span>Expires: {token.expires_at ? formatDate(token.expires_at) : "Never"}</span>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
