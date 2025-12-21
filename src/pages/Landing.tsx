@@ -3,317 +3,210 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  FileText,
-  Library,
-  Layout,
-  Bot,
-  Code,
-  Users,
-  ArrowRight,
-  Check,
-  ShieldCheck,
-  GitBranch,
-  CheckCircle,
-  Rocket,
-  Shield,
-  Award,
-  Settings,
-  Archive,
-  MessageSquare,
-  ListTree,
-  Hammer,
-  Sparkles,
-  Github,
-  Heart,
-  Zap,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
+import { FileText, Library, Layout, Bot, Code, Users, ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle, Rocket, Shield, Award, Settings, Archive, MessageSquare, ListTree, Hammer, Sparkles, Github, Heart, Zap, X, ChevronLeft, ChevronRight, Database } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 export default function Landing() {
   const navigate = useNavigate();
-
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
-
-  const workflowSteps = [
-    { 
-      icon: Settings, 
-      label: "Settings", 
-      description: "Configure project, link standards & tech stacks", 
-      phase: "plan",
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Model Configuration",
-        capabilities: [
-          "Select from Gemini, Claude, or Grok AI models",
-          "Configure max tokens and response length limits",
-          "Enable thinking mode for complex reasoning tasks",
-          "Set model preferences per project for optimal results"
-        ]
-      }
-    },
-    { 
-      icon: Archive, 
-      label: "Artifacts", 
-      description: "Upload documents, images, reference files", 
-      phase: "plan",
-      hasAgent: true,
-      aiDetails: {
-        title: "AI-Powered Document Processing",
-        capabilities: [
-          "Automatic summarization of uploaded documents",
-          "Smart indexing and content extraction",
-          "Parse PDFs, DOCX, Excel files into structured data",
-          "Generate AI titles and descriptions for quick reference"
-        ]
-      }
-    },
-    { 
-      icon: Users, 
-      label: "Collaboration", 
-      description: "AI-assisted document co-authoring with version control", 
-      phase: "plan",
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Collaboration Agent",
-        capabilities: [
-          "Real-time AI co-authoring of project artifacts",
-          "Line-by-line diff tracking with full version history",
-          "Shared blackboard for human-AI collaboration context",
-          "Merge changes back to source artifacts when ready"
-        ]
-      }
-    },
-    { 
-      icon: MessageSquare, 
-      label: "Chat", 
-      description: "AI-powered conversations about your project", 
-      phase: "plan", 
-      hasAgent: true,
-      aiDetails: {
-        title: "Project-Aware AI Conversations",
-        capabilities: [
-          "AI agents with full project context awareness",
-          "Can read requirements, standards, canvas, and files",
-          "Multi-model support (Gemini, Claude, Grok)",
-          "Attach any project element as conversation context"
-        ]
-      }
-    },
-    { 
-      icon: ListTree, 
-      label: "Requirements", 
-      description: "AI decomposes ideas into Epics → Stories", 
-      phase: "design", 
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Requirements Decomposition",
-        capabilities: [
-          "Transform unstructured text into structured requirements",
-          "Generate Epics → Features → User Stories → Acceptance Criteria",
-          "Automatic deduplication against existing requirements",
-          "Support for edit/create actions on existing items"
-        ]
-      }
-    },
-    { 
-      icon: ShieldCheck, 
-      label: "Standards", 
-      description: "Link organizational compliance standards", 
-      phase: "design", 
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Standards Expansion",
-        capabilities: [
-          "Expand source documents into structured standards",
-          "Auto-link standards to project requirements",
-          "Intelligent categorization and hierarchy building",
-          "Generate compliance criteria from policy documents"
-        ]
-      }
-    },
-    { 
-      icon: Layout, 
-      label: "Canvas", 
-      description: "Visual architecture with 10+ AI agents", 
-      phase: "design", 
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Architecture Team (10 Agents)",
-        capabilities: [
-          "Architect, Developer, DBA agents for core design",
-          "QA, UAT, Compliance agents for quality assurance",
-          "Cyber Security agent for threat analysis",
-          "Agents iterate on shared blackboard until design stabilizes"
-        ]
-      }
-    },
-    { 
-      icon: FileText, 
-      label: "Specifications", 
-      description: "Generate 13+ document types", 
-      phase: "design", 
-      hasAgent: true,
-      aiDetails: {
-        title: "AI Document Generation",
-        capabilities: [
-          "13+ specification templates for any audience",
-          "Technical specs, executive summaries, procurement docs",
-          "Cloud architecture guides (AWS, Azure, GCP)",
-          "Security review and compliance documentation"
-        ]
-      }
-    },
-    { 
-      icon: GitBranch, 
-      label: "Repository", 
-      description: "GitHub-synced code repository", 
-      phase: "ship",
-      aiDetails: {
-        title: "GitHub Integration",
-        capabilities: [
-          "Bi-directional sync with GitHub repositories",
-          "Branch management and commit history",
-          "File browser with Monaco code editor",
-          "Personal Access Token support for private repos"
-        ]
-      }
-    },
-    { 
-      icon: Hammer, 
-      label: "Build", 
-      description: "Autonomous AI coding agent", 
-      phase: "ship", 
-      hasAgent: true,
-      aiDetails: {
-        title: "Autonomous Coding Agent",
-        capabilities: [
-          "Read files, search codebase, understand project structure",
-          "Create, edit, rename, delete files with full audit trail",
-          "Stage changes with diff review before committing",
-          "Iterative orchestration with configurable max iterations"
-        ]
-      }
-    },
-    { 
-      icon: Database, 
-      label: "Database", 
-      description: "Manage, explore & import data", 
-      phase: "ship",
-      hasAgent: true,
-      aiDetails: {
-        title: "AI-Powered Database Management",
-        capabilities: [
-          "Provision PostgreSQL databases with one click",
-          "Connect to external PostgreSQL instances",
-          "Import Excel, CSV, JSON with AI schema inference",
-          "SQL query editor with Monaco and saved queries"
-        ]
-      }
-    },
-    { 
-      icon: Rocket, 
-      label: "Deploy", 
-      description: "Push to cloud or local environments", 
-      phase: "ship",
-      aiDetails: {
-        title: "Deployment Options",
-        capabilities: [
-          "Deploy to Render.com cloud hosting",
-          "Local development runner with hot reload",
-          "Environment-based deployments (dev/uat/prod)",
-          "Bug telemetry integration for automated fixes"
-        ]
-      }
-    },
-  ];
-
-  const canvasAgents = [
-    { name: "Architect", color: "bg-blue-500", description: "System architecture" },
-    { name: "Developer", color: "bg-orange-500", description: "Components & APIs" },
-    { name: "DBA", color: "bg-indigo-500", description: "Database schemas" },
-    { name: "Cloud Ops", color: "bg-teal-500", description: "Infrastructure" },
-    { name: "QA", color: "bg-green-500", description: "Testing & quality" },
-    { name: "UAT", color: "bg-yellow-500", description: "User validation" },
-    { name: "Compliance", color: "bg-purple-500", description: "Standards adherence" },
-    { name: "Cyber Security", color: "bg-red-500", description: "Security analysis", featured: true },
-    { name: "Integrator", color: "bg-pink-500", description: "System connections" },
-    { name: "Simplifier", color: "bg-gray-500", description: "Reduces complexity" },
-  ];
-
-  const features = [
-    {
-      icon: FileText,
-      title: "AI-Powered Requirements",
-      description:
-        "Transform unstructured ideas into structured Epics, Features, and Stories. AI decomposes and expands requirements while linking them to organizational standards for complete traceability.",
-      color: "bg-blue-100 text-blue-600",
-    },
-    {
-      icon: Library,
-      title: "Global Standards Library",
-      description:
-        "Build your organization's compliance foundation once, use everywhere. Create reusable standards categories and tech stack templates that automatically link to all your projects.",
-      color: "bg-violet-100 text-violet-600",
-    },
-    {
-      icon: Layout,
-      title: "Visual Architecture Design",
-      description:
-        "Design complex architectures with an interactive canvas. Drag-and-drop nodes for pages, APIs, databases, and security layers. Real-time sync keeps your whole team aligned.",
-      color: "bg-emerald-100 text-emerald-600",
-    },
-    {
-      icon: Bot,
-      title: "Multi-Agent AI Teams",
-      description:
-        "Orchestrate teams of AI agents—Architects, Developers, DBAs, Security, QA—that iteratively refine your architecture. Watch agents collaborate on a shared blackboard until designs stabilize.",
-      color: "bg-rose-100 text-rose-600",
-    },
-    {
-      icon: Code,
-      title: "AI Coding Agent",
-      description:
-        "An autonomous coding agent that reads your requirements, searches your codebase, and makes changes—all with full audit trail. Stage changes, review diffs, and push to GitHub when ready.",
-      color: "bg-amber-100 text-amber-600",
-    },
-    {
-      icon: Users,
-      title: "Instant Collaboration",
-      description:
-        "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
-      color: "bg-cyan-100 text-cyan-600",
-    },
-    {
-      icon: Database,
-      title: "Database Explorer & Import",
-      description:
-        "Provision or connect PostgreSQL databases, browse schemas, execute SQL queries, and import data from Excel, CSV, or JSON with AI-powered schema inference.",
-      color: "bg-indigo-100 text-indigo-600",
-    },
-  ];
-
-  const benefits = [
-    "Complete traceability from standards to code",
-    "AI teams that iterate until architecture stabilizes",
-    "No account required to start—instant collaboration",
-    "Built-in code editor with GitHub sync",
-    "Multi-model AI support (Gemini, Claude, Grok)",
-    "13+ specification templates for any audience",
-    "Database provisioning with AI-powered data import",
-  ];
-
-  return (
-    <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)] antialiased overflow-x-hidden">
+  const workflowSteps = [{
+    icon: Settings,
+    label: "Settings",
+    description: "Configure project, link standards & tech stacks",
+    phase: "plan",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Model Configuration",
+      capabilities: ["Select from Gemini, Claude, or Grok AI models", "Configure max tokens and response length limits", "Enable thinking mode for complex reasoning tasks", "Set model preferences per project for optimal results"]
+    }
+  }, {
+    icon: Archive,
+    label: "Artifacts",
+    description: "Upload documents, images, reference files",
+    phase: "plan",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI-Powered Document Processing",
+      capabilities: ["Automatic summarization of uploaded documents", "Smart indexing and content extraction", "Parse PDFs, DOCX, Excel files into structured data", "Generate AI titles and descriptions for quick reference"]
+    }
+  }, {
+    icon: Users,
+    label: "Collaboration",
+    description: "AI-assisted document co-authoring with version control",
+    phase: "plan",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Collaboration Agent",
+      capabilities: ["Real-time AI co-authoring of project artifacts", "Line-by-line diff tracking with full version history", "Shared blackboard for human-AI collaboration context", "Merge changes back to source artifacts when ready"]
+    }
+  }, {
+    icon: MessageSquare,
+    label: "Chat",
+    description: "AI-powered conversations about your project",
+    phase: "plan",
+    hasAgent: true,
+    aiDetails: {
+      title: "Project-Aware AI Conversations",
+      capabilities: ["AI agents with full project context awareness", "Can read requirements, standards, canvas, and files", "Multi-model support (Gemini, Claude, Grok)", "Attach any project element as conversation context"]
+    }
+  }, {
+    icon: ListTree,
+    label: "Requirements",
+    description: "AI decomposes ideas into Epics → Stories",
+    phase: "design",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Requirements Decomposition",
+      capabilities: ["Transform unstructured text into structured requirements", "Generate Epics → Features → User Stories → Acceptance Criteria", "Automatic deduplication against existing requirements", "Support for edit/create actions on existing items"]
+    }
+  }, {
+    icon: ShieldCheck,
+    label: "Standards",
+    description: "Link organizational compliance standards",
+    phase: "design",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Standards Expansion",
+      capabilities: ["Expand source documents into structured standards", "Auto-link standards to project requirements", "Intelligent categorization and hierarchy building", "Generate compliance criteria from policy documents"]
+    }
+  }, {
+    icon: Layout,
+    label: "Canvas",
+    description: "Visual architecture with 10+ AI agents",
+    phase: "design",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Architecture Team (10 Agents)",
+      capabilities: ["Architect, Developer, DBA agents for core design", "QA, UAT, Compliance agents for quality assurance", "Cyber Security agent for threat analysis", "Agents iterate on shared blackboard until design stabilizes"]
+    }
+  }, {
+    icon: FileText,
+    label: "Specifications",
+    description: "Generate 13+ document types",
+    phase: "design",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI Document Generation",
+      capabilities: ["13+ specification templates for any audience", "Technical specs, executive summaries, procurement docs", "Cloud architecture guides (AWS, Azure, GCP)", "Security review and compliance documentation"]
+    }
+  }, {
+    icon: GitBranch,
+    label: "Repository",
+    description: "GitHub-synced code repository",
+    phase: "ship",
+    aiDetails: {
+      title: "GitHub Integration",
+      capabilities: ["Bi-directional sync with GitHub repositories", "Branch management and commit history", "File browser with Monaco code editor", "Personal Access Token support for private repos"]
+    }
+  }, {
+    icon: Hammer,
+    label: "Build",
+    description: "Autonomous AI coding agent",
+    phase: "ship",
+    hasAgent: true,
+    aiDetails: {
+      title: "Autonomous Coding Agent",
+      capabilities: ["Read files, search codebase, understand project structure", "Create, edit, rename, delete files with full audit trail", "Stage changes with diff review before committing", "Iterative orchestration with configurable max iterations"]
+    }
+  }, {
+    icon: Database,
+    label: "Database",
+    description: "Manage, explore & import data",
+    phase: "ship",
+    hasAgent: true,
+    aiDetails: {
+      title: "AI-Powered Database Management",
+      capabilities: ["Provision PostgreSQL databases with one click", "Connect to external PostgreSQL instances", "Import Excel, CSV, JSON with AI schema inference", "SQL query editor with Monaco and saved queries"]
+    }
+  }, {
+    icon: Rocket,
+    label: "Deploy",
+    description: "Push to cloud or local environments",
+    phase: "ship",
+    aiDetails: {
+      title: "Deployment Options",
+      capabilities: ["Deploy to Render.com cloud hosting", "Local development runner with hot reload", "Environment-based deployments (dev/uat/prod)", "Bug telemetry integration for automated fixes"]
+    }
+  }];
+  const canvasAgents = [{
+    name: "Architect",
+    color: "bg-blue-500",
+    description: "System architecture"
+  }, {
+    name: "Developer",
+    color: "bg-orange-500",
+    description: "Components & APIs"
+  }, {
+    name: "DBA",
+    color: "bg-indigo-500",
+    description: "Database schemas"
+  }, {
+    name: "Cloud Ops",
+    color: "bg-teal-500",
+    description: "Infrastructure"
+  }, {
+    name: "QA",
+    color: "bg-green-500",
+    description: "Testing & quality"
+  }, {
+    name: "UAT",
+    color: "bg-yellow-500",
+    description: "User validation"
+  }, {
+    name: "Compliance",
+    color: "bg-purple-500",
+    description: "Standards adherence"
+  }, {
+    name: "Cyber Security",
+    color: "bg-red-500",
+    description: "Security analysis",
+    featured: true
+  }, {
+    name: "Integrator",
+    color: "bg-pink-500",
+    description: "System connections"
+  }, {
+    name: "Simplifier",
+    color: "bg-gray-500",
+    description: "Reduces complexity"
+  }];
+  const features = [{
+    icon: FileText,
+    title: "AI-Powered Requirements",
+    description: "Transform unstructured ideas into structured Epics, Features, and Stories. AI decomposes and expands requirements while linking them to organizational standards for complete traceability.",
+    color: "bg-blue-100 text-blue-600"
+  }, {
+    icon: Library,
+    title: "Global Standards Library",
+    description: "Build your organization's compliance foundation once, use everywhere. Create reusable standards categories and tech stack templates that automatically link to all your projects.",
+    color: "bg-violet-100 text-violet-600"
+  }, {
+    icon: Layout,
+    title: "Visual Architecture Design",
+    description: "Design complex architectures with an interactive canvas. Drag-and-drop nodes for pages, APIs, databases, and security layers. Real-time sync keeps your whole team aligned.",
+    color: "bg-emerald-100 text-emerald-600"
+  }, {
+    icon: Bot,
+    title: "Multi-Agent AI Teams",
+    description: "Orchestrate teams of AI agents—Architects, Developers, DBAs, Security, QA—that iteratively refine your architecture. Watch agents collaborate on a shared blackboard until designs stabilize.",
+    color: "bg-rose-100 text-rose-600"
+  }, {
+    icon: Code,
+    title: "AI Coding Agent",
+    description: "An autonomous coding agent that reads your requirements, searches your codebase, and makes changes—all with full audit trail. Stage changes, review diffs, and push to GitHub when ready.",
+    color: "bg-amber-100 text-amber-600"
+  }, {
+    icon: Users,
+    title: "Instant Collaboration",
+    description: "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
+    color: "bg-cyan-100 text-cyan-600"
+  }, {
+    icon: Database,
+    title: "Database Explorer & Import",
+    description: "Provision or connect PostgreSQL databases, browse schemas, execute SQL queries, and import data from Excel, CSV, or JSON with AI-powered schema inference.",
+    color: "bg-indigo-100 text-indigo-600"
+  }];
+  const benefits = ["Complete traceability from standards to code", "AI teams that iterate until architecture stabilizes", "No account required to start—instant collaboration", "Built-in code editor with GitHub sync", "Multi-model AI support (Gemini, Claude, Grok)", "13+ specification templates for any audience", "Database provisioning with AI-powered data import"];
+  return <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)] antialiased overflow-x-hidden">
       {/* Navbar */}
       <nav className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -325,10 +218,7 @@ export default function Landing() {
             </span>
           </div>
 
-          <Button
-            onClick={() => navigate("/auth")}
-            className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20"
-          >
+          <Button onClick={() => navigate("/auth")} className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20">
             Login
           </Button>
         </div>
@@ -338,10 +228,7 @@ export default function Landing() {
       <section className="relative pt-32 pb-20 lg:pt-32 lg:pb-32 px-6 overflow-hidden">
         {/* Background decorations */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-          <svg
-            className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 text-muted-foreground/30"
-            viewBox="0 0 100 100"
-          >
+          <svg className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 text-muted-foreground/30" viewBox="0 0 100 100">
             <path d="M0,50 Q25,25 50,50 T100,50" fill="none" stroke="currentColor" strokeWidth="0.5" />
             <path d="M0,60 Q25,35 50,60 T100,60" fill="none" stroke="currentColor" strokeWidth="0.5" />
           </svg>
@@ -351,10 +238,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
           <div className="space-y-8 text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
-              <Link 
-                to="/terms" 
-                className="text-sm font-medium text-[hsl(350,80%,60%)] hover:underline"
-              >
+              <Link to="/terms" className="text-sm font-medium text-[hsl(350,80%,60%)] hover:underline">
                 Currently Alpha Testing
               </Link>
             </div>
@@ -362,11 +246,7 @@ export default function Landing() {
               Build Software with <br />
               <span className="text-[hsl(350,80%,60%)] relative inline-block">
                 AI-Powered
-                <svg
-                  className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10"
-                  viewBox="0 0 100 10"
-                  preserveAspectRatio="none"
-                >
+                <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
                 </svg>
               </span>{" "}
@@ -377,11 +257,7 @@ export default function Landing() {
               architecture, and write compliant code—all with complete traceability.
             </p>
             <div className="flex justify-center lg:justify-start">
-              <Button
-                size="lg"
-                onClick={() => navigate("/dashboard")}
-                className="group bg-[hsl(240,30%,15%)] text-white px-8 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
-              >
+              <Button size="lg" onClick={() => navigate("/dashboard")} className="group bg-[hsl(240,30%,15%)] text-white px-8 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2">
                 Start Building
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -462,18 +338,13 @@ export default function Landing() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, index) => (
-              <Card
-                key={index}
-                className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl hover:-translate-y-2 transition-all duration-300"
-              >
+            {features.map((feature, index) => <Card key={index} className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl hover:-translate-y-2 transition-all duration-300">
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-6`}>
                   <feature.icon className="w-6 h-6" />
                 </div>
                 <h3 className="text-xl font-medium mb-3 text-[hsl(240,30%,15%)]">{feature.title}</h3>
                 <p className="text-gray-600">{feature.description}</p>
-              </Card>
-            ))}
+              </Card>)}
           </div>
         </div>
       </section>
@@ -493,8 +364,7 @@ export default function Landing() {
           {/* Phase Headers */}
           <div className="grid grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                <Settings className="w-4 h-4" />
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">Plan<Settings className="w-4 h-4" />
                 Setup
               </div>
             </div>
@@ -515,22 +385,17 @@ export default function Landing() {
           {/* Steps Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
             {workflowSteps.map((step, index) => {
-              const phaseColors = {
-                plan: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
-                design: "border-rose-200 hover:border-rose-400 hover:bg-rose-50/50",
-                ship: "border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50",
-              };
-              const iconColors = {
-                plan: "text-blue-600 bg-blue-100",
-                design: "text-rose-600 bg-rose-100",
-                ship: "text-emerald-600 bg-emerald-100",
-              };
-              return (
-                <div
-                  key={index}
-                  onClick={() => setSelectedStepIndex(index)}
-                  className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]}`}
-                >
+            const phaseColors = {
+              plan: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
+              design: "border-rose-200 hover:border-rose-400 hover:bg-rose-50/50",
+              ship: "border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50"
+            };
+            const iconColors = {
+              plan: "text-blue-600 bg-blue-100",
+              design: "text-rose-600 bg-rose-100",
+              ship: "text-emerald-600 bg-emerald-100"
+            };
+            return <div key={index} onClick={() => setSelectedStepIndex(index)} className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]}`}>
                   {/* Step Number */}
                   <div className="absolute -top-2 -left-2 w-6 h-6 bg-[hsl(240,30%,15%)] text-white text-xs font-bold rounded-full flex items-center justify-center">
                     {index + 1}
@@ -541,99 +406,68 @@ export default function Landing() {
                   </div>
                   <h4 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1 truncate">{step.label}</h4>
                   <p className="text-xs text-gray-500 leading-tight hidden lg:block line-clamp-2">{step.description}</p>
-                </div>
-              );
-            })}
+                </div>;
+          })}
           </div>
 
           {/* Step Details Dialog */}
-          <Dialog 
-            open={selectedStepIndex !== null} 
-            onOpenChange={(open) => !open && setSelectedStepIndex(null)}
-          >
-            <DialogContent 
-              className="sm:max-w-md"
-              onKeyDown={(e) => {
-                if (selectedStepIndex === null) return;
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1);
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0);
-                }
-              }}
-            >
+          <Dialog open={selectedStepIndex !== null} onOpenChange={open => !open && setSelectedStepIndex(null)}>
+            <DialogContent className="sm:max-w-md" onKeyDown={e => {
+            if (selectedStepIndex === null) return;
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1);
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0);
+            }
+          }}>
               {selectedStepIndex !== null && (() => {
-                const selectedStep = workflowSteps[selectedStepIndex];
-                return (
-                  <>
+              const selectedStep = workflowSteps[selectedStepIndex];
+              return <>
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          selectedStep.phase === "plan" ? "bg-blue-100 text-blue-600" :
-                          selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" :
-                          "bg-emerald-100 text-emerald-600"
-                        }`}>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${selectedStep.phase === "plan" ? "bg-blue-100 text-blue-600" : selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"}`}>
                           <selectedStep.icon className="w-5 h-5" />
                         </div>
                         <div>
                           <span className="text-lg">{selectedStep.label}</span>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              selectedStep.phase === "plan" ? "bg-blue-100 text-blue-700" :
-                              selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" :
-                              "bg-emerald-100 text-emerald-700"
-                            }`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedStep.phase === "plan" ? "bg-blue-100 text-blue-700" : selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
                               {selectedStep.phase.charAt(0).toUpperCase() + selectedStep.phase.slice(1)} Phase
                             </span>
                           </div>
                         </div>
                       </DialogTitle>
                     </DialogHeader>
-                    {selectedStep.aiDetails && (
-                      <div className="mt-4">
+                    {selectedStep.aiDetails && <div className="mt-4">
                         <h4 className="font-medium text-sm text-muted-foreground mb-3">
                           {selectedStep.aiDetails.title}
                         </h4>
                         <ul className="space-y-2">
-                          {selectedStep.aiDetails.capabilities.map((capability, idx) => (
-                            <li key={idx} className="flex items-start gap-2 text-sm">
+                          {selectedStep.aiDetails.capabilities.map((capability, idx) => <li key={idx} className="flex items-start gap-2 text-sm">
                               <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span>{capability}</span>
-                            </li>
-                          ))}
+                            </li>)}
                         </ul>
-                      </div>
-                    )}
+                      </div>}
                     
                     {/* Navigation Arrows */}
                     <div className="flex items-center justify-between mt-6 pt-4 border-t">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1)}
-                        className="flex items-center gap-1"
-                      >
+                      <Button variant="outline" size="sm" onClick={() => setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1)} className="flex items-center gap-1">
                         <ChevronLeft className="w-4 h-4" />
                         Previous
                       </Button>
                       <span className="text-sm text-muted-foreground">
                         {selectedStepIndex + 1} / {workflowSteps.length}
                       </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0)}
-                        className="flex items-center gap-1"
-                      >
+                      <Button variant="outline" size="sm" onClick={() => setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0)} className="flex items-center gap-1">
                         Next
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
-                  </>
-                );
-              })()}
+                  </>;
+            })()}
             </DialogContent>
           </Dialog>
 
@@ -666,17 +500,12 @@ export default function Landing() {
               </div>
               
               <div className="grid grid-cols-2 gap-2 mb-6">
-                {canvasAgents.map((agent, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 ${agent.featured ? "ring-1 ring-red-300 bg-red-50" : ""}`}
-                  >
+                {canvasAgents.map((agent, i) => <div key={i} className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 ${agent.featured ? "ring-1 ring-red-300 bg-red-50" : ""}`}>
                     <div className={`w-2 h-2 rounded-full ${agent.color}`}></div>
                     <span className={`text-xs font-medium ${agent.featured ? "text-red-700" : "text-gray-700"}`}>
                       {agent.name}
                     </span>
-                  </div>
-                ))}
+                  </div>)}
               </div>
               
               <p className="text-sm text-gray-600">
@@ -697,19 +526,12 @@ export default function Landing() {
               </div>
               
               <ul className="space-y-3 mb-6">
-                {[
-                  "Reads requirements & searches codebase",
-                  "Creates, edits, renames, deletes files",
-                  "Stages changes with diff review",
-                  "Commits and pushes to GitHub",
-                ].map((capability, i) => (
-                  <li key={i} className="flex items-center gap-3">
+                {["Reads requirements & searches codebase", "Creates, edits, renames, deletes files", "Stages changes with diff review", "Commits and pushes to GitHub"].map((capability, i) => <li key={i} className="flex items-center gap-3">
                     <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <Check className="w-3 h-3 text-amber-600" />
                     </div>
                     <span className="text-sm text-gray-700">{capability}</span>
-                  </li>
-                ))}
+                  </li>)}
               </ul>
               
               <div className="bg-gray-900 rounded-lg p-4 font-mono text-xs text-green-400">
@@ -735,25 +557,19 @@ export default function Landing() {
                 <div>
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Business</div>
                   <div className="flex flex-wrap gap-1">
-                    {["Overview", "Executive Summary", "Procurement"].map((t) => (
-                      <span key={t} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">{t}</span>
-                    ))}
+                    {["Overview", "Executive Summary", "Procurement"].map(t => <span key={t} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">{t}</span>)}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Technical</div>
                   <div className="flex flex-wrap gap-1">
-                    {["Tech Spec", "Solution Arch", "Agent Instructions"].map((t) => (
-                      <span key={t} className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">{t}</span>
-                    ))}
+                    {["Tech Spec", "Solution Arch", "Agent Instructions"].map(t => <span key={t} className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">{t}</span>)}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Cloud & Security</div>
                   <div className="flex flex-wrap gap-1">
-                    {["AWS", "Azure", "GCP", "Cyber Specialist"].map((t) => (
-                      <span key={t} className={`px-2 py-1 text-xs rounded-full ${t === "Cyber Specialist" ? "bg-red-50 text-red-700 font-medium" : "bg-violet-50 text-violet-700"}`}>{t}</span>
-                    ))}
+                    {["AWS", "Azure", "GCP", "Cyber Specialist"].map(t => <span key={t} className={`px-2 py-1 text-xs rounded-full ${t === "Cyber Specialist" ? "bg-red-50 text-red-700 font-medium" : "bg-violet-50 text-violet-700"}`}>{t}</span>)}
                   </div>
                 </div>
               </div>
@@ -845,14 +661,12 @@ export default function Landing() {
               concept to deployment.
             </p>
             <ul className="space-y-4">
-              {benefits.map((benefit, index) => (
-                <li key={index} className="flex items-center gap-4">
+              {benefits.map((benefit, index) => <li key={index} className="flex items-center gap-4">
                   <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <Check className="w-4 h-4 text-emerald-600" />
                   </div>
                   <span className="text-gray-700">{benefit}</span>
-                </li>
-              ))}
+                </li>)}
             </ul>
           </div>
 
@@ -907,11 +721,7 @@ export default function Landing() {
                 Join teams who are shipping better software, faster, with complete traceability from requirements to
                 code.
               </p>
-              <Button
-                size="lg"
-                onClick={() => navigate("/dashboard")}
-                className="group bg-[hsl(240,30%,15%)] text-white px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2"
-              >
+              <Button size="lg" onClick={() => navigate("/dashboard")} className="group bg-[hsl(240,30%,15%)] text-white px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2">
                 <span>Create Your First Project</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -941,18 +751,12 @@ export default function Landing() {
             </div>
             <div className="text-sm text-gray-500 text-center md:text-right">
               <p>© 2025 Pronghorn. <Link to="/license" className="text-[hsl(350,80%,60%)] hover:underline">MIT License</Link> Open Source by the Government of Alberta.</p>
-              <a
-                href="https://pronghorn.red"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[hsl(350,80%,60%)] hover:underline"
-              >
+              <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,60%)] hover:underline">
                 pronghorn.red
               </a>
             </div>
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 }
