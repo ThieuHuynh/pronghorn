@@ -315,7 +315,7 @@ export default function Landing() {
             onClick={() => navigate("/dashboard")}
             className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20"
           >
-            Get Started
+            Login
           </Button>
         </div>
       </nav>

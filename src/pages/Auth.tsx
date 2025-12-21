@@ -50,6 +50,9 @@ export default function Auth() {
   
   // Expired link error state
   const [expiredLinkError, setExpiredLinkError] = useState<string | null>(null);
+  
+  // Already verified error state (link already used)
+  const [alreadyVerifiedError, setAlreadyVerifiedError] = useState<string | null>(null);
 
   // Handle URL params after Supabase redirect - check IMMEDIATELY before any session redirects
   useEffect(() => {
@@ -64,15 +67,34 @@ export default function Auth() {
       const errorCode = hashParams.get('error_code');
       const errorDescription = hashParams.get('error_description');
       
-      if (error === 'access_denied' && errorCode === 'otp_expired') {
-        setExpiredLinkError(errorDescription?.replace(/\+/g, ' ') || 'Your reset link has expired. Please request a new one.');
+      if (error === 'access_denied') {
+        if (errorCode === 'otp_expired') {
+          // Expired link (recovery or verification)
+          if (recovery === 'true') {
+            setExpiredLinkError(errorDescription?.replace(/\+/g, ' ') || 'Your reset link has expired. Please request a new one.');
+          } else if (verified === 'true') {
+            setAlreadyVerifiedError('This verification link has expired or already been used. Please sign in with your email and password.');
+          } else {
+            setExpiredLinkError(errorDescription?.replace(/\+/g, ' ') || 'This link has expired. Please try again.');
+          }
+        } else if (verified === 'true') {
+          // Other access denied error on verification (likely already used)
+          setAlreadyVerifiedError('This verification link has already been used. Please sign in with your email and password.');
+        }
         // Clear the hash to prevent re-triggering
         window.history.replaceState({}, '', window.location.pathname + window.location.search);
       }
     }
     
-    if (verified === 'true') {
+    // Only show verification success if no error
+    if (verified === 'true' && !alreadyVerifiedError) {
       setVerificationSuccess(true);
+      // If session already exists from verification redirect, go straight to dashboard
+      if (session) {
+        toast.success("Email verified! Redirecting to dashboard...");
+        navigate("/dashboard");
+        return;
+      }
       toast.success("Email verified successfully! You can now sign in.");
     }
     
@@ -82,7 +104,7 @@ export default function Auth() {
       setResetMode(true);
       toast.success("Please set your new password.");
     }
-  }, [searchParams, expiredLinkError]);
+  }, [searchParams, expiredLinkError, alreadyVerifiedError, session, navigate]);
 
   // Listen for PASSWORD_RECOVERY auth event from Supabase
   useEffect(() => {
@@ -380,8 +402,18 @@ export default function Auth() {
             </Alert>
           )}
 
+          {/* Already verified/used link warning */}
+          {alreadyVerifiedError && (
+            <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                {alreadyVerifiedError}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Verification success message */}
-          {verificationSuccess && (
+          {verificationSuccess && !alreadyVerifiedError && (
             <Alert className="mb-4 border-green-500/50 bg-green-500/10">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-700 dark:text-green-400">
