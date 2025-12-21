@@ -353,9 +353,7 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
-              Your 11-Step Journey
-            </h2>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Your 12-Step Journey</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               From initial idea to deployed application—a complete workflow powered by AI at every step
             </p>
