@@ -438,13 +438,6 @@ export type Database = {
             referencedRelation: "artifact_collaborations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "artifact_collaboration_messages_token_id_fkey"
-            columns: ["token_id"]
-            isOneToOne: false
-            referencedRelation: "project_tokens"
-            referencedColumns: ["id"]
-          },
         ]
       }
       artifact_collaborations: {
@@ -5094,6 +5087,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      roll_project_token_with_token: {
+        Args: { p_token: string; p_token_id: string }
+        Returns: string
       }
       rollback_to_commit_with_token: {
         Args: { p_commit_id: string; p_repo_id: string; p_token: string }

@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Key, Plus, Copy, Trash2, Eye, EyeOff, Link2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Link2, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface TokenManagementProps {
@@ -134,6 +135,30 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete token: ${error.message}`);
+    },
+  });
+
+  const rollTokenMutation = useMutation({
+    mutationFn: async (tokenId: string) => {
+      const { data, error } = await supabase.rpc("roll_project_token_with_token" as any, {
+        p_token_id: tokenId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (newToken) => {
+      queryClient.invalidateQueries({ queryKey: ["project-tokens", projectId] });
+      broadcastRefresh();
+      toast.success("Token regenerated successfully");
+      // Copy the new token URL to clipboard
+      const url = `https://pronghorn.red/project/${projectId}/requirements/t/${newToken}`;
+      navigator.clipboard.writeText(url);
+      toast.info("New token URL copied to clipboard");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to regenerate token: ${error.message}`);
     },
   });
 
@@ -323,13 +348,13 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
         {isLoading ? (
           <div className="text-center py-4 text-muted-foreground">Loading tokens...</div>
         ) : tokens && tokens.length > 0 ? (
-          <div className="border rounded-md">
+          <div className="border rounded-md overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Label</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Token</TableHead>
+                  <TableHead className="min-w-[320px]">Token</TableHead>
                   <TableHead>Last Used</TableHead>
                   <TableHead>Expires</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -347,14 +372,18 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      <div className="flex items-center gap-1">
-                        <span className="max-w-[120px] truncate">
-                          {visibleTokens.has(token.id) ? token.token : "••••••••••••"}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        {visibleTokens.has(token.id) ? (
+                          <code className="bg-muted px-2 py-1 rounded text-xs select-all break-all">
+                            {token.token}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground">••••••••••••••••••••</span>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="h-6 w-6 shrink-0"
                           onClick={() => toggleTokenVisibility(token.id)}
                         >
                           {visibleTokens.has(token.id) ? (
@@ -382,6 +411,37 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Regenerate token"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Regenerate Token?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will generate a new token and invalidate the old one. 
+                                Anyone using the old token URL will lose access immediately.
+                                The new token URL will be copied to your clipboard.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => rollTokenMutation.mutate(token.id)}
+                                disabled={rollTokenMutation.isPending}
+                              >
+                                {rollTokenMutation.isPending ? "Regenerating..." : "Regenerate"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                         <Button
                           variant="ghost"
                           size="icon"
