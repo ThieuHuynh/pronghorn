@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy } from "lucide-react";
+import { Copy, Globe, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,7 +17,9 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdmin } from "@/contexts/AdminContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
+import { CloneProjectDialog } from "@/components/dashboard/CloneProjectDialog";
 import { TokenManagement } from "@/components/project/TokenManagement";
 import { AccessLevelBanner } from "@/components/project/AccessLevelBanner";
 
@@ -28,6 +30,7 @@ export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
+  const { isSuperAdmin } = useAdmin();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [projectName, setProjectName] = useState("");
@@ -477,6 +480,32 @@ export default function ProjectSettings() {
                 {/* Project Activity Heatmap */}
                 <ProjectActivityHeatmap projectId={projectId!} shareToken={shareToken} isTokenSet={isTokenSet} />
 
+                {/* Clone Project */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Copy className="h-5 w-5" />
+                      Clone Project
+                    </CardTitle>
+                    <CardDescription>
+                      Create a copy of this project with selected components
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CloneProjectDialog
+                      projectId={projectId!}
+                      projectName={project?.name || "Project"}
+                      shareToken={shareToken}
+                      trigger={
+                        <Button variant="outline">
+                          <Copy className="mr-2 h-4 w-4" />
+                          Clone This Project
+                        </Button>
+                      }
+                    />
+                  </CardContent>
+                </Card>
+
                 {/* Danger Zone - Project Deletion (owner role required) */}
                 {isOwner && (
                   <Card className="border-destructive">
@@ -486,7 +515,88 @@ export default function ProjectSettings() {
                         Irreversible actions that will permanently delete your project and all associated data.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
+                      {/* Superadmin: Publish controls */}
+                      {isSuperAdmin && (
+                        <div className="space-y-3 pb-4 border-b border-border">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2 font-medium">
+                                <Globe className="h-4 w-4" />
+                                Publish to Gallery
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Make this project available in the public gallery for others to clone
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const { data, error } = await supabase.rpc('publish_project_to_gallery', {
+                                    p_project_id: projectId,
+                                    p_name: project?.name || null,
+                                    p_description: project?.description || null,
+                                    p_image_url: null,
+                                    p_tags: project?.tags || null,
+                                    p_category: null
+                                  });
+                                  if (error) throw error;
+                                  toast.success("Project published to gallery!");
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to publish");
+                                }
+                              }}
+                            >
+                              <Globe className="mr-2 h-4 w-4" />
+                              Publish
+                            </Button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2 font-medium">
+                                <EyeOff className="h-4 w-4" />
+                                Toggle Visibility
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Hide or show this project in the public gallery
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  // First get the published_project id
+                                  const { data: pubData } = await supabase
+                                    .from('published_projects')
+                                    .select('id')
+                                    .eq('project_id', projectId)
+                                    .single();
+                                  
+                                  if (!pubData) {
+                                    toast.error("Project is not published yet");
+                                    return;
+                                  }
+                                  
+                                  const { error } = await supabase.rpc('toggle_published_project_visibility', {
+                                    p_published_id: pubData.id
+                                  });
+                                  if (error) throw error;
+                                  toast.success("Visibility toggled!");
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to toggle visibility");
+                                }
+                              }}
+                            >
+                              <EyeOff className="mr-2 h-4 w-4" />
+                              Toggle
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="flex items-start gap-3 p-3 rounded-md bg-destructive/10">
                         <div className="flex-1 space-y-2">
                           <p className="text-sm text-muted-foreground">
