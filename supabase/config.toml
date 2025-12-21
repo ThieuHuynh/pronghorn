@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.ingest-artifacts]
 verify_jwt = false
+
+[functions.deployment-secrets]
+verify_jwt = false
