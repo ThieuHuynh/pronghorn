@@ -6,6 +6,24 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+// CMap and standard font configuration for proper text encoding
+// Required for PDFs with custom font encodings (decorative fonts, non-Latin scripts, etc.)
+const PDF_CONFIG = {
+  cMapUrl: 'https://unpkg.com/pdfjs-dist@4.8.69/cmaps/',
+  cMapPacked: true,
+  standardFontDataUrl: 'https://unpkg.com/pdfjs-dist@4.8.69/standard_fonts/',
+};
+
+/**
+ * Helper to create a configured document loading task
+ */
+const getDocumentWithConfig = (data: ArrayBuffer) => {
+  return pdfjsLib.getDocument({
+    data,
+    ...PDF_CONFIG,
+  });
+};
+
 /**
  * Clone an ArrayBuffer to prevent detachment issues
  */
@@ -83,7 +101,7 @@ export const getPDFInfo = async (arrayBuffer: ArrayBuffer): Promise<PDFInfo> => 
   if (!arrayBuffer) throw new Error('Invalid PDF input');
 
   const safeArrayBuffer = cloneArrayBuffer(arrayBuffer);
-  const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
+  const loadingTask = getDocumentWithConfig(safeArrayBuffer);
   const pdf = await loadingTask.promise;
 
   return {
@@ -100,7 +118,7 @@ export const extractPDFText = async (arrayBuffer: ArrayBuffer): Promise<PDFTextC
   if (!arrayBuffer) throw new Error('Invalid PDF input');
 
   const safeArrayBuffer = cloneArrayBuffer(arrayBuffer);
-  const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
+  const loadingTask = getDocumentWithConfig(safeArrayBuffer);
   const pdf = await loadingTask.promise;
   const textContent: string[] = [];
 
@@ -153,7 +171,7 @@ export const rasterizePdfPage = async (
   scale = 2.5
 ): Promise<string> => {
   const safeArrayBuffer = cloneArrayBuffer(pdfArrayBuffer);
-  const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
+  const loadingTask = getDocumentWithConfig(safeArrayBuffer);
   const pdf = await loadingTask.promise;
 
   const page = await pdf.getPage(pageIndex + 1);
@@ -198,7 +216,7 @@ export const createPageThumbnails = async (
   if (!arrayBuffer) throw new Error('Invalid PDF input');
 
   const safeArrayBuffer = cloneArrayBuffer(arrayBuffer);
-  const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
+  const loadingTask = getDocumentWithConfig(safeArrayBuffer);
   const pdf = await loadingTask.promise;
   const thumbnails = new Map<number, string>();
 
@@ -242,7 +260,7 @@ export const extractPDFImages = async (
   if (!arrayBuffer) throw new Error('Invalid PDF input');
 
   const safeArrayBuffer = cloneArrayBuffer(arrayBuffer);
-  const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
+  const loadingTask = getDocumentWithConfig(safeArrayBuffer);
   const pdf = await loadingTask.promise;
   const images = new Map<string, PDFEmbeddedImage>();
 
