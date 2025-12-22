@@ -320,6 +320,7 @@ export async function processDocxFile(file: File): Promise<DocxData> {
  * @param options.scale - Pixel ratio for higher quality (default: 2)
  * @param options.selectedPages - Optional array of page indices to rasterize (0-indexed)
  * @param options.onProgress - Optional callback for progress updates (current, total)
+ * @param options.abortSignal - Optional AbortSignal for cancellation
  */
 export async function rasterizeDocx(
   arrayBuffer: ArrayBuffer,
@@ -328,9 +329,10 @@ export async function rasterizeDocx(
     scale?: number; 
     selectedPages?: number[];
     onProgress?: (current: number, total: number) => void;
+    abortSignal?: AbortSignal;
   } = {}
 ): Promise<string[]> {
-  const { width = 816, scale = 2, selectedPages, onProgress } = options;
+  const { width = 816, scale = 2, selectedPages, onProgress, abortSignal } = options;
   const PAGE_HEIGHT = 1056; // US Letter at 96 DPI (11 inches)
   
   // First convert to HTML using mammoth
@@ -339,27 +341,18 @@ export async function rasterizeDocx(
   // Dynamically import html-to-image
   const { toPng } = await import("html-to-image");
   
-  // Create an OPAQUE overlay to hide the rendering from the user
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: fixed;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    background: white;
-    z-index: 100000;
-    pointer-events: none;
-  `;
+  // Internal abort controller for the cancel button
+  const internalController = new AbortController();
+  const signal = abortSignal || internalController.signal;
   
-  // Create progress modal that sits on top of the overlay
+  // Create progress modal (visible to user)
   const progressModal = document.createElement("div");
   progressModal.style.cssText = `
     position: fixed;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    z-index: 100001;
+    z-index: 50;
     background: white;
     border-radius: 12px;
     padding: 32px 48px;
@@ -373,6 +366,9 @@ export async function rasterizeDocx(
   styleTag.textContent = `
     @keyframes docx-raster-spin {
       to { transform: rotate(360deg); }
+    }
+    #docx-raster-cancel:hover {
+      background: #e5e7eb !important;
     }
   `;
   document.head.appendChild(styleTag);
@@ -388,9 +384,23 @@ export async function rasterizeDocx(
     <div id="docx-raster-progress-text" style="font-size: 16px; color: #374151; font-weight: 500;">
       Preparing document...
     </div>
+    <button id="docx-raster-cancel" style="
+      margin-top: 16px;
+      padding: 8px 24px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #374151;
+      transition: background 0.15s;
+    ">
+      Cancel
+    </button>
   `;
   
   // Create a fixed-size viewport container (this is what we capture)
+  // Use NEGATIVE z-index so it's invisible behind the page
   const viewport = document.createElement("div");
   viewport.style.cssText = `
     position: fixed;
@@ -400,7 +410,7 @@ export async function rasterizeDocx(
     height: ${PAGE_HEIGHT}px;
     overflow: hidden;
     background: white;
-    z-index: 99999;
+    z-index: -9999;
     visibility: visible;
   `;
   
@@ -443,9 +453,14 @@ export async function rasterizeDocx(
   `;
   
   viewport.appendChild(contentWrapper);
-  document.body.appendChild(overlay);
   document.body.appendChild(progressModal);
   document.body.appendChild(viewport);
+  
+  // Set up cancel button handler
+  const cancelBtn = progressModal.querySelector("#docx-raster-cancel") as HTMLButtonElement;
+  cancelBtn?.addEventListener("click", () => {
+    internalController.abort();
+  });
   
   const updateProgressText = (text: string) => {
     const progressText = progressModal.querySelector("#docx-raster-progress-text");
@@ -455,6 +470,11 @@ export async function rasterizeDocx(
   };
   
   try {
+    // Check for cancellation before starting
+    if (signal.aborted) {
+      throw new DOMException("Rasterization cancelled", "AbortError");
+    }
+    
     // Wait for any images to load and styles to apply
     await new Promise(resolve => setTimeout(resolve, 500));
     
@@ -472,6 +492,11 @@ export async function rasterizeDocx(
     
     // Capture each page by repositioning the content wrapper
     for (let i = 0; i < pagesToRender.length; i++) {
+      // Check for cancellation at the start of each iteration
+      if (signal.aborted) {
+        throw new DOMException("Rasterization cancelled", "AbortError");
+      }
+      
       const pageIndex = pagesToRender[i];
       
       // Update progress modal and call callback
@@ -500,7 +525,6 @@ export async function rasterizeDocx(
   } finally {
     // Clean up
     document.body.removeChild(viewport);
-    document.body.removeChild(overlay);
     document.body.removeChild(progressModal);
     document.head.removeChild(styleTag);
   }

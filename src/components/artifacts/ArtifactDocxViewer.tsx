@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CheckSquare, Square, FileDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { CompactDropZone } from "./CompactDropZone";
 import { 
   DocxData, 
@@ -51,6 +52,7 @@ export function ArtifactDocxViewer({
   const [previewTab, setPreviewTab] = useState<PreviewTabType>("markdown-preview");
   const [rasterizedPages, setRasterizedPages] = useState<string[]>([]);
   const [isRasterizing, setIsRasterizing] = useState(false);
+  const rasterAbortRef = useRef<AbortController | null>(null);
 
   // Generate rasterized preview when mode changes
   useEffect(() => {
@@ -101,6 +103,9 @@ export function ArtifactDocxViewer({
   const generateRasterizedPreview = async () => {
     if (!docxData || isRasterizing) return;
     
+    // Create abort controller for this rasterization
+    rasterAbortRef.current = new AbortController();
+    
     setIsRasterizing(true);
     setRasterProgress(null);
     try {
@@ -109,7 +114,8 @@ export function ArtifactDocxViewer({
         scale: 1,
         onProgress: (current, total) => {
           setRasterProgress({ current, total });
-        }
+        },
+        abortSignal: rasterAbortRef.current.signal,
       });
       setRasterizedPages(pages);
       // Auto-select all pages and update export options
@@ -118,11 +124,16 @@ export function ArtifactDocxViewer({
         selectedRasterPages: new Set(pages.map((_, i) => i)),
         rasterizedPageCount: pages.length,
       });
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        toast.info("Rasterization cancelled");
+        return;
+      }
       console.error("Failed to generate rasterized preview:", err);
     } finally {
       setIsRasterizing(false);
       setRasterProgress(null);
+      rasterAbortRef.current = null;
     }
   };
 
