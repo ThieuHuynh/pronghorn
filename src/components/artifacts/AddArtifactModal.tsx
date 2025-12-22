@@ -634,12 +634,22 @@ export function AddArtifactModal({
               // Get sorted array of selected page indices
               const selectedIndices = Array.from(docxExportOptions.selectedRasterPages).sort((a, b) => a - b);
               
-              // Only rasterize the selected pages (pass indices to avoid wasting time on unneeded pages)
-              const pages = await rasterizeDocx(docxData.arrayBuffer, { 
-                width: 816, 
-                scale: 2,
-                selectedPages: selectedIndices
-              });
+              let pages: string[];
+              
+              // Use cached pages if available (from preview), otherwise rasterize
+              if (docxExportOptions.cachedRasterizedPages?.length) {
+                // Extract only selected pages from cache
+                pages = selectedIndices
+                  .map(idx => docxExportOptions.cachedRasterizedPages![idx])
+                  .filter(Boolean);
+              } else {
+                // No cache available, need to rasterize
+                pages = await rasterizeDocx(docxData.arrayBuffer, { 
+                  width: 816, 
+                  scale: 2,
+                  selectedPages: selectedIndices
+                });
+              }
               
               // pages array now contains only the selected pages, in the same order as selectedIndices
               for (let i = 0; i < pages.length; i++) {

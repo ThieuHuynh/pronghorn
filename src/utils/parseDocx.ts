@@ -20,6 +20,7 @@ export interface DocxExportOptions {
   selectedImages: Set<string>;
   selectedRasterPages: Set<number>;
   rasterizedPageCount: number;
+  cachedRasterizedPages?: string[]; // Cached page data URLs to avoid re-rasterization
 }
 
 export interface DocxData {
@@ -480,8 +481,60 @@ export async function rasterizeDocx(
     
     // Get the total content height from the content wrapper
     const contentHeight = contentWrapper.scrollHeight;
-    const pageCount = Math.max(1, Math.ceil(contentHeight / PAGE_HEIGHT));
     const pages: string[] = [];
+    
+    // === SMART PAGE BREAKS ===
+    // Find all block-level elements to avoid cutting text mid-line
+    const elements = contentWrapper.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, tr, div, table, ul, ol, blockquote');
+    const contentRect = contentWrapper.getBoundingClientRect();
+    
+    // Get positions of all block elements
+    const elementBounds: { top: number; bottom: number }[] = [];
+    elements.forEach(el => {
+      const rect = el.getBoundingClientRect();
+      elementBounds.push({
+        top: rect.top - contentRect.top,
+        bottom: rect.bottom - contentRect.top,
+      });
+    });
+    
+    // Sort by position
+    elementBounds.sort((a, b) => a.top - b.top);
+    
+    // Calculate smart page breaks
+    const pageBreaks: number[] = [0];
+    let currentBreakTarget = PAGE_HEIGHT;
+    
+    while (currentBreakTarget < contentHeight) {
+      // Find the best break point near the target
+      let bestBreak = currentBreakTarget;
+      
+      // Look for an element boundary that ends before the target
+      // Prefer breaks that are close to but not exceeding the target
+      for (const bounds of elementBounds) {
+        // If element ends before target and is close (within 150px)
+        if (bounds.bottom <= currentBreakTarget && bounds.bottom > currentBreakTarget - 150) {
+          bestBreak = bounds.bottom;
+        }
+        // If element starts after target, we've gone past
+        if (bounds.top > currentBreakTarget) break;
+      }
+      
+      // Ensure we make progress (minimum 200px per page to avoid infinite loops)
+      if (bestBreak <= pageBreaks[pageBreaks.length - 1] + 200) {
+        bestBreak = Math.min(currentBreakTarget, contentHeight);
+      }
+      
+      pageBreaks.push(bestBreak);
+      currentBreakTarget = bestBreak + PAGE_HEIGHT;
+    }
+    
+    // Add final break at content end if needed
+    if (pageBreaks[pageBreaks.length - 1] < contentHeight) {
+      pageBreaks.push(contentHeight);
+    }
+    
+    const pageCount = pageBreaks.length - 1;
     
     // Determine which pages to render
     const pagesToRender = selectedPages 
@@ -490,7 +543,7 @@ export async function rasterizeDocx(
     
     const totalPages = pagesToRender.length;
     
-    // Capture each page by repositioning the content wrapper
+    // Capture each page using smart breaks
     for (let i = 0; i < pagesToRender.length; i++) {
       // Check for cancellation at the start of each iteration
       if (signal.aborted) {
@@ -498,6 +551,9 @@ export async function rasterizeDocx(
       }
       
       const pageIndex = pagesToRender[i];
+      const startY = pageBreaks[pageIndex];
+      const endY = pageBreaks[pageIndex + 1];
+      const pageHeight = Math.max(endY - startY, 100); // Minimum 100px height
       
       // Update progress modal and call callback
       updateProgressText(`Rasterizing page ${i + 1} of ${totalPages}...`);
@@ -505,18 +561,21 @@ export async function rasterizeDocx(
         onProgress(i + 1, totalPages);
       }
       
-      // Move content up to show current page in viewport
-      contentWrapper.style.top = `-${pageIndex * PAGE_HEIGHT}px`;
+      // Adjust viewport height for this page
+      viewport.style.height = `${pageHeight}px`;
+      
+      // Move content up to show current page section
+      contentWrapper.style.top = `-${startY}px`;
       
       // Wait for reflow
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Capture the viewport (which shows the current page section)
+      // Capture the viewport with dynamic height
       const dataUrl = await toPng(viewport, {
         pixelRatio: scale,
         backgroundColor: "#ffffff",
         width: width,
-        height: PAGE_HEIGHT,
+        height: pageHeight,
       });
       pages.push(dataUrl);
     }

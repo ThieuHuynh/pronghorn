@@ -118,11 +118,12 @@ export function ArtifactDocxViewer({
         abortSignal: rasterAbortRef.current.signal,
       });
       setRasterizedPages(pages);
-      // Auto-select all pages and update export options
+      // Auto-select all pages and update export options with cached pages
       onExportOptionsChange({
         ...exportOptions,
         selectedRasterPages: new Set(pages.map((_, i) => i)),
         rasterizedPageCount: pages.length,
+        cachedRasterizedPages: pages, // Cache for reuse in AddArtifactModal
       });
     } catch (err: any) {
       if (err.name === "AbortError") {
