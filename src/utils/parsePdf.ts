@@ -433,14 +433,18 @@ export interface ProcessedPDFFile {
   pdfInfo: PDFInfo;
   pagesText: string[];
   arrayBuffer: ArrayBuffer;
+  extractionMethod: 'standard' | 'ocr';
+  ocrConfidence?: number;
 }
 
 /**
  * Process a PDF file and return metadata and text content
+ * Automatically falls back to OCR if encoding issues are detected
  */
 export const processPDFFile = async (
   file: File,
-  onProgress?: (stage: string, progress: number) => void
+  onProgress?: (stage: string, progress: number) => void,
+  forceOcr = false // Option to force OCR mode
 ): Promise<ProcessedPDFFile> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -456,21 +460,50 @@ export const processPDFFile = async (
         onProgress?.('Getting PDF info...', 20);
         const pdfInfo = await getPDFInfo(arrayBuffer);
         
-        onProgress?.('Extracting text...', 50);
-        const { pagesText } = await extractPDFText(arrayBuffer);
-
-        onProgress?.('Complete!', 100);
-
+        // Step 1: Try standard text extraction first (unless forceOcr)
+        if (!forceOcr) {
+          onProgress?.('Extracting text...', 50);
+          const { pagesText } = await extractPDFText(arrayBuffer);
+          
+          // Step 2: Check for encoding issues
+          const { detectEncodingIssues } = await import('./parsePdfOcr');
+          const { hasIssues, issuePages, suspiciousRatio } = detectEncodingIssues(pagesText);
+          
+          if (!hasIssues) {
+            // Standard extraction worked fine
+            onProgress?.('Complete!', 100);
+            return resolve({
+              file: { name: file.name, size: file.size, type: file.type },
+              pdfInfo,
+              pagesText,
+              arrayBuffer,
+              extractionMethod: 'standard'
+            });
+          }
+          
+          // Encoding issues detected - switch to OCR
+          console.warn(`⚠️ Encoding issues detected on pages: ${issuePages.join(', ')} (${(suspiciousRatio * 100).toFixed(1)}% suspicious chars)`);
+          console.log('🔄 Switching to OCR mode for accurate text extraction...');
+          onProgress?.('Encoding issues detected. Switching to OCR...', 55);
+        }
+        
+        // Step 3: Use OCR extraction (either forced or as fallback)
+        const { extractPDFTextWithOCR } = await import('./parsePdfOcr');
+        const { pagesText: ocrText, confidence } = await extractPDFTextWithOCR(
+          arrayBuffer,
+          'eng',
+          onProgress
+        );
+        
         resolve({
-          file: {
-            name: file.name,
-            size: file.size,
-            type: file.type
-          },
+          file: { name: file.name, size: file.size, type: file.type },
           pdfInfo,
-          pagesText,
-          arrayBuffer
+          pagesText: ocrText,
+          arrayBuffer,
+          extractionMethod: 'ocr',
+          ocrConfidence: confidence
         });
+        
       } catch (error) {
         reject(new Error(`Failed to process PDF ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`));
       }
