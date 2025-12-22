@@ -14,6 +14,11 @@ export interface Artifact {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  // Provenance tracking fields
+  provenance_id: string | null;
+  provenance_path: string | null;
+  provenance_page: number | null;
+  provenance_total_pages: number | null;
 }
 
 export const useRealtimeArtifacts = (
@@ -128,6 +133,10 @@ export const useRealtimeArtifacts = (
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: null,
+      provenance_id: null,
+      provenance_path: null,
+      provenance_page: null,
+      provenance_total_pages: null,
     };
 
     setArtifacts((prev) => [...prev, optimisticArtifact]);

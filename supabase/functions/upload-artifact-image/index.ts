@@ -12,7 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, shareToken, imageData, fileName, content, sourceType, sourceId } = await req.json();
+    const { 
+      projectId, 
+      shareToken, 
+      imageData, 
+      fileName, 
+      content, 
+      sourceType, 
+      sourceId,
+      // Provenance tracking fields
+      provenanceId,
+      provenancePath,
+      provenancePage,
+      provenanceTotalPages
+    } = await req.json();
 
     if (!projectId) {
       throw new Error('Project ID is required');
@@ -78,20 +91,26 @@ serve(async (req) => {
       publicUrl = url;
     }
 
-    // Create artifact using token-based RPC
+    // Create artifact using token-based RPC with provenance fields
     const { data: artifact, error: artifactError } = await supabase.rpc('insert_artifact_with_token', {
       p_project_id: projectId,
       p_token: shareToken || null,
       p_content: content,
       p_source_type: sourceType || null,
       p_source_id: sourceId || null,
-      p_image_url: publicUrl
+      p_image_url: publicUrl,
+      p_provenance_id: provenanceId || null,
+      p_provenance_path: provenancePath || null,
+      p_provenance_page: provenancePage || null,
+      p_provenance_total_pages: provenanceTotalPages || null
     });
 
     if (artifactError) {
       console.error('Artifact creation error:', artifactError);
       throw new Error(`Failed to create artifact: ${artifactError.message}`);
     }
+
+    console.log(`Created artifact with provenance: id=${provenanceId}, path=${provenancePath}, page=${provenancePage}/${provenanceTotalPages}`);
 
     return new Response(
       JSON.stringify({ artifact, publicUrl }),

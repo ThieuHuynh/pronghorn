@@ -11,7 +11,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X } from "lucide-react";
 import { ArtifactDownloadDropdown } from "@/components/artifacts/ArtifactDownloadDropdown";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 
 export default function Artifacts() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -65,13 +66,14 @@ export default function Artifacts() {
   const [editingArtifact, setEditingArtifact] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "table" | "gallery">("cards");
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [collaboratingArtifact, setCollaboratingArtifact] = useState<any>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [provenanceFilter, setProvenanceFilter] = useState<string | null>(null);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -88,16 +90,26 @@ export default function Artifacts() {
   });
 
   const filteredAndSortedArtifacts = artifacts
-    .filter((artifact) =>
-      (artifact.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    .filter((artifact) => {
+      // Apply provenance filter if set
+      if (provenanceFilter && artifact.provenance_id !== provenanceFilter) {
+        return false;
+      }
+      // Apply search filter
+      return (
+        artifact.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         artifact.ai_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        artifact.ai_summary?.toLowerCase().includes(searchQuery.toLowerCase()))
-    )
+        artifact.ai_summary?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
     .sort((a, b) => {
       const dateA = new Date(a.created_at).getTime();
       const dateB = new Date(b.created_at).getTime();
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
     });
+
+  // Filter for image artifacts only (for gallery view)
+  const imageArtifacts = filteredAndSortedArtifacts.filter(a => !!a.image_url);
 
   const handleArtifactsCreated = () => {
     refresh();
@@ -252,6 +264,14 @@ ${artifact.content}`;
     setEditingTitle(artifact.ai_title || "");
   };
 
+  const handleShowRelated = (provenanceId: string) => {
+    setProvenanceFilter(provenanceId);
+  };
+
+  const clearProvenanceFilter = () => {
+    setProvenanceFilter(null);
+  };
+
   if (tokenMissing) {
     return (
       <div className="min-h-screen bg-background">
@@ -306,6 +326,19 @@ ${artifact.content}`;
                   />
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  {/* Provenance filter indicator */}
+                  {provenanceFilter && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={clearProvenanceFilter}
+                      className="gap-1"
+                    >
+                      <Link2 className="h-3 w-3" />
+                      Showing related
+                      <X className="h-3 w-3 ml-1" />
+                    </Button>
+                  )}
                   <div className="flex border rounded-md">
                     <Button
                       variant={viewMode === "cards" ? "secondary" : "ghost"}
@@ -320,6 +353,13 @@ ${artifact.content}`;
                       onClick={() => setViewMode("table")}
                     >
                       <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                      size="icon"
+                      onClick={() => setViewMode("gallery")}
+                    >
+                      <Grid3X3 className="h-4 w-4" />
                     </Button>
                   </div>
                   <TooltipProvider>
@@ -360,10 +400,90 @@ ${artifact.content}`;
                 <Card>
                   <CardContent className="text-center py-12">
                     <p className="text-muted-foreground">
-                      {searchQuery ? "No artifacts match your search" : "No artifacts yet"}
+                      {searchQuery ? "No artifacts match your search" : provenanceFilter ? "No related artifacts found" : "No artifacts yet"}
                     </p>
                   </CardContent>
                 </Card>
+              ) : viewMode === "gallery" ? (
+                // Gallery View - Masonry layout for image artifacts
+                imageArtifacts.length === 0 ? (
+                  <Card>
+                    <CardContent className="text-center py-12">
+                      <p className="text-muted-foreground">No image artifacts to display in gallery</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                    {imageArtifacts.map((artifact) => (
+                      <div 
+                        key={artifact.id}
+                        className="break-inside-avoid rounded-lg overflow-hidden border bg-card hover:ring-2 hover:ring-primary/50 transition-all group relative"
+                      >
+                        <img 
+                          src={artifact.image_url!} 
+                          alt={artifact.ai_title || "Artifact"}
+                          className="w-full h-auto cursor-pointer"
+                          onClick={() => setPreviewImage({ url: artifact.image_url!, title: artifact.ai_title || "" })}
+                        />
+                        {/* Hover overlay with title and actions */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium truncate">
+                                {artifact.ai_title || "Untitled"}
+                              </p>
+                              {artifact.provenance_page && artifact.provenance_total_pages && (
+                                <p className="text-white/70 text-xs">
+                                  Page {artifact.provenance_page} of {artifact.provenance_total_pages}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              {artifact.provenance_id && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-white hover:bg-white/20"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleShowRelated(artifact.provenance_id!);
+                                        }}
+                                      >
+                                        <Link2 className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Show Related Pages</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-white hover:bg-white/20"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteArtifact(artifact.id);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : viewMode === "cards" ? (
                 <div className="space-y-4">
                   {filteredAndSortedArtifacts.map((artifact) => (
@@ -371,15 +491,41 @@ ${artifact.content}`;
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="space-y-1 flex-1">
-                            <CardTitle className="text-lg">
-                              {artifact.ai_title || "Untitled Artifact"}
-                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-lg">
+                                {artifact.ai_title || "Untitled Artifact"}
+                              </CardTitle>
+                              {artifact.provenance_page && artifact.provenance_total_pages && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Page {artifact.provenance_page}/{artifact.provenance_total_pages}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               Created {format(new Date(artifact.created_at), "PPp")}
+                              {artifact.provenance_path && (
+                                <span className="ml-2 text-muted-foreground/70">
+                                  • From: {artifact.provenance_path}
+                                </span>
+                              )}
                             </p>
                           </div>
                           <div className="flex gap-2">
                             <TooltipProvider>
+                              {artifact.provenance_id && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleShowRelated(artifact.provenance_id!)}
+                                    >
+                                      <Link2 className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Show Related Pages</TooltipContent>
+                                </Tooltip>
+                              )}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -490,7 +636,7 @@ ${artifact.content}`;
                         <TableHead className="w-[300px]">Name</TableHead>
                         <TableHead>Preview</TableHead>
                         <TableHead className="w-[150px]">Created</TableHead>
-                        <TableHead className="w-[120px] text-right">Actions</TableHead>
+                        <TableHead className="w-[140px] text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -498,7 +644,14 @@ ${artifact.content}`;
                         <TableRow key={artifact.id}>
                           <TableCell className="font-medium">
                             <div className="space-y-1">
-                              <div>{artifact.ai_title || "Untitled Artifact"}</div>
+                              <div className="flex items-center gap-2">
+                                <span>{artifact.ai_title || "Untitled Artifact"}</span>
+                                {artifact.provenance_page && artifact.provenance_total_pages && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {artifact.provenance_page}/{artifact.provenance_total_pages}
+                                  </Badge>
+                                )}
+                              </div>
                               {artifact.image_url && (
                                 <img 
                                   src={artifact.image_url} 
@@ -524,6 +677,21 @@ ${artifact.content}`;
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
                               <TooltipProvider>
+                                {artifact.provenance_id && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => handleShowRelated(artifact.provenance_id!)}
+                                      >
+                                        <Link2 className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Show Related</TooltipContent>
+                                  </Tooltip>
+                                )}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button

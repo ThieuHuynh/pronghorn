@@ -49,6 +49,11 @@ interface AddArtifactModalProps {
   broadcastRefresh: (action?: string, id?: string) => void;
 }
 
+// Helper to generate a unique provenance ID
+const generateProvenanceId = (filename: string): string => {
+  return `${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}-${Date.now()}`;
+};
+
 export function AddArtifactModal({
   open,
   onOpenChange,
@@ -387,10 +392,10 @@ export function AddArtifactModal({
 
       // Create PPTX artifacts
       if (pptxData && pptxExportOptions.selectedSlides.size > 0) {
-        const selectedSlides = Array.from(pptxExportOptions.selectedSlides)
-          .sort((a, b) => a - b)
-          .map((idx) => pptxData.slides[idx])
-          .filter(Boolean);
+        const selectedSlideIndices = Array.from(pptxExportOptions.selectedSlides).sort((a, b) => a - b);
+        const selectedSlides = selectedSlideIndices.map((idx) => pptxData.slides[idx]).filter(Boolean);
+        const totalSlides = pptxData.slides.length;
+        const provenanceId = generateProvenanceId(pptxData.filename);
 
         // Text extraction
         if (pptxExportOptions.mode === "text" || pptxExportOptions.mode === "both") {
@@ -424,9 +429,10 @@ export function AddArtifactModal({
           }
         }
 
-        // Rasterize slides
+        // Rasterize slides - REVERSED for correct display order
         if (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both") {
-          for (const slide of selectedSlides) {
+          const reversedSlides = [...selectedSlides].reverse();
+          for (const slide of reversedSlides) {
             try {
               const blob = await rasterizeSlide(slide, pptxData.media, {
                 width: 1920,
@@ -454,6 +460,10 @@ export function AddArtifactModal({
                   fileName: `${pptxData.filename.replace(/\.pptx?$/i, "")}_slide${slide.index + 1}.png`,
                   content: `Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slide.mergedText}`,
                   sourceType: "pptx-rasterized",
+                  provenanceId,
+                  provenancePath: pptxData.filename,
+                  provenancePage: slide.index + 1,
+                  provenanceTotalPages: totalSlides,
                 },
               });
 
@@ -499,6 +509,8 @@ export function AddArtifactModal({
       // Create PDF artifacts
       if (pdfData && pdfExportOptions.selectedPages.size > 0) {
         const selectedPageIndices = Array.from(pdfExportOptions.selectedPages).sort((a, b) => a - b);
+        const totalPages = pdfData.pageCount;
+        const provenanceId = generateProvenanceId(pdfData.filename);
 
         // Text extraction
         if (pdfExportOptions.mode === "text" || pdfExportOptions.mode === "both") {
@@ -533,7 +545,7 @@ export function AddArtifactModal({
           }
         }
 
-        // Rasterize pages
+        // Rasterize pages - REVERSED for correct display order
         if (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both") {
           try {
             // Rasterize all selected pages at high resolution
@@ -543,7 +555,10 @@ export function AddArtifactModal({
               2.5 // High resolution for export
             );
 
-            for (const result of rasterizedPages) {
+            // Reverse the array for correct insertion order
+            const reversedPages = [...rasterizedPages].reverse();
+            
+            for (const result of reversedPages) {
               if (!result.success || !result.dataUrl) {
                 console.error(`Failed to rasterize page ${result.pageNumber}:`, result.error);
                 errorCount++;
@@ -562,6 +577,10 @@ export function AddArtifactModal({
                     fileName: `${pdfData.filename.replace(/\.pdf$/i, "")}_page${result.pageNumber}.png`,
                     content: `Page ${result.pageNumber}\n\n${pdfData.pagesText[result.pageIndex] || ""}`,
                     sourceType: "pdf-rasterized",
+                    provenanceId,
+                    provenancePath: pdfData.filename,
+                    provenancePage: result.pageNumber,
+                    provenanceTotalPages: totalPages,
                   },
                 });
 
@@ -613,6 +632,9 @@ export function AddArtifactModal({
 
       // Create DOCX artifacts
       if (docxData) {
+        const totalPages = docxExportOptions.rasterizedPageCount || 1;
+        const provenanceId = generateProvenanceId(docxData.filename);
+
         // Text extraction
         if (docxExportOptions.mode === "text" || docxExportOptions.mode === "both") {
           try {
@@ -627,7 +649,7 @@ export function AddArtifactModal({
           }
         }
 
-        // Rasterize document (only selected pages)
+        // Rasterize document (only selected pages) - REVERSED for correct display order
         if (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both") {
           if (docxExportOptions.selectedRasterPages.size > 0) {
             try {
@@ -651,10 +673,14 @@ export function AddArtifactModal({
                 });
               }
               
-              // pages array now contains only the selected pages, in the same order as selectedIndices
-              for (let i = 0; i < pages.length; i++) {
-                const originalPageIndex = selectedIndices[i]; // Map back to original page number
-                const dataUrl = pages[i];
+              // Create array with original indices for provenance, then reverse for correct display order
+              const pagesWithIndices = pages.map((page, i) => ({
+                page,
+                originalIndex: selectedIndices[i]
+              })).reverse();
+              
+              for (const { page, originalIndex } of pagesWithIndices) {
+                const dataUrl = page;
                 const base64Data = dataUrl.split(",")[1];
 
                 const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
@@ -662,9 +688,13 @@ export function AddArtifactModal({
                     projectId,
                     shareToken,
                     imageData: base64Data,
-                    fileName: `${docxData.filename.replace(/\.docx?$/i, "")}_page${originalPageIndex + 1}.png`,
-                    content: `Page ${originalPageIndex + 1} of ${docxData.filename}`,
+                    fileName: `${docxData.filename.replace(/\.docx?$/i, "")}_page${originalIndex + 1}.png`,
+                    content: `Page ${originalIndex + 1} of ${docxData.filename}`,
                     sourceType: "docx-rasterized",
+                    provenanceId,
+                    provenancePath: docxData.filename,
+                    provenancePage: originalIndex + 1,
+                    provenanceTotalPages: totalPages,
                   },
                 });
 
@@ -800,15 +830,15 @@ export function AddArtifactModal({
 
     if (sidebarCollapsed) {
       return (
-        <Tooltip key={tab.id}>
-          <TooltipTrigger asChild>
-            <div className="relative">{button}</div>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {tab.label}
-            {(tab.count ?? 0) > 0 && ` (${tab.count})`}
-          </TooltipContent>
-        </Tooltip>
+        <TooltipProvider key={tab.id}>
+          <Tooltip>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent side="right">
+              <p>{tab.label}</p>
+              {(tab.count ?? 0) > 0 && <p className="text-muted-foreground text-xs">{tab.count} selected</p>}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }
 
@@ -816,188 +846,162 @@ export function AddArtifactModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[95vw] md:max-w-[90vw] h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
-          <DialogTitle className="text-base sm:text-lg">Add New Artifacts</DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm">
-            Create reusable knowledge blocks from various file types
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-4 pb-3 border-b shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>Add Artifacts</DialogTitle>
+              <DialogDescription className="sr-only">
+                Add artifacts to the project using various methods
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {totalCount > 0 && (
+                <Badge variant="outline" className="text-sm">
+                  {totalCount} item{totalCount !== 1 ? 's' : ''} selected
+                </Badge>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
-        <TooltipProvider delayDuration={0}>
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left Sidebar - Collapsible */}
-            <div className={cn(
-              "border-r bg-muted/30 flex flex-col transition-all duration-200",
-              sidebarCollapsed ? "w-12" : "w-36 sm:w-48"
-            )}>
-              {/* Collapse Toggle */}
-              <div className="p-1.5 border-b">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-7"
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeft className="h-4 w-4" />
-                  ) : (
-                    <>
-                      <PanelLeftClose className="h-4 w-4 mr-1.5" />
-                      <span className="text-xs">Collapse</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="p-1.5 space-y-0.5">
-                  {/* All tabs are now active */}
-                  {tabs.map(tab => renderSidebarButton(tab))}
-                </div>
-              </ScrollArea>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Sidebar */}
+          <div className={cn(
+            "border-r flex flex-col shrink-0 transition-all duration-200",
+            sidebarCollapsed ? "w-14" : "w-48"
+          )}>
+            <div className="p-2 border-b flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              >
+                {sidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </Button>
             </div>
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {tabs.map((tab) => renderSidebarButton(tab))}
+              </div>
+            </ScrollArea>
+          </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-              <div className="flex-1 p-2 sm:p-4 overflow-hidden flex flex-col">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <ScrollArea className="flex-1">
+              <div className="p-4">
                 {activeTab === "manual" && (
-                  <div className="h-full flex flex-col gap-2 sm:gap-4">
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      Enter or paste content manually to create an artifact.
-                    </p>
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground">
+                      Enter text, markdown, or structured content manually.
+                    </div>
                     <Textarea
                       ref={textareaRef}
+                      placeholder="Enter artifact content..."
                       value={manualContent}
                       onChange={(e) => setManualContent(e.target.value)}
-                      placeholder="Enter artifact content..."
-                      className="flex-1 min-h-[200px] font-mono text-xs sm:text-sm"
+                      className="min-h-[300px] font-mono text-sm"
                     />
                   </div>
                 )}
+
                 {activeTab === "upload" && (
                   <ArtifactUniversalUpload
                     onImagesAdded={handleUniversalImagesAdded}
                     onExcelAdded={handleUniversalExcelAdded}
                     onTextFilesAdded={handleUniversalTextFilesAdded}
-                    onDocxFilesAdded={handleUniversalDocxAdded}
-                    onPdfFilesAdded={handleUniversalPdfAdded}
-                    onPptxFilesAdded={handleUniversalPptxAdded}
-                    counts={{
-                      images: images.length,
-                      excel: excelData ? 1 : 0,
-                      textFiles: textFiles.length,
-                      docx: docxData ? 1 : 0,
-                      pdf: pdfData ? 1 : 0,
-                      pptx: pptxData ? 1 : 0,
-                    }}
+                    onDocxAdded={handleUniversalDocxAdded}
+                    onPdfAdded={handleUniversalPdfAdded}
+                    onPptxAdded={handleUniversalPptxAdded}
                   />
                 )}
+
                 {activeTab === "images" && (
                   <ArtifactImageGallery
                     images={images}
-                    onImagesChange={setImages}
+                    setImages={setImages}
                   />
                 )}
+
                 {activeTab === "excel" && (
                   <ArtifactExcelViewer
                     excelData={excelData}
-                    onExcelDataChange={setExcelData}
+                    setExcelData={setExcelData}
                     selectedRows={excelSelectedRows}
-                    onSelectedRowsChange={setExcelSelectedRows}
+                    setSelectedRows={setExcelSelectedRows}
                     mergeAsOne={excelMergeAsOne}
-                    onMergeAsOneChange={setExcelMergeAsOne}
+                    setMergeAsOne={setExcelMergeAsOne}
                   />
                 )}
+
                 {activeTab === "text" && (
                   <ArtifactTextFileList
-                    files={textFiles}
-                    onFilesChange={setTextFiles}
+                    textFiles={textFiles}
+                    setTextFiles={setTextFiles}
                   />
                 )}
+
                 {activeTab === "pptx" && (
                   <ArtifactPptxViewer
                     pptxData={pptxData}
-                    onPptxDataChange={setPptxData}
+                    setPptxData={setPptxData}
                     exportOptions={pptxExportOptions}
                     onExportOptionsChange={setPptxExportOptions}
                   />
                 )}
-                {activeTab === "docx" && (
-                  <ArtifactDocxViewer
-                    docxData={docxData}
-                    onDocxDataChange={setDocxData}
-                    exportOptions={docxExportOptions}
-                    onExportOptionsChange={setDocxExportOptions}
-                  />
-                )}
+
                 {activeTab === "pdf" && (
                   <ArtifactPdfPlaceholder
                     pdfData={pdfData}
-                    onPdfDataChange={setPdfData}
+                    setPdfData={setPdfData}
                     exportOptions={pdfExportOptions}
                     onExportOptionsChange={setPdfExportOptions}
                   />
                 )}
-              </div>
 
-              {/* Footer - Responsive */}
-              <div className="border-t p-2 sm:p-4 bg-muted/30">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:justify-between">
-                  <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left order-2 sm:order-1">
-                    {totalCount === 0 ? (
-                      "No items ready"
-                    ) : (
-                      <span className="hidden sm:inline">
-                        Ready: {" "}
-                        {selectedImagesCount > 0 && `${selectedImagesCount} image${selectedImagesCount !== 1 ? 's' : ''}`}
-                        {selectedImagesCount > 0 && (excelRowsCount > 0 || selectedTextFilesCount > 0 || manualContent.trim() || pptxCount > 0) && ", "}
-                        {excelRowsCount > 0 && (excelMergeAsOne ? `1 excel` : `${excelRowsCount} rows`)}
-                        {excelRowsCount > 0 && (selectedTextFilesCount > 0 || manualContent.trim() || pptxCount > 0) && ", "}
-                        {selectedTextFilesCount > 0 && `${selectedTextFilesCount} text`}
-                        {selectedTextFilesCount > 0 && (manualContent.trim() || pptxCount > 0) && ", "}
-                        {manualContent.trim() && "1 manual"}
-                        {manualContent.trim() && pptxCount > 0 && ", "}
-                        {pptxCount > 0 && `${pptxCount} pptx`}
-                      </span>
-                    )}
-                    <span className="sm:hidden">
-                      {totalCount > 0 ? `${totalCount} item${totalCount !== 1 ? 's' : ''} ready` : "No items ready"}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 order-1 sm:order-2">
-                    <Button
-                      onClick={handleCreateArtifacts}
-                      disabled={totalCount === 0 || isCreating}
-                      className="flex-1 sm:flex-none text-xs sm:text-sm h-8 sm:h-9"
-                    >
-                      {isCreating ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 animate-spin" />
-                          <span className="hidden sm:inline">Creating...</span>
-                          <span className="sm:hidden">...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="sm:hidden">Create ({totalCount})</span>
-                          <span className="hidden sm:inline">Create {totalCount} Artifact{totalCount !== 1 ? 's' : ''}</span>
-                        </>
-                      )}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleClose}
-                      className="flex-1 sm:flex-none text-xs sm:text-sm h-8 sm:h-9"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
+                {activeTab === "docx" && (
+                  <ArtifactDocxViewer
+                    docxData={docxData}
+                    setDocxData={setDocxData}
+                    exportOptions={docxExportOptions}
+                    onExportOptionsChange={setDocxExportOptions}
+                  />
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* Footer */}
+            <Separator />
+            <div className="p-4 flex items-center justify-between gap-4 shrink-0 bg-background">
+              <p className="text-sm text-muted-foreground">
+                {totalCount === 0 
+                  ? "Select content to add as artifacts" 
+                  : `${totalCount} artifact${totalCount !== 1 ? 's' : ''} will be created`}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateArtifacts} 
+                  disabled={totalCount === 0 || isCreating}
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>Add {totalCount > 0 ? totalCount : ''} Artifact{totalCount !== 1 ? 's' : ''}</>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
-        </TooltipProvider>
+        </div>
       </DialogContent>
     </Dialog>
   );
