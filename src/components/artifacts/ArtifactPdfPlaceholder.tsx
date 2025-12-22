@@ -1,99 +1,32 @@
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileIcon, X, AlertCircle } from "lucide-react";
-import { CompactDropZone } from "./CompactDropZone";
+import React from "react";
+import {
+  ArtifactPdfViewer,
+  type PdfData,
+  type PdfExportOptions,
+} from "./ArtifactPdfViewer";
 
 interface ArtifactPdfPlaceholderProps {
-  files: File[];
-  onFilesChange: (files: File[]) => void;
+  pdfData: PdfData | null;
+  onPdfDataChange: (data: PdfData | null) => void;
+  exportOptions: PdfExportOptions;
+  onExportOptionsChange: (options: PdfExportOptions) => void;
 }
 
-export function ArtifactPdfPlaceholder({ files, onFilesChange }: ArtifactPdfPlaceholderProps) {
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleDragOver = () => {
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    setIsDragging(false);
-    const droppedFiles = Array.from(e.dataTransfer.files).filter(f => 
-      f.name.toLowerCase().endsWith(".pdf")
-    );
-    onFilesChange([...files, ...droppedFiles]);
-  };
-
-  const handleFileSelect = (selectedFiles: File[]) => {
-    const pdfFiles = selectedFiles.filter(f => 
-      f.name.toLowerCase().endsWith(".pdf")
-    );
-    onFilesChange([...files, ...pdfFiles]);
-  };
-
-  const removeFile = (index: number) => {
-    onFilesChange(files.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
+export function ArtifactPdfPlaceholder({
+  pdfData,
+  onPdfDataChange,
+  exportOptions,
+  onExportOptionsChange,
+}: ArtifactPdfPlaceholderProps) {
   return (
-    <div className="flex flex-col gap-3 h-full min-h-0">
-      <CompactDropZone
-        icon={FileIcon}
-        label="Drop PDF files here or click to browse"
-        buttonText="Select"
-        acceptText="PDF files"
-        accept=".pdf"
-        onFilesSelected={handleFileSelect}
-        isDragging={isDragging}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      />
-
-      <Alert className="shrink-0">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          PDF processing coming soon. Files will be converted to artifacts in a future update.
-        </AlertDescription>
-      </Alert>
-
-      {files.length > 0 && (
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="space-y-2 p-1">
-            {files.map((file, index) => (
-              <div
-                key={`${file.name}-${index}`}
-                className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30"
-              >
-                <FileIcon className="h-5 w-5 text-red-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeFile(index)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-    </div>
+    <ArtifactPdfViewer
+      pdfData={pdfData}
+      onPdfDataChange={onPdfDataChange}
+      exportOptions={exportOptions}
+      onExportOptionsChange={onExportOptionsChange}
+    />
   );
 }
+
+// Re-export types for backward compatibility
+export type { PdfData, PdfExportOptions, PdfExportMode } from "./ArtifactPdfViewer";

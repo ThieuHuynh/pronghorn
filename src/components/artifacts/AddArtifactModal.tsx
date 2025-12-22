@@ -26,8 +26,9 @@ import { ArtifactImageGallery, ImageFile } from "./ArtifactImageGallery";
 import { ArtifactTextFileList, TextFile } from "./ArtifactTextFileList";
 import { ArtifactExcelViewer } from "./ArtifactExcelViewer";
 import { ArtifactDocxPlaceholder } from "./ArtifactDocxPlaceholder";
-import { ArtifactPdfPlaceholder } from "./ArtifactPdfPlaceholder";
+import { ArtifactPdfPlaceholder, type PdfData, type PdfExportOptions } from "./ArtifactPdfPlaceholder";
 import { ArtifactPptxViewer, PptxExportOptions } from "./ArtifactPptxViewer";
+import { rasterizeSelectedPages } from "@/utils/parsePdf";
 import { ArtifactUniversalUpload } from "./ArtifactUniversalUpload";
 import { ExcelData, formatExcelDataAsJson, parseExcelFile } from "@/utils/parseExcel";
 import { PptxData, getAllText, getTextPerSlide } from "@/utils/parsePptx";
@@ -87,7 +88,16 @@ export function AddArtifactModal({
 
   // Phase 2 file states (coming soon)
   const [docxFiles, setDocxFiles] = useState<File[]>([]);
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+
+  // PDF state
+  const [pdfData, setPdfData] = useState<PdfData | null>(null);
+  const [pdfExportOptions, setPdfExportOptions] = useState<PdfExportOptions>({
+    mode: "text",
+    mergeText: true,
+    extractImages: true,
+    selectedPages: new Set(),
+    selectedImages: new Set(),
+  });
 
   // Auto-collapse sidebar on small screens
   useEffect(() => {
@@ -134,6 +144,25 @@ export function AddArtifactModal({
 
   const pptxCount = getPptxCount();
 
+  // Calculate PDF artifact count
+  const getPdfCount = useCallback(() => {
+    if (!pdfData || pdfExportOptions.selectedPages.size === 0) return 0;
+    let count = 0;
+    const selectedCount = pdfExportOptions.selectedPages.size;
+    if (pdfExportOptions.mode === "text" || pdfExportOptions.mode === "both") {
+      count += pdfExportOptions.mergeText ? 1 : selectedCount;
+    }
+    if (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both") {
+      count += selectedCount;
+    }
+    if (pdfExportOptions.extractImages && pdfExportOptions.selectedImages) {
+      count += pdfExportOptions.selectedImages.size;
+    }
+    return count;
+  }, [pdfData, pdfExportOptions]);
+
+  const pdfCount = getPdfCount();
+
   const getTotalCount = () => {
     let count = 0;
     count += selectedImagesCount;
@@ -145,6 +174,8 @@ export function AddArtifactModal({
     if (manualContent.trim()) count += 1;
     // PPTX count
     count += pptxCount;
+    // PDF count
+    count += pdfCount;
     return count;
   };
 
@@ -158,7 +189,7 @@ export function AddArtifactModal({
     { id: "text", label: "Text Files", icon: <FileText className="h-4 w-4" />, count: selectedTextFilesCount },
     { id: "pptx", label: "PowerPoint", icon: <Presentation className="h-4 w-4" />, count: pptxCount },
     { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, count: docxFiles.length },
-    { id: "pdf", label: "PDF", icon: <FileIcon className="h-4 w-4" />, count: pdfFiles.length },
+    { id: "pdf", label: "PDF", icon: <FileIcon className="h-4 w-4" />, count: pdfCount },
   ];
 
   // Handlers for universal upload
@@ -200,7 +231,10 @@ export function AddArtifactModal({
   };
 
   const handleUniversalPdfAdded = (files: File[]) => {
-    setPdfFiles(prev => [...prev, ...files]);
+    // PDF files are now handled by the viewer component - switch to PDF tab
+    if (files.length > 0) {
+      setActiveTab("pdf");
+    }
   };
 
   const handleUniversalPptxAdded = (files: File[]) => {
@@ -461,7 +495,14 @@ export function AddArtifactModal({
       selectedImages: new Set(),
     });
     setDocxFiles([]);
-    setPdfFiles([]);
+    setPdfData(null);
+    setPdfExportOptions({
+      mode: "text",
+      mergeText: true,
+      extractImages: true,
+      selectedPages: new Set(),
+      selectedImages: new Set(),
+    });
     setActiveTab("manual");
   };
 
@@ -607,7 +648,7 @@ export function AddArtifactModal({
                       excel: excelData ? 1 : 0,
                       textFiles: textFiles.length,
                       docx: docxFiles.length,
-                      pdf: pdfFiles.length,
+                      pdf: pdfData ? 1 : 0,
                       pptx: pptxData ? 1 : 0,
                     }}
                   />
@@ -650,8 +691,10 @@ export function AddArtifactModal({
                 )}
                 {activeTab === "pdf" && (
                   <ArtifactPdfPlaceholder
-                    files={pdfFiles}
-                    onFilesChange={setPdfFiles}
+                    pdfData={pdfData}
+                    onPdfDataChange={setPdfData}
+                    exportOptions={pdfExportOptions}
+                    onExportOptionsChange={setPdfExportOptions}
                   />
                 )}
               </div>
