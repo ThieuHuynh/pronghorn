@@ -1286,9 +1286,6 @@ async function parseSlide(
     rels = parseRelationships(relsXml);
   }
   
-  // Extract text content
-  const textContent = extractTextFromXml(doc);
-  
   // Find which layout this slide uses and parse its placeholder styles
   let layoutPath: string | null = null;
   for (const relId in rels) {
@@ -1326,18 +1323,30 @@ async function parseSlide(
     }
   }
   
-  // Try to find slide title (usually first text in title placeholder)
+  // Extract title from title placeholder shapes (not fallback)
   let title: string | undefined;
-  const titleShapes = doc.querySelectorAll('[type="title"], [type="ctrTitle"]');
-  if (titleShapes.length > 0) {
-    const titleTexts = titleShapes[0].getElementsByTagNameNS(NS.a, "t");
-    if (titleTexts.length > 0) {
-      title = titleTexts[0].textContent || undefined;
+  for (const shape of shapes) {
+    if ((shape.placeholderType === 'title' || shape.placeholderType === 'ctrTitle') && shape.text) {
+      title = shape.text;
+      break; // Use first title found
     }
   }
-  // Fallback: use first text as title
-  if (!title && textContent.length > 0) {
-    title = textContent[0];
+  // NO FALLBACK - if no title placeholder, title stays undefined
+  
+  // Build textContent from non-title, non-slideNum shapes
+  const textContent: string[] = [];
+  for (const shape of shapes) {
+    // Skip title placeholders (already in `title`)
+    // Skip slide number placeholders (not useful for export)
+    if (shape.placeholderType === 'title' || 
+        shape.placeholderType === 'ctrTitle' || 
+        shape.placeholderType === 'sldNum') {
+      continue;
+    }
+    // Add shape text if it exists
+    if (shape.text && shape.text.trim()) {
+      textContent.push(shape.text.trim());
+    }
   }
   
   return {
