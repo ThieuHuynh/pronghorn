@@ -396,76 +396,72 @@ export function ArtifactPptxViewer({
                 <div className="grid grid-cols-2 gap-4">
                   {/* Background Color */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="auto-bg"
-                        checked={exportOptions.useAutoBackground !== false}
-                        onCheckedChange={(checked) =>
-                          onExportOptionsChange({ 
-                            ...exportOptions, 
-                            useAutoBackground: !!checked,
+                    <Label className="text-xs">Background Color</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={exportOptions.overrideBackgroundColor || "#FFFFFF"}
+                        onChange={(e) =>
+                          onExportOptionsChange({
+                            ...exportOptions,
+                            overrideBackgroundColor: e.target.value,
+                            useAutoBackground: false,
                           })
                         }
+                        className="w-8 h-8 rounded border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={exportOptions.useAutoBackground !== false}
                       />
-                      <Label htmlFor="auto-bg" className="text-xs cursor-pointer">
-                        Auto-detect background
-                      </Label>
-                    </div>
-                    {exportOptions.useAutoBackground === false && (
                       <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={exportOptions.overrideBackgroundColor || "#FFFFFF"}
-                          onChange={(e) =>
-                            onExportOptionsChange({
-                              ...exportOptions,
-                              overrideBackgroundColor: e.target.value,
+                        <Checkbox
+                          id="auto-bg"
+                          checked={exportOptions.useAutoBackground !== false}
+                          onCheckedChange={(checked) =>
+                            onExportOptionsChange({ 
+                              ...exportOptions, 
+                              useAutoBackground: !!checked,
                             })
                           }
-                          className="w-8 h-8 rounded border cursor-pointer"
                         />
-                        <span className="text-xs text-muted-foreground">
-                          {exportOptions.overrideBackgroundColor || "#FFFFFF"}
-                        </span>
+                        <Label htmlFor="auto-bg" className="text-xs cursor-pointer">
+                          Auto
+                        </Label>
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   {/* Font Color */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="auto-font"
-                        checked={exportOptions.useAutoFontColor !== false}
-                        onCheckedChange={(checked) =>
-                          onExportOptionsChange({ 
-                            ...exportOptions, 
-                            useAutoFontColor: !!checked,
+                    <Label className="text-xs">Font Color</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={exportOptions.overrideFontColor || "#000000"}
+                        onChange={(e) =>
+                          onExportOptionsChange({
+                            ...exportOptions,
+                            overrideFontColor: e.target.value,
+                            useAutoFontColor: false,
                           })
                         }
+                        className="w-8 h-8 rounded border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={exportOptions.useAutoFontColor !== false}
                       />
-                      <Label htmlFor="auto-font" className="text-xs cursor-pointer">
-                        Auto-detect font color
-                      </Label>
-                    </div>
-                    {exportOptions.useAutoFontColor === false && (
                       <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={exportOptions.overrideFontColor || "#000000"}
-                          onChange={(e) =>
-                            onExportOptionsChange({
-                              ...exportOptions,
-                              overrideFontColor: e.target.value,
+                        <Checkbox
+                          id="auto-font"
+                          checked={exportOptions.useAutoFontColor !== false}
+                          onCheckedChange={(checked) =>
+                            onExportOptionsChange({ 
+                              ...exportOptions, 
+                              useAutoFontColor: !!checked,
                             })
                           }
-                          className="w-8 h-8 rounded border cursor-pointer"
                         />
-                        <span className="text-xs text-muted-foreground">
-                          {exportOptions.overrideFontColor || "#000000"}
-                        </span>
+                        <Label htmlFor="auto-font" className="text-xs cursor-pointer">
+                          Auto
+                        </Label>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>

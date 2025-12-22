@@ -147,8 +147,69 @@ function extractTextFromXml(doc: Document): string[] {
   return texts;
 }
 
+// Theme colors cache - will be populated when parsing starts
+let themeColors: Record<string, string> = {};
+
 /**
- * Parse color from PPTX XML (simplified)
+ * Parse theme.xml to extract actual color values
+ */
+async function parseThemeColors(zip: JSZip): Promise<Record<string, string>> {
+  const colors: Record<string, string> = {};
+  
+  try {
+    const themeFile = zip.file("ppt/theme/theme1.xml");
+    if (!themeFile) return colors;
+    
+    const themeXml = await themeFile.async("string");
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(themeXml, "application/xml");
+    
+    // Parse clrScheme for actual scheme color values
+    const clrScheme = doc.getElementsByTagNameNS(NS.a, "clrScheme")[0];
+    if (!clrScheme) return colors;
+    
+    // Standard Office color scheme names
+    const colorNames = ['dk1', 'lt1', 'dk2', 'lt2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
+    
+    for (const name of colorNames) {
+      // Find element by local name within clrScheme
+      const children = clrScheme.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if (child.localName === name) {
+          // Check for srgbClr
+          const srgb = child.getElementsByTagNameNS(NS.a, "srgbClr")[0];
+          if (srgb) {
+            const val = srgb.getAttribute("val");
+            if (val) colors[name] = `#${val}`;
+          }
+          // Check for sysClr (system color)
+          const sysClr = child.getElementsByTagNameNS(NS.a, "sysClr")[0];
+          if (sysClr && !colors[name]) {
+            const lastClr = sysClr.getAttribute("lastClr");
+            if (lastClr) colors[name] = `#${lastClr}`;
+          }
+          break;
+        }
+      }
+    }
+    
+    // Map tx1/tx2/bg1/bg2 aliases
+    if (colors.dk1) colors.tx1 = colors.dk1;
+    if (colors.dk2) colors.tx2 = colors.dk2;
+    if (colors.lt1) colors.bg1 = colors.lt1;
+    if (colors.lt2) colors.bg2 = colors.lt2;
+    
+    console.log("[PPTX Parser] Parsed theme colors:", colors);
+  } catch (error) {
+    console.warn("Failed to parse theme colors:", error);
+  }
+  
+  return colors;
+}
+
+/**
+ * Parse color from PPTX XML with theme color support
  */
 function parseColor(element: Element | null): string | undefined {
   if (!element) return undefined;
@@ -160,11 +221,13 @@ function parseColor(element: Element | null): string | undefined {
     if (val) return `#${val}`;
   }
   
-  // Try schemeClr (theme color) - return a default
+  // Try schemeClr (theme color) - use parsed theme colors or fallback
   const schemeClr = element.getElementsByTagNameNS(NS.a, "schemeClr")[0];
   if (schemeClr) {
     const val = schemeClr.getAttribute("val");
-    // Map common scheme colors to hex
+    if (val && themeColors[val]) return themeColors[val];
+    
+    // Fallback map if theme parsing didn't work
     const schemeMap: Record<string, string> = {
       tx1: "#000000",
       tx2: "#44546A",
@@ -182,6 +245,41 @@ function parseColor(element: Element | null): string | undefined {
       dk2: "#44546A",
     };
     if (val && schemeMap[val]) return schemeMap[val];
+  }
+  
+  return undefined;
+}
+
+/**
+ * Parse color from gradient fill - extract first color stop
+ */
+function parseGradientColor(element: Element | null): string | undefined {
+  if (!element) return undefined;
+  
+  const gradFill = element.getElementsByTagNameNS(NS.a, "gradFill")[0];
+  if (!gradFill) return undefined;
+  
+  const gsLst = gradFill.getElementsByTagNameNS(NS.a, "gsLst")[0];
+  if (!gsLst) return undefined;
+  
+  // Get first gradient stop
+  const gsElements = gsLst.getElementsByTagNameNS(NS.a, "gs");
+  if (gsElements.length === 0) return undefined;
+  
+  const firstGs = gsElements[0];
+  
+  // Try srgbClr in the gradient stop
+  const srgbClr = firstGs.getElementsByTagNameNS(NS.a, "srgbClr")[0];
+  if (srgbClr) {
+    const val = srgbClr.getAttribute("val");
+    if (val) return `#${val}`;
+  }
+  
+  // Try schemeClr in gradient stop
+  const schemeClr = firstGs.getElementsByTagNameNS(NS.a, "schemeClr")[0];
+  if (schemeClr) {
+    const val = schemeClr.getAttribute("val");
+    if (val && themeColors[val]) return themeColors[val];
   }
   
   return undefined;
@@ -389,7 +487,40 @@ function extractParagraphsFromShape(sp: Element): PptxParagraph[] {
 }
 
 /**
+ * Extract background color from a bgPr or bgRef element
+ */
+function extractBackgroundFromBg(bg: Element): string | undefined {
+  // Check bgPr (background properties)
+  const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
+  if (bgPr) {
+    // Try solid fill first
+    const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+    const solidColor = parseColor(solidFill);
+    if (solidColor) return solidColor;
+    
+    // Try gradient fill - extract first color
+    const gradColor = parseGradientColor(bgPr);
+    if (gradColor) return gradColor;
+  }
+  
+  // Check bgRef (background reference to theme fill)
+  const bgRef = bg.getElementsByTagNameNS(NS.p, "bgRef")[0];
+  if (bgRef) {
+    // bgRef may have embedded color
+    const color = parseColor(bgRef);
+    if (color) return color;
+    
+    // Try gradient in bgRef
+    const gradColor = parseGradientColor(bgRef);
+    if (gradColor) return gradColor;
+  }
+  
+  return undefined;
+}
+
+/**
  * Extract slide background color from slide, layout, or master XML
+ * Follows the proper inheritance chain: slide → layout → master
  */
 async function extractSlideBackground(
   zip: JSZip,
@@ -398,41 +529,42 @@ async function extractSlideBackground(
 ): Promise<string | undefined> {
   const parser = new DOMParser();
   
-  // Try to get background from slide first
+  // 1. Try to get background from slide first
   const slidePath = `ppt/slides/slide${slideIndex + 1}.xml`;
   const slideFile = zip.file(slidePath);
   if (slideFile) {
     const slideXml = await slideFile.async("string");
     const slideDoc = parser.parseFromString(slideXml, "application/xml");
     
-    // Check for slide-level background
     const cSld = slideDoc.getElementsByTagNameNS(NS.p, "cSld")[0];
     if (cSld) {
       const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
       if (bg) {
-        const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
-        if (bgPr) {
-          const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
-          const color = parseColor(solidFill);
-          if (color) return color;
-        }
-        // Check bgRef with schemeClr
-        const bgRef = bg.getElementsByTagNameNS(NS.p, "bgRef")[0];
-        if (bgRef) {
-          const color = parseColor(bgRef);
-          if (color) return color;
+        const color = extractBackgroundFromBg(bg);
+        if (color) {
+          console.log(`[PPTX Parser] Slide ${slideIndex + 1} background from slide: ${color}`);
+          return color;
         }
       }
     }
   }
   
-  // Try to get background from slide layout
-  const layoutRelId = Object.keys(slideRels).find(id => 
-    slideRels[id].includes("slideLayouts")
-  );
+  // 2. Try to get background from slide layout
+  let layoutPath: string | null = null;
+  for (const relId in slideRels) {
+    const target = slideRels[relId];
+    if (target.includes("slideLayouts")) {
+      // Normalize path
+      layoutPath = target.startsWith("../") 
+        ? `ppt/${target.replace("../", "")}` 
+        : target.replace("ppt/ppt/", "ppt/");
+      break;
+    }
+  }
   
-  if (layoutRelId && slideRels[layoutRelId]) {
-    const layoutPath = slideRels[layoutRelId].replace("ppt/ppt/", "ppt/");
+  let masterPathFromLayout: string | null = null;
+  
+  if (layoutPath) {
     const layoutFile = zip.file(layoutPath);
     if (layoutFile) {
       const layoutXml = await layoutFile.async("string");
@@ -442,25 +574,48 @@ async function extractSlideBackground(
       if (cSld) {
         const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
         if (bg) {
-          const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
-          if (bgPr) {
-            const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
-            const color = parseColor(solidFill);
-            if (color) return color;
+          const color = extractBackgroundFromBg(bg);
+          if (color) {
+            console.log(`[PPTX Parser] Slide ${slideIndex + 1} background from layout: ${color}`);
+            return color;
+          }
+        }
+      }
+      
+      // Get layout's relationship to master
+      const layoutRelsPath = layoutPath.replace("slideLayouts/", "slideLayouts/_rels/") + ".rels";
+      const layoutRelsFile = zip.file(layoutRelsPath);
+      if (layoutRelsFile) {
+        const layoutRelsXml = await layoutRelsFile.async("string");
+        const layoutRels = parseRelationships(layoutRelsXml);
+        for (const relId in layoutRels) {
+          const target = layoutRels[relId];
+          if (target.includes("slideMasters")) {
+            masterPathFromLayout = target.startsWith("../") 
+              ? `ppt/${target.replace("../", "")}` 
+              : target.replace("ppt/ppt/", "ppt/");
+            break;
           }
         }
       }
     }
   }
   
-  // Try to get background from slide master
+  // 3. Try to get background from slide master
   try {
-    const masterFiles = Object.keys(zip.files).filter(f => 
-      f.startsWith("ppt/slideMasters/") && f.endsWith(".xml") && !f.includes("_rels")
-    );
+    // Use master from layout relationship, or fallback to first master
+    let masterPath = masterPathFromLayout;
+    if (!masterPath) {
+      const masterFiles = Object.keys(zip.files).filter(f => 
+        f.startsWith("ppt/slideMasters/") && f.endsWith(".xml") && !f.includes("_rels")
+      );
+      if (masterFiles.length > 0) {
+        masterPath = masterFiles[0];
+      }
+    }
     
-    if (masterFiles.length > 0) {
-      const masterFile = zip.file(masterFiles[0]);
+    if (masterPath) {
+      const masterFile = zip.file(masterPath);
       if (masterFile) {
         const masterXml = await masterFile.async("string");
         const masterDoc = parser.parseFromString(masterXml, "application/xml");
@@ -469,11 +624,10 @@ async function extractSlideBackground(
         if (cSld) {
           const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
           if (bg) {
-            const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
-            if (bgPr) {
-              const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
-              const color = parseColor(solidFill);
-              if (color) return color;
+            const color = extractBackgroundFromBg(bg);
+            if (color) {
+              console.log(`[PPTX Parser] Slide ${slideIndex + 1} background from master: ${color}`);
+              return color;
             }
           }
         }
@@ -483,7 +637,8 @@ async function extractSlideBackground(
     console.warn("Failed to extract master background:", e);
   }
   
-  // Default to white
+  // No background found
+  console.log(`[PPTX Parser] Slide ${slideIndex + 1} no background color found`);
   return undefined;
 }
 
@@ -786,6 +941,9 @@ async function parseSlide(
 export async function parsePptxFile(file: File): Promise<PptxData> {
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
+  
+  // Parse theme colors first (for proper color resolution)
+  themeColors = await parseThemeColors(zip);
   
   // Extract metadata
   const metadata = await extractMetadata(zip);
