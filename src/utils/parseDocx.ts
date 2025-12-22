@@ -319,12 +319,18 @@ export async function processDocxFile(file: File): Promise<DocxData> {
  * @param options.width - Page width in pixels (default: 816)
  * @param options.scale - Pixel ratio for higher quality (default: 2)
  * @param options.selectedPages - Optional array of page indices to rasterize (0-indexed)
+ * @param options.onProgress - Optional callback for progress updates (current, total)
  */
 export async function rasterizeDocx(
   arrayBuffer: ArrayBuffer,
-  options: { width?: number; scale?: number; selectedPages?: number[] } = {}
+  options: { 
+    width?: number; 
+    scale?: number; 
+    selectedPages?: number[];
+    onProgress?: (current: number, total: number) => void;
+  } = {}
 ): Promise<string[]> {
-  const { width = 816, scale = 2, selectedPages } = options;
+  const { width = 816, scale = 2, selectedPages, onProgress } = options;
   const PAGE_HEIGHT = 1056; // US Letter at 96 DPI (11 inches)
   
   // First convert to HTML using mammoth
@@ -334,7 +340,6 @@ export async function rasterizeDocx(
   const { toPng } = await import("html-to-image");
   
   // Create an OPAQUE overlay to hide the rendering from the user
-  // The viewport renders behind this, technically visible to html-to-image but hidden from user
   const overlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed;
@@ -347,9 +352,45 @@ export async function rasterizeDocx(
     pointer-events: none;
   `;
   
+  // Create progress modal that sits on top of the overlay
+  const progressModal = document.createElement("div");
+  progressModal.style.cssText = `
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100001;
+    background: white;
+    border-radius: 12px;
+    padding: 32px 48px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    text-align: center;
+    font-family: system-ui, -apple-system, sans-serif;
+  `;
+  
+  // Add spinner animation style
+  const styleTag = document.createElement("style");
+  styleTag.textContent = `
+    @keyframes docx-raster-spin {
+      to { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(styleTag);
+  
+  progressModal.innerHTML = `
+    <div style="margin-bottom: 16px;">
+      <svg style="width: 40px; height: 40px; animation: docx-raster-spin 1s linear infinite; margin: 0 auto;" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="18" stroke="#e5e7eb" stroke-width="4" fill="none"></circle>
+        <circle cx="20" cy="20" r="18" stroke="#3b82f6" stroke-width="4" fill="none" 
+                stroke-dasharray="90 120" stroke-linecap="round"></circle>
+      </svg>
+    </div>
+    <div id="docx-raster-progress-text" style="font-size: 16px; color: #374151; font-weight: 500;">
+      Preparing document...
+    </div>
+  `;
+  
   // Create a fixed-size viewport container (this is what we capture)
-  // Position it on-screen so html-to-image can render it properly
-  // It sits BEHIND the opaque overlay (lower z-index)
   const viewport = document.createElement("div");
   viewport.style.cssText = `
     position: fixed;
@@ -403,7 +444,15 @@ export async function rasterizeDocx(
   
   viewport.appendChild(contentWrapper);
   document.body.appendChild(overlay);
+  document.body.appendChild(progressModal);
   document.body.appendChild(viewport);
+  
+  const updateProgressText = (text: string) => {
+    const progressText = progressModal.querySelector("#docx-raster-progress-text");
+    if (progressText) {
+      progressText.textContent = text;
+    }
+  };
   
   try {
     // Wait for any images to load and styles to apply
@@ -419,8 +468,18 @@ export async function rasterizeDocx(
       ? selectedPages.filter(p => p >= 0 && p < pageCount).sort((a, b) => a - b)
       : Array.from({ length: pageCount }, (_, i) => i);
     
+    const totalPages = pagesToRender.length;
+    
     // Capture each page by repositioning the content wrapper
-    for (const pageIndex of pagesToRender) {
+    for (let i = 0; i < pagesToRender.length; i++) {
+      const pageIndex = pagesToRender[i];
+      
+      // Update progress modal and call callback
+      updateProgressText(`Rasterizing page ${i + 1} of ${totalPages}...`);
+      if (onProgress) {
+        onProgress(i + 1, totalPages);
+      }
+      
       // Move content up to show current page in viewport
       contentWrapper.style.top = `-${pageIndex * PAGE_HEIGHT}px`;
       
@@ -442,6 +501,8 @@ export async function rasterizeDocx(
     // Clean up
     document.body.removeChild(viewport);
     document.body.removeChild(overlay);
+    document.body.removeChild(progressModal);
+    document.head.removeChild(styleTag);
   }
 }
 

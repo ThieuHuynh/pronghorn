@@ -96,12 +96,21 @@ export function ArtifactDocxViewer({
     }
   }, [previewTab]);
 
+  const [rasterProgress, setRasterProgress] = useState<{ current: number; total: number } | null>(null);
+
   const generateRasterizedPreview = async () => {
     if (!docxData || isRasterizing) return;
     
     setIsRasterizing(true);
+    setRasterProgress(null);
     try {
-      const pages = await rasterizeDocx(docxData.arrayBuffer, { width: 816, scale: 1 });
+      const pages = await rasterizeDocx(docxData.arrayBuffer, { 
+        width: 816, 
+        scale: 1,
+        onProgress: (current, total) => {
+          setRasterProgress({ current, total });
+        }
+      });
       setRasterizedPages(pages);
       // Auto-select all pages and update export options
       onExportOptionsChange({
@@ -113,6 +122,7 @@ export function ArtifactDocxViewer({
       console.error("Failed to generate rasterized preview:", err);
     } finally {
       setIsRasterizing(false);
+      setRasterProgress(null);
     }
   };
 
@@ -440,9 +450,13 @@ export function ArtifactDocxViewer({
               </div>
               <div className="border rounded-lg p-2 bg-background">
                 {isRasterizing ? (
-                  <div className="flex items-center justify-center h-40 gap-2">
+                  <div className="flex flex-col items-center justify-center h-40 gap-2">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Generating preview...</span>
+                    <span className="text-sm text-muted-foreground">
+                      {rasterProgress 
+                        ? `Rasterizing page ${rasterProgress.current} of ${rasterProgress.total}...`
+                        : "Preparing document..."}
+                    </span>
                   </div>
                 ) : rasterizedPages.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
