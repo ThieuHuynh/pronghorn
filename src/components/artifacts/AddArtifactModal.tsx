@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -114,6 +114,12 @@ export function AddArtifactModal({
     selectedPages: new Set(),
     selectedImages: new Set(),
   });
+
+  // Visual Recognition state
+  const [vrDialogOpen, setVrDialogOpen] = useState(false);
+  const [vrPendingImages, setVrPendingImages] = useState<RasterizedImage[]>([]);
+  // Store overridden text content: key = "pptx-{slideIndex}" or "pdf-{pageIndex}" or "docx-{pageIndex}"
+  const [vrOverriddenContent, setVrOverriddenContent] = useState<Map<string, string>>(new Map());
 
   // Auto-collapse sidebar on small screens
   useEffect(() => {
@@ -284,78 +290,152 @@ export function AddArtifactModal({
     }
   };
 
-  // Helper to process visual recognition on rasterized artifacts
-  const processVisualRecognition = async (
-    artifactIds: string[], 
-    model: string
-  ): Promise<{ successful: number; failed: number }> => {
-    if (artifactIds.length === 0) return { successful: 0, failed: 0 };
+  // Helper to check if there are selected rasterized pages
+  const hasSelectedRasterizedPages = useMemo(() => {
+    const hasPptxRasterized = pptxData && 
+      (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both") && 
+      pptxExportOptions.selectedSlides.size > 0;
     
-    setCreatingMessage(`Applying Visual Recognition (${artifactIds.length} pages)...`);
+    const hasPdfRasterized = pdfData && 
+      (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both") && 
+      pdfExportOptions.selectedPages.size > 0;
+    
+    const hasDocxRasterized = docxData && 
+      (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both") && 
+      docxExportOptions.selectedRasterPages.size > 0;
+    
+    return hasPptxRasterized || hasPdfRasterized || hasDocxRasterized;
+  }, [pptxData, pptxExportOptions, pdfData, pdfExportOptions, docxData, docxExportOptions]);
+
+  // Helper to collect rasterized images for VR processing
+  const collectRasterizedImages = async (): Promise<RasterizedImage[]> => {
+    const images: RasterizedImage[] = [];
+
+    // PPTX slides
+    if (pptxData && (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both")) {
+      for (const slideIdx of pptxExportOptions.selectedSlides) {
+        const slide = pptxData.slides[slideIdx];
+        if (!slide) continue;
+        
+        try {
+          const blob = await rasterizeSlide(slide, pptxData.media, { width: 1920, height: 1080, pixelRatio: 1 });
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(",")[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          images.push({
+            id: `pptx-${slideIdx}`,
+            imageBase64: base64,
+            imageMimeType: "image/png",
+            existingText: vrOverriddenContent.get(`pptx-${slideIdx}`) || slide.mergedText,
+            label: `Slide ${slideIdx + 1}${slide.title ? `: ${slide.title}` : ""}`,
+          });
+        } catch (err) {
+          console.error(`Failed to rasterize slide ${slideIdx + 1}:`, err);
+        }
+      }
+    }
+
+    // PDF pages
+    if (pdfData && (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both")) {
+      const selectedIndices = Array.from(pdfExportOptions.selectedPages).sort((a, b) => a - b);
+      try {
+        const rasterizedPages = await rasterizeSelectedPages(pdfData.arrayBuffer, selectedIndices, 2.5);
+        for (const result of rasterizedPages) {
+          if (!result.success || !result.dataUrl) continue;
+          
+          const pageIdx = result.pageIndex;
+          images.push({
+            id: `pdf-${pageIdx}`,
+            imageBase64: result.dataUrl.split(",")[1],
+            imageMimeType: "image/png",
+            existingText: vrOverriddenContent.get(`pdf-${pageIdx}`) || pdfData.pagesText[pageIdx] || "",
+            label: `Page ${result.pageNumber}`,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to rasterize PDF pages:", err);
+      }
+    }
+
+    // DOCX pages
+    if (docxData && (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both")) {
+      const selectedIndices = Array.from(docxExportOptions.selectedRasterPages).sort((a, b) => a - b);
+      try {
+        let pages: string[];
+        if (docxExportOptions.cachedRasterizedPages?.length) {
+          pages = selectedIndices.map(idx => docxExportOptions.cachedRasterizedPages![idx]).filter(Boolean);
+        } else {
+          pages = await rasterizeDocx(docxData.arrayBuffer, { width: 816, scale: 2, selectedPages: selectedIndices });
+        }
+        
+        pages.forEach((page, i) => {
+          const originalIndex = selectedIndices[i];
+          images.push({
+            id: `docx-${originalIndex}`,
+            imageBase64: page.split(",")[1],
+            imageMimeType: "image/png",
+            existingText: vrOverriddenContent.get(`docx-${originalIndex}`) || `Page ${originalIndex + 1} of ${docxData.filename}`,
+            label: `Page ${originalIndex + 1}`,
+          });
+        });
+      } catch (err) {
+        console.error("Failed to rasterize DOCX:", err);
+      }
+    }
+
+    return images;
+  };
+
+  // Open Visual Recognition dialog
+  const handleOpenVisualRecognition = async () => {
+    setCreatingMessage("Preparing images for Visual Recognition...");
+    setIsCreating(true);
     
     try {
-      const response = await fetch(
-        `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/visual-recognition`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
-          },
-          body: JSON.stringify({
-            artifactIds,
-            projectId,
-            shareToken,
-            model,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to process visual recognition");
+      const images = await collectRasterizedImages();
+      if (images.length === 0) {
+        toast.error("No rasterized images to process");
+        return;
       }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let result = { successful: 0, failed: 0 };
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
-
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.type === 'progress') {
-                setCreatingMessage(`Visual Recognition: ${parsed.processed}/${parsed.total} pages...`);
-              } else if (parsed.type === 'complete') {
-                result = { successful: parsed.successful, failed: parsed.failed };
-              }
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
-        }
-      }
-
-      return result;
+      
+      setVrPendingImages(images);
+      setVrDialogOpen(true);
     } catch (error) {
-      console.error("Visual recognition error:", error);
-      return { successful: 0, failed: artifactIds.length };
+      console.error("Failed to prepare images:", error);
+      toast.error("Failed to prepare images for Visual Recognition");
+    } finally {
+      setIsCreating(false);
+      setCreatingMessage("");
     }
+  };
+
+  // Handle Visual Recognition completion
+  const handleVrComplete = (results: Map<string, string>) => {
+    // Update the overridden content map
+    setVrOverriddenContent(prev => {
+      const newMap = new Map(prev);
+      for (const [id, content] of results) {
+        newMap.set(id, content);
+      }
+      return newMap;
+    });
+    
+    setVrDialogOpen(false);
+    setVrPendingImages([]);
+    toast.success(`Visual Recognition updated ${results.size} page${results.size !== 1 ? 's' : ''}`);
+  };
+
+  // Helper to get text content for a page (with VR override if exists)
+  const getOverriddenText = (type: 'pptx' | 'pdf' | 'docx', index: number, originalText: string): string => {
+    const key = `${type}-${index}`;
+    return vrOverriddenContent.get(key) ?? originalText;
   };
 
   const handleCreateArtifacts = async () => {
@@ -365,11 +445,6 @@ export function AddArtifactModal({
     setCreatingMessage("Creating artifacts...");
     let successCount = 0;
     let errorCount = 0;
-    
-    // Track rasterized artifact IDs for visual recognition
-    const pptxRasterizedIds: string[] = [];
-    const pdfRasterizedIds: string[] = [];
-    const docxRasterizedIds: string[] = [];
 
     try {
       // Create image artifacts
@@ -540,7 +615,7 @@ export function AddArtifactModal({
                   shareToken,
                   imageData: base64,
                   fileName: `${pptxData.filename.replace(/\.pptx?$/i, "")}_slide${slide.index + 1}.png`,
-                  content: `Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slide.mergedText}`,
+                  content: getOverriddenText('pptx', slide.index, `Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slide.mergedText}`),
                   sourceType: "pptx-rasterized",
                   title: `${pptxData.filename} - Slide ${slide.index + 1}`,
                   provenanceId,
@@ -551,10 +626,6 @@ export function AddArtifactModal({
               });
 
               if (error) throw error;
-              // Track for visual recognition
-              if (data?.artifact?.id) {
-                pptxRasterizedIds.push(data.artifact.id);
-              }
               broadcastRefresh("insert", data?.artifact?.id);
               successCount++;
             } catch (err) {
@@ -662,7 +733,7 @@ export function AddArtifactModal({
                     shareToken,
                     imageData: base64Data,
                     fileName: `${pdfData.filename.replace(/\.pdf$/i, "")}_page${result.pageNumber}.png`,
-                    content: `Page ${result.pageNumber}\n\n${pdfData.pagesText[result.pageIndex] || ""}`,
+                    content: getOverriddenText('pdf', result.pageIndex, `Page ${result.pageNumber}\n\n${pdfData.pagesText[result.pageIndex] || ""}`),
                     sourceType: "pdf-rasterized",
                     title: `${pdfData.filename} - Page ${result.pageNumber}`,
                     provenanceId,
@@ -673,10 +744,6 @@ export function AddArtifactModal({
                 });
 
                 if (error) throw error;
-                // Track for visual recognition
-                if (data?.artifact?.id) {
-                  pdfRasterizedIds.push(data.artifact.id);
-                }
                 broadcastRefresh("insert", data?.artifact?.id);
                 successCount++;
               } catch (err) {
@@ -781,7 +848,7 @@ export function AddArtifactModal({
                     shareToken,
                     imageData: base64Data,
                     fileName: `${docxData.filename.replace(/\.docx?$/i, "")}_page${originalIndex + 1}.png`,
-                    content: `Page ${originalIndex + 1} of ${docxData.filename}`,
+                    content: getOverriddenText('docx', originalIndex, `Page ${originalIndex + 1} of ${docxData.filename}`),
                     sourceType: "docx-rasterized",
                     title: `${docxData.filename} - Page ${originalIndex + 1}`,
                     provenanceId,
@@ -792,10 +859,6 @@ export function AddArtifactModal({
                 });
 
                 if (error) throw error;
-                // Track for visual recognition
-                if (data?.artifact?.id) {
-                  docxRasterizedIds.push(data.artifact.id);
-                }
                 broadcastRefresh("insert", data?.artifact?.id);
                 successCount++;
               }
@@ -835,46 +898,13 @@ export function AddArtifactModal({
         }
       }
 
-      // Apply Visual Recognition if enabled for any rasterized artifacts
-      let vrSuccessCount = 0;
-      let vrErrorCount = 0;
-
-      // PPTX Visual Recognition
-      if (pptxExportOptions.visualRecognition && pptxRasterizedIds.length > 0) {
-        const vrResult = await processVisualRecognition(
-          pptxRasterizedIds, 
-          pptxExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
-        );
-        vrSuccessCount += vrResult.successful;
-        vrErrorCount += vrResult.failed;
-      }
-
-      // PDF Visual Recognition
-      if (pdfExportOptions.visualRecognition && pdfRasterizedIds.length > 0) {
-        const vrResult = await processVisualRecognition(
-          pdfRasterizedIds, 
-          pdfExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
-        );
-        vrSuccessCount += vrResult.successful;
-        vrErrorCount += vrResult.failed;
-      }
-
-      // DOCX Visual Recognition
-      if (docxExportOptions.visualRecognition && docxRasterizedIds.length > 0) {
-        const vrResult = await processVisualRecognition(
-          docxRasterizedIds, 
-          docxExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
-        );
-        vrSuccessCount += vrResult.successful;
-        vrErrorCount += vrResult.failed;
-      }
-
       setCreatingMessage("");
 
       if (successCount > 0) {
+        const vrCount = vrOverriddenContent.size;
         let message = `Created ${successCount} artifact${successCount !== 1 ? 's' : ''}`;
-        if (vrSuccessCount > 0) {
-          message += ` (${vrSuccessCount} with OCR)`;
+        if (vrCount > 0) {
+          message += ` (${vrCount} with OCR)`;
         }
         toast.success(message);
         onArtifactsCreated();
@@ -884,9 +914,6 @@ export function AddArtifactModal({
 
       if (errorCount > 0) {
         toast.error(`Failed to create ${errorCount} artifact${errorCount !== 1 ? 's' : ''}`);
-      }
-      if (vrErrorCount > 0) {
-        toast.warning(`Visual recognition failed for ${vrErrorCount} artifact${vrErrorCount !== 1 ? 's' : ''}`);
       }
     } finally {
       setIsCreating(false);
@@ -926,6 +953,7 @@ export function AddArtifactModal({
       selectedPages: new Set(),
       selectedImages: new Set(),
     });
+    setVrOverriddenContent(new Map());
     setActiveTab("manual");
   };
 
@@ -1125,12 +1153,30 @@ export function AddArtifactModal({
             {/* Footer */}
             <Separator />
             <div className="p-4 flex items-center justify-between gap-4 shrink-0 bg-background">
-              <p className="text-sm text-muted-foreground">
-                {totalCount === 0 
-                  ? "Select content to add as artifacts" 
-                  : `${totalCount} artifact${totalCount !== 1 ? 's' : ''} will be created`}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {totalCount === 0 
+                    ? "Select content to add as artifacts" 
+                    : `${totalCount} artifact${totalCount !== 1 ? 's' : ''} will be created`}
+                </p>
+                {vrOverriddenContent.size > 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    <ScanEye className="h-3 w-3" />
+                    {vrOverriddenContent.size} OCR
+                  </Badge>
+                )}
+              </div>
               <div className="flex gap-2">
+                {hasSelectedRasterizedPages && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleOpenVisualRecognition}
+                    disabled={isCreating}
+                  >
+                    <ScanEye className="h-4 w-4 mr-2" />
+                    Visual Recognition
+                  </Button>
+                )}
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
@@ -1151,6 +1197,14 @@ export function AddArtifactModal({
             </div>
           </div>
         </div>
+
+        {/* Visual Recognition Dialog */}
+        <VisualRecognitionImportDialog
+          open={vrDialogOpen}
+          onOpenChange={setVrDialogOpen}
+          images={vrPendingImages}
+          onComplete={handleVrComplete}
+        />
       </DialogContent>
     </Dialog>
   );

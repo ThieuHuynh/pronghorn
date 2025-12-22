@@ -43,9 +43,6 @@ export interface PptxExportOptions {
   overrideFontColor?: string;
   useAutoBackground?: boolean;
   useAutoFontColor?: boolean;
-  // Visual Recognition options (applied after rasterization)
-  visualRecognition?: boolean;
-  visualRecognitionModel?: string;
 }
 
 interface ArtifactPptxViewerProps {
