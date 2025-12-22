@@ -312,8 +312,14 @@ export async function rasterizeElement(
     width = SLIDE_WIDTH,
     height = SLIDE_HEIGHT,
     pixelRatio = 2,
-    backgroundColor = "#FFFFFF",
+    backgroundColor,
+    overrideBackgroundColor,
   } = options;
+
+  // Use override color first, then backgroundColor option, then extract from element, then fallback
+  const actualBgColor = overrideBackgroundColor || backgroundColor || element.style.backgroundColor || "#FFFFFF";
+  
+  console.log(`[PPTX Rasterizer] Using background color: ${actualBgColor} (override: ${overrideBackgroundColor}, option: ${backgroundColor})`);
 
   // Add element to DOM temporarily (required for html-to-image)
   element.style.position = "fixed";
@@ -335,7 +341,7 @@ export async function rasterizeElement(
       width,
       height,
       pixelRatio,
-      backgroundColor,
+      backgroundColor: actualBgColor,  // Use the resolved background color
       cacheBust: true,
       style: {
         transform: "none",
@@ -362,6 +368,9 @@ export async function rasterizeSlide(
 ): Promise<Blob> {
   const width = options.width || SLIDE_WIDTH;
   const height = options.height || SLIDE_HEIGHT;
+  
+  // Determine background color: override > slide color > default
+  const bgColor = options.overrideBackgroundColor || slide.backgroundColor || "#FFFFFF";
 
   const element = renderSlideToHtml(slide, media, { 
     width, 
@@ -369,7 +378,15 @@ export async function rasterizeSlide(
     overrideBackgroundColor: options.overrideBackgroundColor,
     overrideFontColor: options.overrideFontColor,
   });
-  return rasterizeElement(element, { ...options, width, height });
+  
+  // Pass the resolved background color to rasterizeElement
+  return rasterizeElement(element, { 
+    ...options, 
+    width, 
+    height,
+    backgroundColor: bgColor,
+    overrideBackgroundColor: options.overrideBackgroundColor,
+  });
 }
 
 /**

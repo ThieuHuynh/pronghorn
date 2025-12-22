@@ -264,6 +264,123 @@ async function parseColorMapFromMasters(zip: JSZip): Promise<Record<string, stri
   return clrMap;
 }
 
+// Cache for placeholder positions from slide masters and layouts
+interface PlaceholderPosition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+let placeholderPositions: Map<string, PlaceholderPosition> = new Map();
+
+/**
+ * Parse placeholder positions from slide masters
+ * These are used when a shape doesn't have its own transform
+ */
+async function parsePlaceholderPositions(zip: JSZip): Promise<void> {
+  const parser = new DOMParser();
+  placeholderPositions.clear();
+  
+  // Find all slide master files
+  const masterFiles = Object.keys(zip.files).filter(f => 
+    f.startsWith("ppt/slideMasters/slideMaster") && f.endsWith(".xml") && !f.includes("_rels")
+  );
+  
+  console.log(`[PPTX Parser] Parsing placeholder positions from ${masterFiles.length} slide masters`);
+  
+  for (const masterPath of masterFiles) {
+    const masterFile = zip.file(masterPath);
+    if (!masterFile) continue;
+    
+    try {
+      const xml = await masterFile.async("string");
+      const doc = parser.parseFromString(xml, "application/xml");
+      
+      // Find sp elements with ph (placeholder) elements
+      const spElements = doc.getElementsByTagNameNS(NS.p, "sp");
+      for (let i = 0; i < spElements.length; i++) {
+        const sp = spElements[i];
+        const nvSpPr = sp.getElementsByTagNameNS(NS.p, "nvSpPr")[0];
+        if (!nvSpPr) continue;
+        
+        const nvPr = nvSpPr.getElementsByTagNameNS(NS.p, "nvPr")[0];
+        if (!nvPr) continue;
+        
+        const ph = nvPr.getElementsByTagNameNS(NS.p, "ph")[0];
+        if (!ph) continue;
+        
+        const phType = ph.getAttribute("type") || "body";
+        
+        // Only store if we don't already have this type (first master wins)
+        if (placeholderPositions.has(phType)) continue;
+        
+        // Get position from xfrm
+        const transform = findXfrm(sp);
+        if (transform) {
+          placeholderPositions.set(phType, {
+            x: transform.x,
+            y: transform.y,
+            width: transform.width,
+            height: transform.height,
+          });
+          console.log(`[PPTX Parser] Placeholder '${phType}' position: x=${transform.x}, y=${transform.y}, w=${transform.width}, h=${transform.height}`);
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to parse placeholder positions from ${masterPath}:`, error);
+    }
+  }
+  
+  // Also parse slide layouts for more specific placeholder positions
+  const layoutFiles = Object.keys(zip.files).filter(f => 
+    f.startsWith("ppt/slideLayouts/slideLayout") && f.endsWith(".xml") && !f.includes("_rels")
+  );
+  
+  console.log(`[PPTX Parser] Parsing placeholder positions from ${layoutFiles.length} slide layouts`);
+  
+  for (const layoutPath of layoutFiles) {
+    const layoutFile = zip.file(layoutPath);
+    if (!layoutFile) continue;
+    
+    try {
+      const xml = await layoutFile.async("string");
+      const doc = parser.parseFromString(xml, "application/xml");
+      
+      // Find sp elements with ph (placeholder) elements
+      const spElements = doc.getElementsByTagNameNS(NS.p, "sp");
+      for (let i = 0; i < spElements.length; i++) {
+        const sp = spElements[i];
+        const nvSpPr = sp.getElementsByTagNameNS(NS.p, "nvSpPr")[0];
+        if (!nvSpPr) continue;
+        
+        const nvPr = nvSpPr.getElementsByTagNameNS(NS.p, "nvPr")[0];
+        if (!nvPr) continue;
+        
+        const ph = nvPr.getElementsByTagNameNS(NS.p, "ph")[0];
+        if (!ph) continue;
+        
+        const phType = ph.getAttribute("type") || "body";
+        
+        // Get position from xfrm (layouts can override master positions)
+        const transform = findXfrm(sp);
+        if (transform && transform.width > 0 && transform.height > 0) {
+          // Only override if we have valid dimensions
+          placeholderPositions.set(phType, {
+            x: transform.x,
+            y: transform.y,
+            width: transform.width,
+            height: transform.height,
+          });
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to parse placeholder positions from ${layoutPath}:`, error);
+    }
+  }
+  
+  console.log(`[PPTX Parser] Total placeholder positions cached:`, Object.fromEntries(placeholderPositions));
+}
+
 /**
  * Resolve a scheme color using clrMap and themeColors
  * For example: bg1 -> lt1 (via clrMap) -> #FFFFFF (via themeColors)
@@ -772,13 +889,32 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     // Skip if no transform AND no text
     if (!transform && textContent.length === 0) continue;
     
-    // Use default dimensions if transform missing but we have text
-    const x = transform?.x ?? 50;
-    const y = transform?.y ?? 50 + i * 60;
-    const width = transform?.width ?? SLIDE_WIDTH - 100;
-    const height = transform?.height ?? 50;
+    // Determine position: use transform if available, otherwise inherit from placeholder positions
+    let x: number, y: number, width: number, height: number;
     
-    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, paragraphs=${paragraphs.length}, placeholder=${placeholderType || 'none'}`);
+    if (transform) {
+      // Use explicit transform from the shape
+      x = transform.x;
+      y = transform.y;
+      width = transform.width;
+      height = transform.height;
+    } else if (placeholderType && placeholderPositions.has(placeholderType)) {
+      // Inherit position from placeholder cache (slide master/layout)
+      const inheritedPos = placeholderPositions.get(placeholderType)!;
+      x = inheritedPos.x;
+      y = inheritedPos.y;
+      width = inheritedPos.width;
+      height = inheritedPos.height;
+      console.log(`[PPTX Parser] Shape ${i}: Using inherited position for placeholder '${placeholderType}': x=${x}, y=${y}`);
+    } else {
+      // Fallback to default positions
+      x = 50;
+      y = 50 + i * 60;
+      width = SLIDE_WIDTH - 100;
+      height = 50;
+    }
+    
+    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, paragraphs=${paragraphs.length}, placeholder=${placeholderType || 'none'}, hasTransform=${!!transform}`);
     
     // Get fill color
     const solidFill = sp.getElementsByTagNameNS(NS.a, "solidFill")[0];
@@ -1027,6 +1163,9 @@ export async function parsePptxFile(file: File): Promise<PptxData> {
   
   // Parse color map from slide masters (for resolving scheme colors like bg1 -> lt1)
   colorMap = await parseColorMapFromMasters(zip);
+  
+  // Parse placeholder positions from masters and layouts (for position inheritance)
+  await parsePlaceholderPositions(zip);
   
   // Extract metadata
   const metadata = await extractMetadata(zip);
