@@ -12,6 +12,10 @@ const PDF_CONFIG = {
   cMapUrl: 'https://unpkg.com/pdfjs-dist@4.8.69/cmaps/',
   cMapPacked: true,
   standardFontDataUrl: 'https://unpkg.com/pdfjs-dist@4.8.69/standard_fonts/',
+  // Enable extra font properties for debugging
+  fontExtraProperties: true,
+  // Disable font face to force PDF.js to handle fonts internally
+  disableFontFace: false,
 };
 
 /**
@@ -125,8 +129,37 @@ export const extractPDFText = async (arrayBuffer: ArrayBuffer): Promise<PDFTextC
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContentItems = await page.getTextContent({
-      includeMarkedContent: true
+      includeMarkedContent: true,
+      disableNormalization: false,
     });
+    
+    // DEBUG: Log font styles and raw text items for first page
+    if (i === 1) {
+      console.group('🔍 PDF Font Diagnostics - Page 1');
+      console.log('Font Styles:', textContentItems.styles);
+      console.log('First 10 text items (raw):', textContentItems.items.slice(0, 10));
+      
+      // Log each unique font used
+      const fontsUsed = new Set<string>();
+      textContentItems.items.forEach((item: unknown) => {
+        const typedItem = item as { fontName?: string };
+        if (typedItem.fontName) {
+          fontsUsed.add(typedItem.fontName);
+        }
+      });
+      console.log('Fonts used on page:', Array.from(fontsUsed));
+      
+      // Check for ToUnicode issues - look at char codes
+      const sampleItems = textContentItems.items.slice(0, 5) as Array<{ str?: string; fontName?: string }>;
+      sampleItems.forEach((item, idx) => {
+        if (item.str) {
+          const charCodes = Array.from(item.str).map(c => c.charCodeAt(0));
+          console.log(`Item ${idx}: "${item.str}" | Font: ${item.fontName} | CharCodes:`, charCodes);
+        }
+      });
+      console.groupEnd();
+    }
+    
     const pageText = textContentItems.items
       .map((item: unknown, index: number, arr: unknown[]) => {
         const typedItem = item as { str?: string; hasEOL?: boolean; transform?: number[] };
