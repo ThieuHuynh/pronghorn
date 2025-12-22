@@ -18,11 +18,6 @@ export interface RasterizeOptions {
 // Default font stack
 const DEFAULT_FONT = '"Open Sans", Calibri, Arial, sans-serif';
 
-// Point to pixel conversion (at 96 DPI screen resolution)
-// PowerPoint font sizes are in points (1pt = 1/72 inch)
-// At 96 DPI: 1 point = 96/72 ≈ 1.333 pixels
-const PT_TO_PX = 96 / 72;
-
 /**
  * Create HTML for a text run with formatting
  */
@@ -36,8 +31,7 @@ function createTextRunElement(run: PptxTextRun, scale: number, overrideFontColor
   if (run.underline) span.style.textDecoration = "underline";
   
   if (run.fontSize) {
-    // Convert points to pixels, then apply scale
-    span.style.fontSize = `${run.fontSize * PT_TO_PX * scale}px`;
+    span.style.fontSize = `${run.fontSize * scale}px`;
   }
   
   // Use override color if provided, otherwise use run's color
@@ -69,7 +63,7 @@ function createParagraphElement(
   p.style.lineHeight = "1.3";
   p.style.fontFamily = DEFAULT_FONT;
   // Convert points to pixels, then apply scale
-  p.style.fontSize = `${defaultFontSize * PT_TO_PX * scale}px`;
+  p.style.fontSize = `${defaultFontSize * scale}px`;
   
   // Apply alignment
   if (paragraph.alignment) {
@@ -181,7 +175,7 @@ function createShapeElement(
       textEl.textContent = shape.text;
       textEl.style.fontFamily = DEFAULT_FONT;
       // Convert points to pixels, then apply scale
-      textEl.style.fontSize = `${defaultFontSize * PT_TO_PX * scale}px`;
+      textEl.style.fontSize = `${defaultFontSize * scale}px`;
       textEl.style.color = overrideFontColor || shape.fontColor || "#000000";
       textEl.style.fontWeight = shape.bold ? "bold" : "normal";
       textEl.style.fontStyle = shape.italic ? "italic" : "normal";
@@ -260,7 +254,7 @@ export function renderSlideToHtml(
     const textContainer = document.createElement("div");
     textContainer.style.padding = `${20 * scale}px`;
     // Convert points to pixels for fallback text
-    textContainer.style.fontSize = `${16 * PT_TO_PX * scale}px`;
+    textContainer.style.fontSize = `${16 * scale}px`;
     textContainer.style.color = fontColor || "#333";
     textContainer.style.fontFamily = DEFAULT_FONT;
     textContainer.style.lineHeight = "1.5";
