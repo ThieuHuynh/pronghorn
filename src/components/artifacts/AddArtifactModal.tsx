@@ -464,6 +464,121 @@ export function AddArtifactModal({
         }
       }
 
+      // Create PDF artifacts
+      if (pdfData && pdfExportOptions.selectedPages.size > 0) {
+        const selectedPageIndices = Array.from(pdfExportOptions.selectedPages).sort((a, b) => a - b);
+
+        // Text extraction
+        if (pdfExportOptions.mode === "text" || pdfExportOptions.mode === "both") {
+          if (pdfExportOptions.mergeText) {
+            // Single merged text artifact
+            try {
+              const mergedText = selectedPageIndices
+                .map((pageIdx) => {
+                  const pageText = pdfData.pagesText[pageIdx] || "";
+                  return `--- Page ${pageIdx + 1} ---\n${pageText}`;
+                })
+                .join("\n\n");
+              await addArtifact(mergedText, "pdf-text");
+              successCount++;
+            } catch (err) {
+              console.error("Failed to create merged PDF text artifact:", err);
+              errorCount++;
+            }
+          } else {
+            // Separate text artifact per page
+            for (const pageIdx of selectedPageIndices) {
+              try {
+                const pageText = pdfData.pagesText[pageIdx] || "";
+                const pageContent = `# Page ${pageIdx + 1}\n\n${pageText}`;
+                await addArtifact(pageContent, "pdf-page-text");
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to create text artifact for page ${pageIdx + 1}:`, err);
+                errorCount++;
+              }
+            }
+          }
+        }
+
+        // Rasterize pages
+        if (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both") {
+          try {
+            // Rasterize all selected pages at high resolution
+            const rasterizedPages = await rasterizeSelectedPages(
+              pdfData.arrayBuffer,
+              selectedPageIndices,
+              2.5 // High resolution for export
+            );
+
+            for (const result of rasterizedPages) {
+              if (!result.success || !result.dataUrl) {
+                console.error(`Failed to rasterize page ${result.pageNumber}:`, result.error);
+                errorCount++;
+                continue;
+              }
+
+              try {
+                // Extract base64 from data URL
+                const base64Data = result.dataUrl.split(",")[1];
+
+                const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
+                  body: {
+                    projectId,
+                    shareToken,
+                    imageData: base64Data,
+                    fileName: `${pdfData.filename.replace(/\.pdf$/i, "")}_page${result.pageNumber}.png`,
+                    content: `Page ${result.pageNumber}\n\n${pdfData.pagesText[result.pageIndex] || ""}`,
+                    sourceType: "pdf-rasterized",
+                  },
+                });
+
+                if (error) throw error;
+                broadcastRefresh("insert", data?.artifact?.id);
+                successCount++;
+              } catch (err) {
+                console.error(`Failed to upload rasterized page ${result.pageNumber}:`, err);
+                errorCount++;
+              }
+            }
+          } catch (err) {
+            console.error("Failed to rasterize PDF pages:", err);
+            errorCount++;
+          }
+        }
+
+        // Extract selected embedded images
+        if (pdfExportOptions.extractImages && pdfExportOptions.selectedImages) {
+          for (const imageId of pdfExportOptions.selectedImages) {
+            const img = pdfData.embeddedImages.get(imageId);
+            if (!img) continue;
+
+            try {
+              // Extract base64 from data URL
+              const base64Data = img.dataUrl.split(",")[1];
+
+              const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
+                body: {
+                  projectId,
+                  shareToken,
+                  imageData: base64Data,
+                  fileName: `${pdfData.filename.replace(/\.pdf$/i, "")}_image_${imageId}.png`,
+                  content: `Embedded image from ${pdfData.filename} (Page ${img.pageIndex + 1})`,
+                  sourceType: "pdf-image",
+                },
+              });
+
+              if (error) throw error;
+              broadcastRefresh("insert", data?.artifact?.id);
+              successCount++;
+            } catch (err) {
+              console.error(`Failed to create artifact for PDF image ${imageId}:`, err);
+              errorCount++;
+            }
+          }
+        }
+      }
+
       if (successCount > 0) {
         toast.success(`Created ${successCount} artifact${successCount !== 1 ? 's' : ''}`);
         onArtifactsCreated();
