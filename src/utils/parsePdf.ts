@@ -133,8 +133,10 @@ export const extractPDFText = async (arrayBuffer: ArrayBuffer): Promise<PDFTextC
         return text + ' ';
       })
       .join('')
+      .replace(/[ \t]{2,}/g, ' ') // Collapse multiple spaces to single space
       .replace(/\n{3,}/g, '\n\n') // Normalize excessive newlines to double
       .replace(/[ \t]+\n/g, '\n') // Remove trailing spaces before newlines
+      .replace(/\n[ \t]+/g, '\n') // Remove leading spaces after newlines
       .trim();
     textContent.push(pageText);
   }
