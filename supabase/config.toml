@@ -116,3 +116,6 @@ verify_jwt = false
 
 [functions.database-connection-secrets]
 verify_jwt = false
+
+[functions.visual-recognition]
+verify_jwt = false
