@@ -16,6 +16,8 @@ const PDF_CONFIG = {
   fontExtraProperties: true,
   // Disable font face to force PDF.js to handle fonts internally
   disableFontFace: false,
+  // Enable verbosity for font warnings
+  verbosity: pdfjsLib.VerbosityLevel.WARNINGS,
 };
 
 /**
@@ -146,6 +148,61 @@ export const extractPDFText = async (arrayBuffer: ArrayBuffer): Promise<PDFTextC
       }
     });
     console.log('Fonts used on page:', Array.from(fontsUsed));
+    
+    // DEEP FONT INSPECTION: Access actual font objects to check ToUnicode maps
+    console.group('📜 Deep Font Object Inspection');
+    for (const fontName of fontsUsed) {
+      try {
+        // Access font object from page's commonObjs with timeout
+        const fontObj = await new Promise<unknown>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('timeout')), 3000);
+          page.commonObjs.get(fontName, (obj: unknown) => {
+            clearTimeout(timeout);
+            resolve(obj);
+          });
+        });
+        
+        if (fontObj && typeof fontObj === 'object') {
+          const font = fontObj as {
+            name?: string;
+            type?: string;
+            isType3Font?: boolean;
+            composite?: boolean;
+            encoding?: unknown;
+            toUnicode?: unknown;
+            cMap?: unknown;
+            cidEncoding?: string;
+            defaultEncoding?: string[];
+            differences?: unknown[];
+            toFontChar?: unknown;
+          };
+          
+          console.log(`Font "${fontName}":`, {
+            name: font.name,
+            type: font.type,
+            isType3Font: font.isType3Font,
+            composite: font.composite,
+            hasToUnicode: font.toUnicode ? '✅ PRESENT' : '❌ MISSING',
+            hasCMap: font.cMap ? 'yes' : 'no',
+            cidEncoding: font.cidEncoding,
+            encodingType: font.encoding ? typeof font.encoding : 'none',
+            defaultEncodingLength: font.defaultEncoding?.length,
+            hasDifferences: font.differences ? `${font.differences.length} entries` : 'no',
+            hasToFontChar: font.toFontChar ? 'yes' : 'no',
+          });
+          
+          // If toUnicode is missing, this is likely the problem
+          if (!font.toUnicode) {
+            console.warn(`⚠️ FONT "${fontName}" IS MISSING ToUnicode MAP - THIS CAUSES GARBLED TEXT!`);
+          }
+        } else {
+          console.log(`Font "${fontName}": Could not access font object (null or not object)`);
+        }
+      } catch (err) {
+        console.warn(`⚠️ Could not get font object for "${fontName}":`, err);
+      }
+    }
+    console.groupEnd();
     
     // Log first 5 text items with char codes to spot encoding issues
     const sampleItems = textContentItems.items.slice(0, 5) as Array<{ str?: string; fontName?: string }>;
