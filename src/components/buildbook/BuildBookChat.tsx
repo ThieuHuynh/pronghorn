@@ -15,12 +15,21 @@ interface ChatMessage {
   content: string;
 }
 
+interface ResourceInfo {
+  name: string;
+  url: string;
+  resource_type: string;
+  description: string | null;
+  thumbnail_url: string | null;
+}
+
 interface StandardInfo {
   name: string;
   code?: string;
   description: string | null;
   long_description: string | null;
   category?: string;
+  resources: ResourceInfo[];
 }
 
 interface TechStackInfo {
@@ -29,6 +38,7 @@ interface TechStackInfo {
   version?: string | null;
   description: string | null;
   long_description: string | null;
+  resources: ResourceInfo[];
 }
 
 interface BuildBookChatProps {
@@ -72,35 +82,81 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
 
   const loadContext = async () => {
     try {
-      // Load standards info
+      // Load standards info with resources
       if (standards.length > 0) {
         const standardIds = standards.map(s => s.standard_id);
         const { data: standardsData } = await supabase
           .from("standards")
-          .select("code, title, description, long_description, category:standard_categories(name)")
+          .select("id, code, title, description, long_description, category:standard_categories(id, name)")
           .in("id", standardIds);
 
+        // Fetch resources for standards
+        const { data: standardResourcesData } = await supabase
+          .from("standard_resources")
+          .select("standard_id, standard_category_id, resource_type, name, url, description, thumbnail_url")
+          .or(`standard_id.in.(${standardIds.join(",")}),standard_category_id.in.(${standardsData?.map(s => (s.category as any)?.id).filter(Boolean).join(",") || "00000000-0000-0000-0000-000000000000"})`);
+
         if (standardsData) {
-          setStandardsInfo(standardsData.map(s => ({
-            name: s.title,
-            code: s.code,
-            description: s.description,
-            long_description: s.long_description,
-            category: (s.category as any)?.name,
-          })));
+          setStandardsInfo(standardsData.map(s => {
+            const categoryId = (s.category as any)?.id;
+            // Get resources for this standard OR its category
+            const resources = (standardResourcesData || [])
+              .filter(r => r.standard_id === s.id || r.standard_category_id === categoryId)
+              .map(r => ({
+                name: r.name,
+                url: r.url,
+                resource_type: r.resource_type,
+                description: r.description,
+                thumbnail_url: r.thumbnail_url,
+              }));
+
+            return {
+              name: s.title,
+              code: s.code,
+              description: s.description,
+              long_description: s.long_description,
+              category: (s.category as any)?.name,
+              resources,
+            };
+          }));
         }
       }
 
-      // Load tech stacks info
+      // Load tech stacks info with resources
       if (techStacks.length > 0) {
         const techStackIds = techStacks.map(t => t.tech_stack_id);
         const { data: techStacksData } = await supabase
           .from("tech_stacks")
-          .select("name, type, version, description, long_description")
+          .select("id, name, type, version, description, long_description")
           .in("id", techStackIds);
 
+        // Fetch resources for tech stacks
+        const { data: techStackResourcesData } = await supabase
+          .from("tech_stack_resources")
+          .select("tech_stack_id, resource_type, name, url, description, thumbnail_url")
+          .in("tech_stack_id", techStackIds);
+
         if (techStacksData) {
-          setTechStacksInfo(techStacksData);
+          setTechStacksInfo(techStacksData.map(t => {
+            const resources = (techStackResourcesData || [])
+              .filter(r => r.tech_stack_id === t.id)
+              .map(r => ({
+                name: r.name,
+                url: r.url,
+                resource_type: r.resource_type,
+                description: r.description,
+                thumbnail_url: r.thumbnail_url,
+              }));
+
+            return {
+              name: t.name,
+              type: t.type,
+              version: t.version,
+              description: t.description,
+              long_description: t.long_description,
+              resources,
+            };
+          }));
         }
       }
 
@@ -128,6 +184,14 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
         context += `\n`;
         if (s.description) context += `${s.description}\n`;
         if (s.long_description) context += `\nDetails:\n${s.long_description}\n`;
+        if (s.resources.length > 0) {
+          context += `\nResources:\n`;
+          s.resources.forEach(r => {
+            context += `- [${r.resource_type.toUpperCase()}] ${r.name}: ${r.url}`;
+            if (r.description) context += ` - ${r.description}`;
+            context += `\n`;
+          });
+        }
       });
     }
 
@@ -140,6 +204,14 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
         context += `\n`;
         if (t.description) context += `${t.description}\n`;
         if (t.long_description) context += `\nDetails:\n${t.long_description}\n`;
+        if (t.resources.length > 0) {
+          context += `\nResources:\n`;
+          t.resources.forEach(r => {
+            context += `- [${r.resource_type.toUpperCase()}] ${r.name}: ${r.url}`;
+            if (r.description) context += ` - ${r.description}`;
+            context += `\n`;
+          });
+        }
       });
     }
 
