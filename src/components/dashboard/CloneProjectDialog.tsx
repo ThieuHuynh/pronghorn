@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { getProjectToken, setProjectToken } from "@/lib/tokenCache";
 
 interface CloneProjectDialogProps {
   projectId: string;
@@ -45,6 +46,7 @@ export function CloneProjectDialog({
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState(`Copy of ${projectName}`);
   const [isCloning, setIsCloning] = useState(false);
+  const [fetchedToken, setFetchedToken] = useState<string | null>(null);
   const [options, setOptions] = useState<CloneOptions>({
     cloneChat: false,
     cloneArtifacts: false,
@@ -59,6 +61,34 @@ export function CloneProjectDialog({
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Fetch owner token when dialog opens and no shareToken is provided
+  useEffect(() => {
+    if (open && !shareToken) {
+      // Try to get from cache first
+      const cachedToken = getProjectToken(projectId);
+      if (cachedToken) {
+        setFetchedToken(cachedToken);
+        return;
+      }
+      
+      // Fetch owner token from project_tokens table
+      const fetchToken = async () => {
+        const { data } = await supabase
+          .from('project_tokens')
+          .select('token')
+          .eq('project_id', projectId)
+          .eq('role', 'owner')
+          .maybeSingle();
+        
+        if (data?.token) {
+          setFetchedToken(data.token);
+          setProjectToken(projectId, data.token);
+        }
+      };
+      fetchToken();
+    }
+  }, [open, projectId, shareToken]);
 
   const handleOptionChange = (key: keyof CloneOptions) => {
     setOptions(prev => ({ ...prev, [key]: !prev[key] }));
@@ -80,7 +110,7 @@ export function CloneProjectDialog({
       const { data, error } = await supabase.functions.invoke("clone-project", {
         body: {
           sourceProjectId: projectId,
-          shareToken: shareToken || null,
+          shareToken: shareToken || fetchedToken || null,
           newName: newName.trim(),
           ...options,
         },
