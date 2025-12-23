@@ -6,12 +6,20 @@ import {
   Library, 
   Layers, 
   BookOpen,
-  FolderTree
+  FolderTree,
+  Download
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -19,6 +27,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { ResourceManager } from "@/components/resources/ResourceManager";
 import { BuildBook, BuildBookStandard, BuildBookTechStack } from "@/hooks/useRealtimeBuildBooks";
 import { BuildBookChat } from "./BuildBookChat";
+import { toast } from "sonner";
+import {
+  fetchBuildBookFullData,
+  buildBuildBookMarkdown,
+  buildBuildBookJSON,
+  downloadAsMarkdown,
+  downloadAsJSON,
+} from "@/lib/buildBookDownloadUtils";
 
 interface DocsItem {
   id: string;
@@ -303,21 +319,93 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
         {/* Sidebar */}
         <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
           <div className="h-full flex flex-col bg-muted/30">
-            <div className="p-3 border-b bg-background flex gap-2 items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 h-9 text-sm"
+            <div className="p-3 border-b bg-background space-y-2">
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-9 text-sm"
+                  />
+                </div>
+                <BuildBookChat
+                  buildBook={buildBook}
+                  standards={standards}
+                  techStacks={techStacks}
                 />
               </div>
-              <BuildBookChat
-                buildBook={buildBook}
-                standards={standards}
-                techStacks={techStacks}
-              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full gap-2">
+                    <Download className="h-4 w-4" />
+                    Download Build Book
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        toast.info("Preparing Markdown download...");
+                        const standardIds = standards.map(s => s.standard_id);
+                        const techStackIds = techStacks.map(t => t.tech_stack_id);
+                        const fullData = await fetchBuildBookFullData(buildBook.id, standardIds, techStackIds);
+                        const markdown = buildBuildBookMarkdown(
+                          {
+                            id: buildBook.id,
+                            name: buildBook.name,
+                            short_description: buildBook.short_description,
+                            long_description: buildBook.long_description,
+                            tags: buildBook.tags,
+                          },
+                          fullData.standards,
+                          fullData.techStacks
+                        );
+                        const safeName = buildBook.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                        downloadAsMarkdown(markdown, `buildbook_${safeName}`);
+                        toast.success("Build Book downloaded as Markdown");
+                      } catch (error) {
+                        console.error("Download error:", error);
+                        toast.error("Failed to download Build Book");
+                      }
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download as .md
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        toast.info("Preparing JSON download...");
+                        const standardIds = standards.map(s => s.standard_id);
+                        const techStackIds = techStacks.map(t => t.tech_stack_id);
+                        const fullData = await fetchBuildBookFullData(buildBook.id, standardIds, techStackIds);
+                        const json = buildBuildBookJSON(
+                          {
+                            id: buildBook.id,
+                            name: buildBook.name,
+                            short_description: buildBook.short_description,
+                            long_description: buildBook.long_description,
+                            tags: buildBook.tags,
+                          },
+                          fullData.standards,
+                          fullData.techStacks
+                        );
+                        const safeName = buildBook.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                        downloadAsJSON(json, `buildbook_${safeName}`);
+                        toast.success("Build Book downloaded as JSON");
+                      } catch (error) {
+                        console.error("Download error:", error);
+                        toast.error("Failed to download Build Book");
+                      }
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download as .json
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             
             <ScrollArea className="flex-1">

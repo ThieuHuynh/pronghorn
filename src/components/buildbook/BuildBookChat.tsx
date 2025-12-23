@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, X, Loader2, Sparkles } from "lucide-react";
+import { MessageSquare, Send, Loader2, Sparkles, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,6 +8,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { BuildBook, BuildBookStandard, BuildBookTechStack } from "@/hooks/useRealtimeBuildBooks";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { buildChatMarkdown, downloadAsMarkdown } from "@/lib/buildBookDownloadUtils";
 
 interface ChatMessage {
   id: string;
@@ -386,16 +388,39 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
               <MessageSquare className="h-5 w-5" />
               Ask about {buildBook.name}
             </SheetTitle>
-            {messages.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearChat}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        const markdown = buildChatMarkdown(buildBook.name, messages);
+                        const safeName = buildBook.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                        downloadAsMarkdown(markdown, `buildbook_chat_${safeName}`);
+                        toast.success("Chat downloaded as Markdown");
+                      } catch (error) {
+                        console.error("Download error:", error);
+                        toast.error("Failed to download chat");
+                      }
+                    }}
+                    className="text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearChat}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </SheetHeader>
 
