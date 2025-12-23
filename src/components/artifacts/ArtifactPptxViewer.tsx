@@ -549,27 +549,21 @@ export function ArtifactPptxViewer({
                     {/* Preview text content - show VR override if exists */}
                     <div className="flex-1 min-w-0">
                       {previewSlide.title && !textOverrides?.has(`pptx-${previewSlide.index}`) && (
-                        <div className="text-sm font-medium truncate mb-2">{previewSlide.title}</div>
+                        <div className="text-sm font-medium mb-2">{previewSlide.title}</div>
                       )}
-                      <div className="text-xs text-muted-foreground space-y-1 max-h-24 overflow-y-auto">
+                      <ScrollArea className="text-xs text-muted-foreground space-y-1 max-h-48">
                         {textOverrides?.has(`pptx-${previewSlide.index}`) ? (
-                          <p className="whitespace-pre-wrap line-clamp-6">
-                            {textOverrides.get(`pptx-${previewSlide.index}`)?.substring(0, 500)}
-                            {(textOverrides.get(`pptx-${previewSlide.index}`)?.length || 0) > 500 ? "..." : ""}
+                          <p className="whitespace-pre-wrap">
+                            {textOverrides.get(`pptx-${previewSlide.index}`)}
                           </p>
                         ) : previewSlide.textContent.length > 0 ? (
-                          previewSlide.textContent.slice(0, 5).map((text, i) => (
-                            <p key={i} className="line-clamp-1">{text}</p>
+                          previewSlide.textContent.map((text, i) => (
+                            <p key={i}>{text}</p>
                           ))
                         ) : (
                           <p className="italic">No text content</p>
                         )}
-                        {!textOverrides?.has(`pptx-${previewSlide.index}`) && previewSlide.textContent.length > 5 && (
-                          <p className="text-muted-foreground/50">
-                            +{previewSlide.textContent.length - 5} more...
-                          </p>
-                        )}
-                      </div>
+                      </ScrollArea>
                     </div>
                   </div>
                 </div>
