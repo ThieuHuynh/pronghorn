@@ -290,8 +290,9 @@ export function AddArtifactModal({
     }
   };
 
-  // Helper to check if there are selected rasterized pages
-  const hasSelectedRasterizedPages = useMemo(() => {
+  // Helper to check if there are rasterized pages OR extracted images available for VR
+  const hasRasterizedContent = useMemo(() => {
+    // Rasterized slides/pages
     const hasPptxRasterized = pptxData && 
       (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both") && 
       pptxExportOptions.selectedSlides.size > 0;
@@ -304,12 +305,29 @@ export function AddArtifactModal({
       (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both") && 
       docxExportOptions.selectedRasterPages.size > 0;
     
-    return hasPptxRasterized || hasPdfRasterized || hasDocxRasterized;
-  }, [pptxData, pptxExportOptions, pdfData, pdfExportOptions, docxData, docxExportOptions]);
+    // Extracted/embedded images from documents
+    const hasPptxImages = pptxData && 
+      pptxExportOptions.extractImages && 
+      (pptxExportOptions.selectedImages?.size || 0) > 0;
+    
+    const hasPdfImages = pdfData && 
+      pdfExportOptions.extractImages && 
+      (pdfExportOptions.selectedImages?.size || 0) > 0;
+    
+    const hasDocxImages = docxData && 
+      docxExportOptions.extractImages && 
+      (docxExportOptions.selectedImages?.size || 0) > 0;
+    
+    // User-uploaded images from gallery
+    const hasGalleryImages = images.filter(i => i.selected).length > 0;
+    
+    return hasPptxRasterized || hasPdfRasterized || hasDocxRasterized || 
+           hasPptxImages || hasPdfImages || hasDocxImages || hasGalleryImages;
+  }, [pptxData, pptxExportOptions, pdfData, pdfExportOptions, docxData, docxExportOptions, images]);
 
   // Helper to collect rasterized images for VR processing (uses cached images when available)
   const collectRasterizedImages = async (): Promise<RasterizedImage[]> => {
-    const images: RasterizedImage[] = [];
+    const collectedImages: RasterizedImage[] = [];
 
     // PPTX slides - use cached thumbnails if available
     if (pptxData && (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both")) {
@@ -338,7 +356,7 @@ export function AddArtifactModal({
             });
           }
 
-          images.push({
+          collectedImages.push({
             id: `pptx-${slideIdx}`,
             imageBase64: base64,
             imageMimeType: "image/png",
@@ -361,7 +379,7 @@ export function AddArtifactModal({
           const cachedDataUrl = pdfExportOptions.cachedRasterizedPages.get(pageIdx);
           if (cachedDataUrl) {
             const base64 = cachedDataUrl.includes(",") ? cachedDataUrl.split(",")[1] : cachedDataUrl;
-            images.push({
+            collectedImages.push({
               id: `pdf-${pageIdx}`,
               imageBase64: base64,
               imageMimeType: "image/png",
@@ -378,7 +396,7 @@ export function AddArtifactModal({
             if (!result.success || !result.dataUrl) continue;
             
             const pageIdx = result.pageIndex;
-            images.push({
+            collectedImages.push({
               id: `pdf-${pageIdx}`,
               imageBase64: result.dataUrl.split(",")[1],
               imageMimeType: "image/png",
@@ -405,7 +423,7 @@ export function AddArtifactModal({
         
         pages.forEach((page, i) => {
           const originalIndex = selectedIndices[i];
-          images.push({
+          collectedImages.push({
             id: `docx-${originalIndex}`,
             imageBase64: page.split(",")[1],
             imageMimeType: "image/png",
@@ -418,7 +436,81 @@ export function AddArtifactModal({
       }
     }
 
-    return images;
+    // PPTX extracted images (from Picture Gallery)
+    if (pptxData && pptxExportOptions.extractImages && (pptxExportOptions.selectedImages?.size || 0) > 0) {
+      for (const imageId of pptxExportOptions.selectedImages!) {
+        const img = pptxData.media.get(imageId);
+        if (img) {
+          collectedImages.push({
+            id: `pptx-img-${imageId}`,
+            imageBase64: img.base64,
+            imageMimeType: img.mimeType,
+            existingText: vrOverriddenContent.get(`pptx-img-${imageId}`) || "",
+            label: img.filename || `Image ${imageId}`,
+          });
+        }
+      }
+    }
+
+    // PDF extracted images
+    if (pdfData && pdfExportOptions.extractImages && (pdfExportOptions.selectedImages?.size || 0) > 0) {
+      for (const imageId of pdfExportOptions.selectedImages!) {
+        const img = pdfData.embeddedImages?.get(imageId);
+        if (img) {
+          const base64 = img.dataUrl.includes(",") ? img.dataUrl.split(",")[1] : img.dataUrl;
+          collectedImages.push({
+            id: `pdf-img-${imageId}`,
+            imageBase64: base64,
+            imageMimeType: "image/png",
+            existingText: vrOverriddenContent.get(`pdf-img-${imageId}`) || "",
+            label: `Image from page ${img.pageIndex + 1}`,
+          });
+        }
+      }
+    }
+
+    // DOCX extracted images
+    if (docxData && docxExportOptions.extractImages && (docxExportOptions.selectedImages?.size || 0) > 0) {
+      for (const imageId of docxExportOptions.selectedImages!) {
+        const img = docxData.embeddedImages?.get(imageId);
+        if (img) {
+          collectedImages.push({
+            id: `docx-img-${imageId}`,
+            imageBase64: img.base64,
+            imageMimeType: img.mimeType,
+            existingText: vrOverriddenContent.get(`docx-img-${imageId}`) || "",
+            label: img.filename || `Image ${imageId}`,
+          });
+        }
+      }
+    }
+
+    // User-uploaded images from gallery
+    const selectedGalleryImages = images.filter(i => i.selected);
+    for (const galleryImage of selectedGalleryImages) {
+      try {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.includes(",") ? result.split(",")[1] : result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(galleryImage.file);
+        });
+        collectedImages.push({
+          id: `gallery-${galleryImage.id}`,
+          imageBase64: base64,
+          imageMimeType: galleryImage.file.type || "image/png",
+          existingText: vrOverriddenContent.get(`gallery-${galleryImage.id}`) || "",
+          label: galleryImage.file.name,
+        });
+      } catch (err) {
+        console.error(`Failed to read image ${galleryImage.file.name}:`, err);
+      }
+    }
+
+    return collectedImages;
   };
 
   // Open Visual Recognition dialog
@@ -1198,7 +1290,7 @@ export function AddArtifactModal({
                 )}
               </div>
               <div className="flex gap-2">
-                {hasSelectedRasterizedPages && (
+                {hasRasterizedContent && (
                   <Button 
                     variant="outline" 
                     onClick={handleOpenVisualRecognition}
