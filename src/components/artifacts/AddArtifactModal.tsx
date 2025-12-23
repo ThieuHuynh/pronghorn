@@ -581,13 +581,18 @@ export function AddArtifactModal({
             reader.readAsDataURL(img.file);
           });
 
+          // Use VR overridden content if available, otherwise use default
+          const vrKey = `gallery-${img.id}`;
+          const vrContent = vrOverriddenContent.get(vrKey);
+          const content = vrContent || `Image: ${img.file.name}`;
+
           const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
             body: {
               projectId,
               shareToken,
               imageData: base64,
               fileName: img.file.name,
-              content: `Image: ${img.file.name}`,
+              content,
               sourceType: "upload",
             },
           });
@@ -1220,6 +1225,7 @@ export function AddArtifactModal({
                   <ArtifactImageGallery
                     images={images}
                     onImagesChange={setImages}
+                    vrOverriddenContent={vrOverriddenContent}
                   />
                 )}
 
