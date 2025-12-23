@@ -510,16 +510,14 @@ export function ArtifactPdfViewer({
                     {/* Text preview - show VR override if exists */}
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-muted-foreground mb-1">Text Content</div>
-                      <div className="text-sm bg-muted/30 rounded p-2 max-h-32 overflow-y-auto">
+                      <div className="text-sm bg-muted/30 rounded p-2 max-h-64 overflow-y-auto">
                         {textOverrides?.has(`pdf-${previewPageIndex}`) ? (
-                          <p className="whitespace-pre-wrap line-clamp-6">
-                            {textOverrides.get(`pdf-${previewPageIndex}`)?.substring(0, 500)}
-                            {(textOverrides.get(`pdf-${previewPageIndex}`)?.length || 0) > 500 ? "..." : ""}
+                          <p className="whitespace-pre-wrap">
+                            {textOverrides.get(`pdf-${previewPageIndex}`)}
                           </p>
                         ) : pdfData.pagesText[previewPageIndex] ? (
-                          <p className="whitespace-pre-wrap line-clamp-6">
-                            {pdfData.pagesText[previewPageIndex].substring(0, 500)}
-                            {pdfData.pagesText[previewPageIndex].length > 500 ? "..." : ""}
+                          <p className="whitespace-pre-wrap">
+                            {pdfData.pagesText[previewPageIndex]}
                           </p>
                         ) : (
                           <p className="text-muted-foreground italic">No text content on this page</p>
