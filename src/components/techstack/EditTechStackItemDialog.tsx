@@ -97,24 +97,29 @@ export function EditTechStackItemDialog({ open, onClose, itemId, parentId, onRef
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user?.id).single();
 
-      const payload = {
+      const basePayload = {
         name: formData.name,
         type: formData.type,
         version: formData.version || null,
         version_constraint: formData.version_constraint || null,
         description: formData.description || null,
         long_description: formData.long_description || null,
-        org_id: profile?.org_id,
-        created_by: user?.id,
-        parent_id: parentId || null,
       };
 
       if (itemId) {
-        const { error } = await supabase.from("tech_stacks").update(payload).eq("id", itemId);
+        // UPDATE - don't modify parent_id to preserve hierarchy
+        const { error } = await supabase.from("tech_stacks").update(basePayload).eq("id", itemId);
         if (error) throw error;
         toast.success("Item updated");
       } else {
-        const { error } = await supabase.from("tech_stacks").insert(payload);
+        // INSERT - include parent_id, org_id, created_by
+        const insertPayload = {
+          ...basePayload,
+          org_id: profile?.org_id,
+          created_by: user?.id,
+          parent_id: parentId || null,
+        };
+        const { error } = await supabase.from("tech_stacks").insert(insertPayload);
         if (error) throw error;
         toast.success("Item created");
       }
