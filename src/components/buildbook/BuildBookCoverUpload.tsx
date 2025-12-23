@@ -1,17 +1,36 @@
 import { useState } from "react";
-import { Upload, Sparkles, X, Image as ImageIcon } from "lucide-react";
+import { Upload, Sparkles, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface BuildBookCoverUploadProps {
   currentUrl: string | null;
   onUrlChange: (url: string | null) => void;
+  bookName?: string;
+  bookDescription?: string;
 }
 
-export function BuildBookCoverUpload({ currentUrl, onUrlChange }: BuildBookCoverUploadProps) {
+export function BuildBookCoverUpload({ 
+  currentUrl, 
+  onUrlChange, 
+  bookName = "Build Book",
+  bookDescription = "" 
+}: BuildBookCoverUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,9 +68,59 @@ export function BuildBookCoverUpload({ currentUrl, onUrlChange }: BuildBookCover
   const handleGenerateImage = async () => {
     setIsGenerating(true);
     try {
-      // This would integrate with your image generation edge function
-      // For now, we'll show a placeholder message
-      toast.info("AI image generation coming soon!");
+      // Build the prompt for cover image generation
+      const basePrompt = `Create a professional, visually striking cover image for a technical build book titled "${bookName}".`;
+      const descPrompt = bookDescription ? ` The book covers: ${bookDescription}.` : "";
+      const stylePrompt = " Use a modern, clean design with abstract geometric shapes, subtle gradients, and professional typography. The image should be suitable as a book cover or documentation header. Aspect ratio 16:9.";
+      const userPrompt = customPrompt ? ` Additional requirements: ${customPrompt}` : "";
+      
+      const fullPrompt = basePrompt + descPrompt + stylePrompt + userPrompt;
+
+      const { data, error } = await supabase.functions.invoke("generate-image", {
+        body: {
+          selectedContent: {
+            projectMetadata: {
+              name: bookName,
+              description: bookDescription,
+            },
+          },
+          generationType: "infographic",
+          style: "modern",
+          customPrompt: fullPrompt,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.imageUrl) {
+        // The response is a base64 data URL, we need to upload it to storage
+        const base64Data = data.imageUrl.split(",")[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: "image/png" });
+
+        const fileName = `build-book-covers/generated-${Date.now()}.png`;
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(fileName, blob);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("attachments")
+          .getPublicUrl(fileName);
+
+        onUrlChange(publicUrl);
+        toast.success("Cover image generated and saved");
+        setShowGenerateDialog(false);
+        setCustomPrompt("");
+      } else {
+        throw new Error("No image generated");
+      }
     } catch (error: any) {
       toast.error("Failed to generate image: " + error.message);
     } finally {
@@ -110,13 +179,67 @@ export function BuildBookCoverUpload({ currentUrl, onUrlChange }: BuildBookCover
         <Button
           variant="outline"
           className="flex-1"
-          onClick={handleGenerateImage}
+          onClick={() => setShowGenerateDialog(true)}
           disabled={isGenerating}
         >
           <Sparkles className="h-4 w-4 mr-2" />
-          {isGenerating ? "Generating..." : "Generate with AI"}
+          Generate with AI
         </Button>
       </div>
+
+      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Cover Image</DialogTitle>
+            <DialogDescription>
+              AI will create a professional cover image based on your build book details.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Book Name</Label>
+              <p className="text-sm text-muted-foreground">{bookName || "Untitled Build Book"}</p>
+            </div>
+            
+            {bookDescription && (
+              <div className="space-y-2">
+                <Label>Description Preview</Label>
+                <p className="text-sm text-muted-foreground line-clamp-3">{bookDescription}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="custom-prompt">Additional Instructions (optional)</Label>
+              <Input
+                id="custom-prompt"
+                placeholder="e.g., Use blue color scheme, include cloud icons..."
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGenerateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateImage} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

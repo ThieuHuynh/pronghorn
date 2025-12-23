@@ -15,7 +15,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRealtimeProjectStandards } from "@/hooks/useRealtimeProjectStandards";
-
+import { ApplyBuildBookDialog } from "@/components/buildbook/ApplyBuildBookDialog";
 interface Standard {
   id: string;
   code: string;
@@ -233,11 +233,18 @@ export default function Standards() {
         <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 w-full overflow-auto">
           <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
-            <ProjectPageHeader
-              title="Project Standards"
-              subtitle="Select applicable standards and tech stacks for this project"
-              onMenuClick={() => setIsSidebarOpen(true)}
-            />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <ProjectPageHeader
+                title="Project Standards"
+                subtitle="Select applicable standards and tech stacks for this project"
+                onMenuClick={() => setIsSidebarOpen(true)}
+              />
+              <ApplyBuildBookDialog
+                projectId={projectId!}
+                shareToken={shareToken}
+                onApplied={loadData}
+              />
+            </div>
 
             <div className="space-y-6">
               {/* Tech Stacks Section */}

@@ -303,6 +303,8 @@ export default function BuildBookEditor() {
                 <BuildBookCoverUpload
                   currentUrl={coverImageUrl}
                   onUrlChange={setCoverImageUrl}
+                  bookName={name}
+                  bookDescription={shortDescription}
                 />
               </CardContent>
             </Card>
