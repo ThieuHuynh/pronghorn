@@ -80,23 +80,35 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
 
   // Track scroll position to show/hide jump button
   useEffect(() => {
-    const scrollArea = scrollViewportRef.current;
-    if (!scrollArea) return;
+    if (!isOpen) return;
+    
+    // Small delay to ensure ScrollArea is mounted
+    const timer = setTimeout(() => {
+      const container = scrollViewportRef.current;
+      if (!container) return;
+      
+      const viewport = container.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+      if (!viewport) return;
 
-    const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-    if (!viewport) return;
+      const handleScroll = () => {
+        const { scrollTop, scrollHeight, clientHeight } = viewport;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        const threshold = 100;
+        setIsAtBottom(distanceFromBottom < threshold);
+      };
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = viewport;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      const threshold = 100;
-      setIsAtBottom(distanceFromBottom < threshold);
+      viewport.addEventListener("scroll", handleScroll, { passive: true });
+      handleScroll(); // Check initial position
+      
+      // Cleanup stored for later
+      (scrollViewportRef as any)._cleanup = () => viewport.removeEventListener("scroll", handleScroll);
+    }, 100);
+    
+    return () => {
+      clearTimeout(timer);
+      (scrollViewportRef as any)._cleanup?.();
     };
-
-    viewport.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Check initial position
-    return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [isOpen]);
+  }, [isOpen, messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
