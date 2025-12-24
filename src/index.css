@@ -140,7 +140,7 @@ All colors MUST be HSL.
   }
   
   .card-hover {
-    @apply transition-all duration-200 hover:shadow-lg hover:scale-[1.01];
+    @apply transition-all duration-200 hover:shadow-lg hover:ring-2 hover:ring-primary/70 focus-visible:ring-2 focus-visible:ring-primary;
   }
 }
 
