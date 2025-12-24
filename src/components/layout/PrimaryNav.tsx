@@ -45,7 +45,7 @@ export function PrimaryNav() {
             <PronghornLogo className="h-8 w-8" />
           </div>
           <span className="font-bold text-xl">Pronghorn</span>
-          <Link to="/terms" className="text-primary hover:underline text-sm font-medium">(Alpha)</Link>
+          <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">(Alpha)</Link>
         </NavLink>
 
         {/* Desktop Navigation */}

@@ -4,31 +4,41 @@ import { PronghornLogo } from "@/components/layout/PronghornLogo";
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)]">
+      {/* Skip Navigation */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[hsl(240,30%,15%)] focus:text-white focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
+
       {/* Navbar */}
-      <nav className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <PronghornLogo className="h-8 w-8 rounded-lg" />
-            <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
-            <Link to="/terms" className="text-[hsl(350,80%,60%)] hover:underline text-sm font-medium">(Alpha)</Link>
-          </Link>
-          <div className="flex items-center gap-6 text-sm">
-            <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
-              Terms of Use
+      <header>
+        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50">
+          <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <PronghornLogo className="h-8 w-8 rounded-lg" />
+              <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
+              <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">(Alpha)</Link>
             </Link>
+            <div className="flex items-center gap-6 text-sm">
+              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,40%)] transition-colors underline decoration-1 underline-offset-2">
+                Terms of Use
+              </Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      </header>
 
       {/* Content */}
-      <main className="pt-24 pb-16 px-6">
-        <article className="max-w-4xl mx-auto prose prose-gray prose-headings:text-[hsl(240,30%,15%)] prose-a:text-[hsl(350,80%,60%)] prose-a:no-underline hover:prose-a:underline">
-          <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">Your Data Matters</p>
+      <main role="main" id="main-content" className="pt-24 pb-16 px-6">
+        <article className="max-w-4xl mx-auto prose prose-gray prose-headings:text-[hsl(240,30%,15%)] prose-a:text-[hsl(350,80%,40%)] prose-a:underline prose-a:decoration-1 prose-a:underline-offset-2 hover:prose-a:no-underline">
+          <p className="text-sm text-gray-600 uppercase tracking-wider mb-2">Your Data Matters</p>
           <h1 className="text-4xl font-medium tracking-tight mb-4">Privacy Policy</h1>
           <p className="text-lg text-gray-600 mb-8">
             We believe in transparency and protecting your privacy. Learn how we collect, use, and safeguard your information.
           </p>
-          <p className="text-sm text-gray-500">Last updated: December 10, 2025</p>
+          <p className="text-sm text-gray-600">Last updated: December 10, 2025</p>
 
           <h2>Our Commitment</h2>
           <p>
@@ -187,18 +197,18 @@ export default function Privacy() {
       </main>
 
       {/* Footer */}
-      <footer className="py-8 px-6 border-t border-gray-100">
+      <footer role="contentinfo" className="py-8 px-6 border-t border-gray-100">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <Link to="/" className="flex items-center gap-3">
             <PronghornLogo className="h-6 w-6 rounded-lg" />
             <span className="text-sm font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
           </Link>
-          <div className="flex items-center gap-6 text-sm text-gray-500">
-            <Link to="/terms" className="hover:text-[hsl(350,80%,60%)] transition-colors">Terms of Use</Link>
-            <Link to="/privacy" className="hover:text-[hsl(350,80%,60%)] transition-colors">Privacy Policy</Link>
-            <Link to="/license" className="hover:text-[hsl(350,80%,60%)] transition-colors">License</Link>
-          </div>
-          <p className="text-sm text-gray-500">© 2025 Government of Alberta</p>
+          <nav role="navigation" aria-label="Footer navigation" className="flex items-center gap-6 text-sm text-gray-600">
+            <Link to="/terms" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">Terms of Use</Link>
+            <Link to="/privacy" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">Privacy Policy</Link>
+            <Link to="/license" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">License</Link>
+          </nav>
+          <p className="text-sm text-gray-600">© 2025 Government of Alberta</p>
         </div>
       </footer>
     </div>

@@ -4,31 +4,41 @@ import { PronghornLogo } from "@/components/layout/PronghornLogo";
 const License = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Skip Navigation */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-foreground focus:text-background focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
+
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-3">
-            <PronghornLogo className="h-8 w-8" />
-            <span className="text-xl font-bold text-foreground">
-              Pronghorn{" "}
-              <Link to="/terms" className="text-primary hover:underline text-sm font-normal">
-                (Alpha)
+      <header>
+        <nav role="navigation" aria-label="Main navigation" className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+          <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+            <Link to="/" className="flex items-center gap-3">
+              <PronghornLogo className="h-8 w-8" />
+              <span className="text-xl font-bold text-foreground">
+                Pronghorn{" "}
+                <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 text-sm font-normal hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+                  (Alpha)
+                </Link>
+              </span>
+            </Link>
+            <div className="flex items-center gap-6">
+              <Link to="/terms" className="text-muted-foreground hover:text-foreground transition-colors underline decoration-1 underline-offset-2">
+                Terms
               </Link>
-            </span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link to="/terms" className="text-muted-foreground hover:text-foreground transition-colors">
-              Terms
-            </Link>
-            <Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">
-              Privacy
-            </Link>
+              <Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors underline decoration-1 underline-offset-2">
+                Privacy
+              </Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 pt-32 pb-16 max-w-4xl">
+      <main role="main" id="main-content" className="container mx-auto px-6 pt-32 pb-16 max-w-4xl">
         <h1 className="text-4xl font-bold mb-2">MIT License</h1>
         <p className="text-muted-foreground mb-8">Effective Date: December 10, 2025</p>
 
@@ -91,7 +101,7 @@ const License = () => {
             For questions about the license or the project, please contact:{" "}
               <a
                 href="mailto:ti.pronghorn@gov.ab.ca"
-                className="text-primary hover:underline"
+                className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]"
               >
                 ti.pronghorn@gov.ab.ca
               </a>
@@ -101,24 +111,24 @@ const License = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border py-8">
+      <footer role="contentinfo" className="border-t border-border py-8">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3">
               <PronghornLogo className="h-8 w-8" />
               <span className="text-lg font-semibold">Pronghorn</span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <Link to="/terms" className="hover:text-foreground transition-colors">
+            <nav role="navigation" aria-label="Footer navigation" className="flex items-center gap-6 text-sm text-muted-foreground">
+              <Link to="/terms" className="hover:text-foreground transition-colors underline decoration-1 underline-offset-2">
                 Terms
               </Link>
-              <Link to="/privacy" className="hover:text-foreground transition-colors">
+              <Link to="/privacy" className="hover:text-foreground transition-colors underline decoration-1 underline-offset-2">
                 Privacy
               </Link>
-              <Link to="/license" className="hover:text-foreground transition-colors">
+              <Link to="/license" className="hover:text-foreground transition-colors underline decoration-1 underline-offset-2">
                 License
               </Link>
-            </div>
+            </nav>
             <p className="text-sm text-muted-foreground">
               © 2025 Government of Alberta
             </p>

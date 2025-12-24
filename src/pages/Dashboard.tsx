@@ -260,8 +260,15 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip Navigation */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-foreground focus:text-background focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
       <PrimaryNav />
-      <main className="container px-4 md:px-6 py-6 md:py-8">
+      <main role="main" id="main-content" className="container px-4 md:px-6 py-6 md:py-8">
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 md:mb-8">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
