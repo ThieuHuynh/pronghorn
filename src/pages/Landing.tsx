@@ -209,6 +209,16 @@ export default function Landing() {
     title: "Database Explorer & Import",
     description: "Provision or connect PostgreSQL databases, browse schemas, execute SQL queries, and import data from Excel, CSV, or JSON with AI-powered schema inference.",
     color: "public-chip-indigo"
+  }, {
+    icon: Rocket,
+    title: "Deployment & DevOps",
+    description: "Deploy to cloud platforms or export for local development. Manage environment variables, view deployment logs, and publish your app live in minutes.",
+    color: "public-chip-orange"
+  }, {
+    icon: GitBranch,
+    title: "GitHub & Version Control",
+    description: "Full GitHub integration with sync, push, and pull. Built-in staging, diff viewer, commit history, and rollback to any previous version with complete audit trail.",
+    color: "public-chip-slate"
   }];
   
   const benefits = ["Complete traceability from standards to code", "AI teams that iterate until architecture stabilizes", "No account required to start—instant collaboration", "Built-in code editor with GitHub sync", "Multi-model AI support (Gemini, Claude, Grok)", "13+ specification templates for any audience", "Database provisioning with AI-powered data import"];
