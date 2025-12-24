@@ -78,6 +78,7 @@ const DeploymentLogsDialog = ({
   const [events, setEvents] = useState<RenderEvent[]>([]);
   const [deploys, setDeploys] = useState<DeployInfo[]>([]);
   const [latestDeploy, setLatestDeploy] = useState<DeployInfo | null>(null);
+  const [buildLogs, setBuildLogs] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -124,6 +125,7 @@ const DeploymentLogsDialog = ({
         setEvents(data.data?.events || []);
         setDeploys(data.data?.deploys || []);
         setLatestDeploy(data.data?.latestDeploy || null);
+        setBuildLogs(data.data?.buildLogs || null);
       }
     } catch (error) {
       console.error("Error fetching Render events:", error);
@@ -226,17 +228,25 @@ const DeploymentLogsDialog = ({
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="events">
               Build Events
-              {events.length > 0 && (
+              {deploys.length > 0 && (
                 <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
-                  {events.length}
+                  {deploys.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="buildlogs">
+              Build Logs
+              {buildLogs && (
+                <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
+                  •
                 </span>
               )}
             </TabsTrigger>
             <TabsTrigger value="activity">
-              Activity Log
+              Activity
               {logs.length > 0 && (
                 <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full">
                   {logs.length}
@@ -310,6 +320,35 @@ const DeploymentLogsDialog = ({
                     </div>
                   ))}
                 </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="buildlogs" className="mt-2">
+            <ScrollArea className="h-[350px] rounded-md border bg-background p-4">
+              {isLoadingEvents ? (
+                <div className="flex items-center justify-center h-full">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !buildLogs ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <p>No build logs available. Logs appear after a build starts.</p>
+                </div>
+              ) : (
+                <pre className="font-mono text-xs whitespace-pre-wrap text-foreground leading-relaxed">
+                  {buildLogs.split('\n').map((line, idx) => {
+                    const isError = line.toLowerCase().includes('error') || line.includes('npm ERR!');
+                    const isWarning = line.toLowerCase().includes('warn');
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`${isError ? 'text-destructive' : isWarning ? 'text-yellow-500' : ''}`}
+                      >
+                        {line}
+                      </div>
+                    );
+                  })}
+                </pre>
               )}
             </ScrollArea>
           </TabsContent>

@@ -766,6 +766,8 @@ async function getEventsRenderService(
 
   let deploys: any[] = [];
   let latestDeploy: any = null;
+  let buildLogs: string | null = null;
+  
   try {
     const deploysResponse = await fetch(
       `${RENDER_API_URL}/services/${deployment.render_service_id}/deploys?limit=10`,
@@ -784,13 +786,43 @@ async function getEventsRenderService(
       
       if (deploys.length > 0) {
         latestDeploy = deploys[0];
+        
+        // Fetch build logs for the latest deploy (especially useful for failed builds)
+        if (latestDeploy.id) {
+          try {
+            console.log('[render-service] Fetching build logs for deploy:', latestDeploy.id);
+            const logsResponse = await fetch(
+              `${RENDER_API_URL}/deploys/${latestDeploy.id}/logs`,
+              { method: 'GET', headers }
+            );
+            
+            if (logsResponse.ok) {
+              const logsData = await logsResponse.json();
+              if (Array.isArray(logsData) && logsData.length > 0) {
+                // Extract log messages - Render returns array of log objects
+                buildLogs = logsData
+                  .map((log: any) => {
+                    const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
+                    const message = log.message || log.text || '';
+                    return timestamp ? `${timestamp} ${message}` : message;
+                  })
+                  .join('\n');
+                console.log('[render-service] Got build logs, lines:', logsData.length);
+              }
+            } else {
+              console.log('[render-service] No logs available yet or failed to fetch');
+            }
+          } catch (logError) {
+            console.error('[render-service] Error fetching build logs:', logError);
+          }
+        }
       }
     }
   } catch (e) {
     console.error('[render-service] Error getting deploys:', e);
   }
 
-  return { events, deploys, latestDeploy };
+  return { events, deploys, latestDeploy, buildLogs };
 }
 
 async function syncEnvVarsRenderService(
