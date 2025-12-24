@@ -13,11 +13,15 @@ export const useRealtimeDeployments = (
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const deploymentsRef = useRef<Deployment[]>([]);
 
   // Merge new deployments with existing ones to avoid UI disruption
   const mergeDeployments = useCallback((newData: Deployment[]) => {
     setDeployments(prev => {
-      if (prev.length === 0) return newData;
+      if (prev.length === 0) {
+        deploymentsRef.current = newData;
+        return newData;
+      }
       
       // Create a map of new deployments by ID
       const newMap = new Map(newData.map(d => [d.id, d]));
@@ -42,7 +46,7 @@ export const useRealtimeDeployments = (
       if (!hasChanges) return prev; // Return same reference to avoid re-render
       
       // Merge: update existing items in place, add new ones, remove deleted ones
-      return newData.map(newDep => {
+      const result = newData.map(newDep => {
         const existing = prev.find(p => p.id === newDep.id);
         // If fields are the same, preserve the existing object reference
         if (existing &&
@@ -54,6 +58,9 @@ export const useRealtimeDeployments = (
         }
         return newDep;
       });
+      
+      deploymentsRef.current = result;
+      return result;
     });
   }, []);
 
@@ -83,8 +90,8 @@ export const useRealtimeDeployments = (
 
     setIsRefreshing(true);
     try {
-      // Use current deployments state instead of fetching again
-      const cloudDeployments = deployments.filter(
+      // Use ref to get current deployments without adding to dependency array
+      const cloudDeployments = deploymentsRef.current.filter(
         d => d.platform === "pronghorn_cloud" && d.render_service_id
       );
 
@@ -117,7 +124,7 @@ export const useRealtimeDeployments = (
     } finally {
       setIsRefreshing(false);
     }
-  }, [projectId, shareToken, enabled, deployments, mergeDeployments]);
+  }, [projectId, shareToken, enabled, mergeDeployments]);
 
   // Broadcast refresh to other clients
   const broadcastRefresh = useCallback(() => {
