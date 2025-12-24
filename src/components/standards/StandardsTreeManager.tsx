@@ -77,7 +77,7 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh, onViewD
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {standards.map((standard) => (
         <StandardNode
           key={standard.id}
@@ -146,8 +146,8 @@ function StandardNode({
   const [showResources, setShowResources] = useState(false);
 
   return (
-    <div className="border border-border rounded-lg p-3 space-y-2">
-      <div className="flex items-start gap-2">
+    <div className="border border-border rounded-md p-2 space-y-1.5">
+      <div className="flex items-start gap-1.5">
         {standard.children && standard.children.length > 0 && (
           <Button
             variant="ghost"
@@ -250,9 +250,8 @@ function StandardNode({
         </div>
       </div>
 
-      {/* Children */}
       {isExpanded && standard.children && standard.children.length > 0 && (
-        <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
+        <div className="ml-4 mt-1.5 space-y-1.5 border-l-2 border-border pl-3">
           {standard.children.map((child) => (
             <StandardNode
               key={child.id}
