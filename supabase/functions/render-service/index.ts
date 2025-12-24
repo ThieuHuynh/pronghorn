@@ -267,16 +267,37 @@ async function createRenderService(
   }
 
   const result = await response.json();
-  console.log('[render-service] Service created:', result);
+  console.log('[render-service] Service created:', JSON.stringify(result, null, 2));
 
-  // Update deployment with Render service ID
-  await supabase.rpc('update_deployment_with_token', {
+  const renderServiceId = result.service?.id;
+  const renderDeployId = result.deployId; // Render returns the initial deploy ID
+  const serviceUrl = result.service?.serviceDetails?.url;
+
+  if (!renderServiceId) {
+    console.error('[render-service] CRITICAL: Render response missing service.id:', result);
+    throw new Error('Render did not return a service ID');
+  }
+
+  console.log('[render-service] Saving to DB - render_service_id:', renderServiceId, 'render_deploy_id:', renderDeployId);
+
+  // Update deployment with Render service ID - MUST succeed
+  const { data: updateData, error: updateError } = await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
-    p_render_service_id: result.service?.id,
-    p_status: 'pending',
-    p_url: result.service?.serviceDetails?.url,
+    p_render_service_id: renderServiceId,
+    p_render_deploy_id: renderDeployId || null,
+    p_status: 'building', // Service was created, initial build starts immediately
+    p_url: serviceUrl || null,
   });
+
+  if (updateError) {
+    console.error('[render-service] CRITICAL: Failed to save render_service_id to database:', updateError);
+    console.error('[render-service] Deployment ID:', deployment.id, 'Render Service ID:', renderServiceId);
+    // Don't throw - the service was created on Render successfully, return success
+    // but log prominently so we can debug
+  } else {
+    console.log('[render-service] Successfully saved render_service_id to database:', updateData);
+  }
 
   return result;
 }
@@ -392,7 +413,8 @@ async function getServiceStatus(
   shareToken?: string
 ) {
   if (!deployment.render_service_id) {
-    return { status: 'not_created' };
+    console.log('[render-service] No render_service_id, returning not_created');
+    return { status: 'not_created', message: 'Service has not been created on Render yet' };
   }
 
   console.log('[render-service] Getting status for service:', deployment.render_service_id);
@@ -409,10 +431,12 @@ async function getServiceStatus(
   }
 
   const result = await response.json();
-  console.log('[render-service] Service status:', result);
+  console.log('[render-service] Service status response:', JSON.stringify(result, null, 2));
 
   let mappedStatus = 'pending';
   const service = result.service;
+  let latestDeploy: any = null;
+  let deployLogs: string | null = null;
   
   if (service) {
     if (service.suspended === 'suspended') {
@@ -431,11 +455,11 @@ async function getServiceStatus(
     
     if (deploysResponse.ok) {
       const deploysData = await deploysResponse.json();
-      const latestDeploy = deploysData[0]?.deploy;
+      latestDeploy = deploysData[0]?.deploy;
       
       if (latestDeploy) {
         const deployStatus = latestDeploy.status;
-        console.log('[render-service] Latest deploy status:', deployStatus);
+        console.log('[render-service] Latest deploy status:', deployStatus, 'Deploy ID:', latestDeploy.id);
         
         if (deployStatus === 'build_in_progress' || deployStatus === 'update_in_progress') {
           mappedStatus = 'building';
@@ -447,6 +471,29 @@ async function getServiceStatus(
           mappedStatus = 'stopped';
         } else if (deployStatus === 'build_failed' || deployStatus === 'update_failed') {
           mappedStatus = 'failed';
+          
+          // Fetch deploy logs for failed builds
+          try {
+            console.log('[render-service] Fetching logs for failed deploy:', latestDeploy.id);
+            const logsResponse = await fetch(
+              `${RENDER_API_URL}/deploys/${latestDeploy.id}/logs`,
+              { method: 'GET', headers }
+            );
+            
+            if (logsResponse.ok) {
+              const logsData = await logsResponse.json();
+              // Logs are returned as array of log objects, extract last 50 lines
+              if (Array.isArray(logsData)) {
+                const lastLogs = logsData.slice(-50);
+                deployLogs = lastLogs.map((log: any) => log.message || log.text || JSON.stringify(log)).join('\n');
+                console.log('[render-service] Got deploy logs, length:', deployLogs.length);
+              }
+            } else {
+              console.error('[render-service] Failed to fetch deploy logs:', await logsResponse.text());
+            }
+          } catch (logError) {
+            console.error('[render-service] Error fetching deploy logs:', logError);
+          }
         }
       }
     }
@@ -456,14 +503,20 @@ async function getServiceStatus(
 
   const serviceUrl = service?.serviceDetails?.url;
 
+  // Update database with new status
   if (supabase && deployment.id) {
     console.log('[render-service] Updating deployment status in DB:', mappedStatus);
-    await supabase.rpc('update_deployment_with_token', {
+    const { error: updateError } = await supabase.rpc('update_deployment_with_token', {
       p_deployment_id: deployment.id,
       p_token: shareToken || null,
       p_status: mappedStatus,
       p_url: serviceUrl || null,
+      p_render_deploy_id: latestDeploy?.id || null,
     });
+    
+    if (updateError) {
+      console.error('[render-service] Failed to update status in DB:', updateError);
+    }
   }
 
   return {
@@ -472,6 +525,8 @@ async function getServiceStatus(
     createdAt: service?.createdAt,
     updatedAt: service?.updatedAt,
     service: service,
+    latestDeploy: latestDeploy,
+    deployLogs: deployLogs,
   };
 }
 
