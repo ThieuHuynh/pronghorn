@@ -6,20 +6,23 @@ import { queryClient } from "@/lib/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminProvider } from "@/contexts/AdminContext";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import App from "./App";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AdminProvider>
-          <BrowserRouter>
-            <App />
-            <Toaster position="top-right" />
-          </BrowserRouter>
-        </AdminProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AdminProvider>
+            <BrowserRouter>
+              <App />
+              <Toaster position="top-right" />
+            </BrowserRouter>
+          </AdminProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>
 );

@@ -4,6 +4,7 @@ import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdmin } from "@/contexts/AdminContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -85,7 +86,8 @@ export function PrimaryNav() {
         </nav>
 
         {/* Desktop User Menu */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-2">
+          <ThemeToggle />
           <AdminAccessButton />
           {user ? (
             <>
@@ -112,7 +114,8 @@ export function PrimaryNav() {
         </div>
 
         {/* Mobile Menu */}
-        <div className="flex md:hidden items-center gap-2 ml-auto">
+        <div className="flex md:hidden items-center gap-1 ml-auto">
+          <ThemeToggle />
           <AdminAccessButton />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
