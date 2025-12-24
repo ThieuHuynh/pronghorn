@@ -14,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type } from "lucide-react";
+import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3 } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,6 +68,7 @@ export function EnhanceImageDialog({
   const [isProcessing, setIsProcessing] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [compactView, setCompactView] = useState(false);
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -290,14 +292,26 @@ export function EnhanceImageDialog({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Select Images (optional - leave empty to create from text)</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSelectAll}
-                    disabled={isProcessing}
-                  >
-                    {selectedArtifacts.size === imageArtifacts.length ? "Deselect All" : "Select All"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Toggle
+                      pressed={compactView}
+                      onPressedChange={setCompactView}
+                      size="sm"
+                      aria-label="Toggle compact view"
+                      className="gap-1"
+                    >
+                      {compactView ? <Grid2x2 className="h-3.5 w-3.5" /> : <Grid3x3 className="h-3.5 w-3.5" />}
+                      <span className="text-xs">{compactView ? "Small" : "Large"}</span>
+                    </Toggle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      disabled={isProcessing}
+                    >
+                      {selectedArtifacts.size === imageArtifacts.length ? "Deselect All" : "Select All"}
+                    </Button>
+                  </div>
                 </div>
 
                 {imageArtifacts.length === 0 ? (
@@ -305,13 +319,13 @@ export function EnhanceImageDialog({
                     No image artifacts available. Enter a prompt below to create a new image.
                   </div>
                 ) : (
-                  <ScrollArea className="h-[300px] border rounded-md p-3">
-                    <div className="columns-2 sm:columns-3 gap-2 space-y-2">
+                  <ScrollArea className="h-[300px] border rounded-md p-2">
+                    <div className={`grid gap-2 ${compactView ? 'grid-cols-3 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3'}`}>
                       {imageArtifacts.map((artifact) => (
                         <div
                           key={artifact.id}
                           onClick={() => !isProcessing && handleToggleArtifact(artifact.id)}
-                          className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all break-inside-avoid ${
+                          className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all ${
                             selectedArtifacts.has(artifact.id)
                               ? "border-primary ring-2 ring-primary/20"
                               : "border-transparent hover:border-muted-foreground/30"
@@ -320,7 +334,7 @@ export function EnhanceImageDialog({
                           <img
                             src={artifact.image_url!}
                             alt={getArtifactTitle(artifact)}
-                            className="w-full object-cover"
+                            className={`w-full object-cover ${compactView ? 'h-16' : ''}`}
                           />
                           <div className="absolute top-1 left-1">
                             <Checkbox
@@ -329,9 +343,11 @@ export function EnhanceImageDialog({
                               className="bg-background/80"
                             />
                           </div>
-                          <div className="absolute bottom-0 left-0 right-0 bg-background/80 px-1 py-0.5">
-                            <p className="text-xs truncate">{getArtifactTitle(artifact)}</p>
-                          </div>
+                          {!compactView && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-background/80 px-1 py-0.5">
+                              <p className="text-xs truncate">{getArtifactTitle(artifact)}</p>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
