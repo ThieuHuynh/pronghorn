@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate, Link } from "react-router-dom";
-import { FileText, Library, Layout, Bot, Code, Users, ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle, Rocket, Shield, Award, Settings, Archive, MessageSquare, ListTree, Hammer, Sparkles, Github, Heart, Zap, X, ChevronLeft, ChevronRight, Database } from "lucide-react";
+import { FileText, Library, Layout, Bot, Code, Users, ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle, Rocket, Shield, Award, Settings, Archive, MessageSquare, ListTree, Hammer, Sparkles, Github, Heart, Zap, X, ChevronLeft, ChevronRight, Database, BookOpen, Download, Layers, Cpu } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 export default function Landing() {
   const navigate = useNavigate();
@@ -652,6 +652,141 @@ export default function Landing() {
                 </div>
               </div>
               
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Context Engineering Section */}
+      <section className="py-24 px-6 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-700 rounded-full text-sm font-medium mb-6">
+              <Cpu className="w-4 h-4" />
+              Powered by Context Engineering
+            </div>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+              AI That Understands Your Whole Project
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Pronghorn is built on <span className="font-semibold text-[hsl(240,30%,15%)]">Context Engineering</span>—the practice of curating rich, structured context that makes AI dramatically more effective. Every artifact, standard, and decision becomes context for better AI output.
+            </p>
+          </div>
+
+          {/* Open Source Resources Grid */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {/* Tech Stacks */}
+            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <Layers className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Tech Stacks</h3>
+                  <p className="text-sm text-gray-500">Open-source templates</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Curated technology stack templates covering frameworks, languages, databases, and infrastructure. Use them as-is or customize for your organization.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/tech-stacks")} className="w-full">
+                Browse Tech Stacks
+              </Button>
+            </Card>
+
+            {/* Standards */}
+            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Standards</h3>
+                  <p className="text-sm text-gray-500">Compliance & best practices</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Organizational standards, compliance requirements, and best practices. Link standards to projects for automatic traceability and validation.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/standards")} className="w-full">
+                Explore Standards
+              </Button>
+            </Card>
+
+            {/* Build Books */}
+            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1 lg:col-span-1 md:col-span-2 lg:row-span-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-orange-600 rounded-xl flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Build Books</h3>
+                  <p className="text-sm text-gray-500">Complete project blueprints</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Comprehensive project templates bundling standards, tech stacks, resources, and documentation. Chat with AI about any Build Book, then download everything for local development.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => navigate("/build-books")} className="flex-1">
+                  View Build Books
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          {/* Take Away Feature Highlight */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 md:p-10 border border-amber-200/50">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Download className="w-5 h-5 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-700 uppercase tracking-wide">Take Away Resource</span>
+                </div>
+                <h3 className="text-2xl font-medium text-[hsl(240,30%,15%)] mb-4">
+                  Download Complete Build Books for Any AI Tool
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Each Build Book can be downloaded as a complete package—standards, tech stacks, documentation, and AI prompts—ready to use with <span className="font-medium">Cursor, Claude, ChatGPT, Copilot</span>, or any other AI development tool.
+                </p>
+                <ul className="space-y-3">
+                  {[
+                    "Chat with AI about standards before downloading",
+                    "Export as markdown, JSON, or structured docs",
+                    "Use as context for any AI coding assistant",
+                    "Perfect for local development workflows"
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-center gap-3">
+                      <div className="w-5 h-5 bg-amber-200 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3 text-amber-700" />
+                      </div>
+                      <span className="text-sm text-gray-700">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-amber-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <div className="w-3 h-3 rounded-full bg-green-400" />
+                  <span className="text-xs text-gray-400 ml-2">build-book-export.md</span>
+                </div>
+                <div className="font-mono text-xs space-y-2 text-gray-600">
+                  <div className="text-violet-600"># Enterprise React Application</div>
+                  <div className="text-gray-400">---</div>
+                  <div><span className="text-emerald-600">## Tech Stack</span></div>
+                  <div className="pl-4 text-gray-500">- React 18 + TypeScript</div>
+                  <div className="pl-4 text-gray-500">- Tailwind CSS + shadcn/ui</div>
+                  <div className="pl-4 text-gray-500">- Supabase Backend</div>
+                  <div className="mt-2"><span className="text-emerald-600">## Standards</span></div>
+                  <div className="pl-4 text-gray-500">- WCAG 2.1 AA Compliance</div>
+                  <div className="pl-4 text-gray-500">- SOC2 Security Controls</div>
+                  <div className="mt-2"><span className="text-emerald-600">## AI Instructions</span></div>
+                  <div className="pl-4 text-gray-500">- Follow component patterns...</div>
+                  <div className="pl-4 text-amber-500 animate-pulse">|</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
