@@ -321,7 +321,7 @@ async function enrichResourcesWithOwnerInfo(
     let resourceCreatedAt = null;
 
     if (resourceType === "service") {
-      // Look up deployment in project_deployments
+      // Step 1: Look up deployment in project_deployments and get project info
       const { data: deployment } = await supabase
         .from("project_deployments")
         .select(`
@@ -332,11 +332,7 @@ async function enrichResourcesWithOwnerInfo(
             id,
             name,
             created_at,
-            created_by,
-            profiles:created_by (
-              email,
-              display_name
-            )
+            created_by
           )
         `)
         .eq("render_service_id", renderId)
@@ -344,24 +340,33 @@ async function enrichResourcesWithOwnerInfo(
 
       if (deployment) {
         resourceCreatedAt = deployment.created_at;
-        projectInfo = deployment.projects ? {
-          id: deployment.projects.id,
-          name: deployment.projects.name,
-          created_at: deployment.projects.created_at,
-        } : null;
         
-        if (deployment.projects?.profiles) {
-          const profile = Array.isArray(deployment.projects.profiles) 
-            ? deployment.projects.profiles[0] 
-            : deployment.projects.profiles;
-          ownerInfo = {
-            email: profile?.email,
-            display_name: profile?.display_name,
+        if (deployment.projects) {
+          projectInfo = {
+            id: deployment.projects.id,
+            name: deployment.projects.name,
+            created_at: deployment.projects.created_at,
           };
+          
+          // Step 2: Get profile separately using created_by
+          if (deployment.projects.created_by) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("email, display_name")
+              .eq("user_id", deployment.projects.created_by)
+              .maybeSingle();
+            
+            if (profile) {
+              ownerInfo = {
+                email: profile.email,
+                display_name: profile.display_name,
+              };
+            }
+          }
         }
       }
     } else {
-      // Look up database in project_databases
+      // Step 1: Look up database in project_databases and get project info
       const { data: database } = await supabase
         .from("project_databases")
         .select(`
@@ -372,11 +377,7 @@ async function enrichResourcesWithOwnerInfo(
             id,
             name,
             created_at,
-            created_by,
-            profiles:created_by (
-              email,
-              display_name
-            )
+            created_by
           )
         `)
         .eq("render_postgres_id", renderId)
@@ -384,20 +385,29 @@ async function enrichResourcesWithOwnerInfo(
 
       if (database) {
         resourceCreatedAt = database.created_at;
-        projectInfo = database.projects ? {
-          id: database.projects.id,
-          name: database.projects.name,
-          created_at: database.projects.created_at,
-        } : null;
         
-        if (database.projects?.profiles) {
-          const profile = Array.isArray(database.projects.profiles) 
-            ? database.projects.profiles[0] 
-            : database.projects.profiles;
-          ownerInfo = {
-            email: profile?.email,
-            display_name: profile?.display_name,
+        if (database.projects) {
+          projectInfo = {
+            id: database.projects.id,
+            name: database.projects.name,
+            created_at: database.projects.created_at,
           };
+          
+          // Step 2: Get profile separately using created_by
+          if (database.projects.created_by) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("email, display_name")
+              .eq("user_id", database.projects.created_by)
+              .maybeSingle();
+            
+            if (profile) {
+              ownerInfo = {
+                email: profile.email,
+                display_name: profile.display_name,
+              };
+            }
+          }
         }
       }
     }

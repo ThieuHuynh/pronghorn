@@ -23,12 +23,20 @@ Deno.serve(async (req) => {
 
   try {
     const GITHUB_PAT = Deno.env.get("GITHUB_PAT");
+    const GITHUB_DOMAIN = Deno.env.get("GITHUB_DOMAIN");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     if (!GITHUB_PAT) {
       return new Response(
         JSON.stringify({ error: "GitHub PAT not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!GITHUB_DOMAIN) {
+      return new Response(
+        JSON.stringify({ error: "GITHUB_DOMAIN not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -113,10 +121,14 @@ Deno.serve(async (req) => {
           if (page > 10) break;
         }
 
-        console.log("[superadmin-github-management] Repos fetched:", allRepos.length);
+        console.log("[superadmin-github-management] Total repos fetched:", allRepos.length);
+
+        // Filter repos to only include those from GITHUB_DOMAIN
+        const filteredRepos = allRepos.filter(repo => repo.owner?.login === GITHUB_DOMAIN);
+        console.log(`[superadmin-github-management] Filtered to ${filteredRepos.length} repos from ${GITHUB_DOMAIN}`);
 
         // Enrich with owner info from database
-        const enrichedRepos = await enrichReposWithOwnerInfo(supabase, allRepos);
+        const enrichedRepos = await enrichReposWithOwnerInfo(supabase, filteredRepos);
 
         return new Response(
           JSON.stringify({ repos: enrichedRepos }),
@@ -247,7 +259,7 @@ async function enrichReposWithOwnerInfo(supabase: any, repos: any[]): Promise<an
     let projectInfo = null;
     let resourceCreatedAt = null;
 
-    // Look up repo in project_repos
+    // Step 1: Look up repo in project_repos and get project info
     const { data: projectRepo } = await supabase
       .from("project_repos")
       .select(`
@@ -258,11 +270,7 @@ async function enrichReposWithOwnerInfo(supabase: any, repos: any[]): Promise<an
           id,
           name,
           created_at,
-          created_by,
-          profiles:created_by (
-            email,
-            display_name
-          )
+          created_by
         )
       `)
       .eq("organization", repo.owner.login)
@@ -271,20 +279,29 @@ async function enrichReposWithOwnerInfo(supabase: any, repos: any[]): Promise<an
 
     if (projectRepo) {
       resourceCreatedAt = projectRepo.created_at;
-      projectInfo = projectRepo.projects ? {
-        id: projectRepo.projects.id,
-        name: projectRepo.projects.name,
-        created_at: projectRepo.projects.created_at,
-      } : null;
       
-      if (projectRepo.projects?.profiles) {
-        const profile = Array.isArray(projectRepo.projects.profiles) 
-          ? projectRepo.projects.profiles[0] 
-          : projectRepo.projects.profiles;
-        ownerInfo = {
-          email: profile?.email,
-          display_name: profile?.display_name,
+      if (projectRepo.projects) {
+        projectInfo = {
+          id: projectRepo.projects.id,
+          name: projectRepo.projects.name,
+          created_at: projectRepo.projects.created_at,
         };
+        
+        // Step 2: Get profile separately using created_by
+        if (projectRepo.projects.created_by) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("email, display_name")
+            .eq("user_id", projectRepo.projects.created_by)
+            .maybeSingle();
+          
+          if (profile) {
+            ownerInfo = {
+              email: profile.email,
+              display_name: profile.display_name,
+            };
+          }
+        }
       }
     }
 
