@@ -207,22 +207,35 @@ export default function Landing() {
   }];
   const benefits = ["Complete traceability from standards to code", "AI teams that iterate until architecture stabilizes", "No account required to start—instant collaboration", "Built-in code editor with GitHub sync", "Multi-model AI support (Gemini, Claude, Grok)", "13+ specification templates for any audience", "Database provisioning with AI-powered data import"];
   return <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)] antialiased overflow-x-hidden">
-      {/* Navbar */}
-      <nav className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <PronghornLogo className="h-8 w-8 rounded-lg" />
-            <span className="text-xl font-semibold tracking-tight">
-              Pronghorn{" "}
-              <Link to="/terms" className="text-[hsl(350,80%,60%)] hover:underline">(Alpha)</Link>
-            </span>
-          </div>
+      {/* Skip Navigation Link */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[hsl(240,30%,15%)] focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(350,80%,40%)]"
+      >
+        Skip to main content
+      </a>
 
-          <Button onClick={() => navigate("/auth")} className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20">
-            Login
-          </Button>
-        </div>
-      </nav>
+      {/* Header with Navigation */}
+      <header>
+        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <PronghornLogo className="h-8 w-8 rounded-lg" />
+              <span className="text-xl font-semibold tracking-tight">
+                Pronghorn{" "}
+                <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">(Alpha)</Link>
+              </span>
+            </div>
+
+            <Button onClick={() => navigate("/auth")} className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20">
+              Login
+            </Button>
+          </div>
+        </nav>
+      </header>
+
+      {/* Main Content */}
+      <main role="main" id="main-content">
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 lg:pt-32 lg:pb-32 px-6 overflow-hidden">
@@ -238,13 +251,13 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
           <div className="space-y-8 text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
-              <Link to="/terms" className="text-sm font-medium text-[hsl(350,80%,60%)] hover:underline">
+              <Link to="/terms" className="text-sm font-medium text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
                 Currently Alpha Testing
               </Link>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
               Build Software with <br />
-              <span className="text-[hsl(350,80%,60%)] relative inline-block">
+              <span className="text-[hsl(350,80%,40%)] relative inline-block">
                 AI-Powered
                 <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
@@ -397,7 +410,7 @@ export default function Landing() {
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${iconColors[step.phase as keyof typeof iconColors]}`}>
                     <step.icon className="w-5 h-5" />
                   </div>
-                  <h4 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1 truncate">{step.label}</h4>
+                  <h3 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1 truncate">{step.label}</h3>
                   <p className="text-xs text-gray-500 leading-tight hidden lg:block line-clamp-2">{step.description}</p>
                 </div>;
           })}
@@ -434,9 +447,9 @@ export default function Landing() {
                       </DialogTitle>
                     </DialogHeader>
                     {selectedStep.aiDetails && <div className="mt-4">
-                        <h4 className="font-medium text-sm text-muted-foreground mb-3">
+                        <p className="font-medium text-sm text-muted-foreground mb-3">
                           {selectedStep.aiDetails.title}
-                        </h4>
+                        </p>
                         <ul className="space-y-2">
                           {selectedStep.aiDetails.capabilities.map((capability, idx) => <li key={idx} className="flex items-start gap-2 text-sm">
                               <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -576,7 +589,7 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <div className="bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] rounded-3xl p-10 md:p-16 relative overflow-hidden">
             {/* Background decorations */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,60%)]/20 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,40%)]/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
             
             <div className="relative z-10">
@@ -665,7 +678,7 @@ export default function Landing() {
 
           {/* Stats Card */}
           <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] p-10 flex flex-col justify-center">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,60%)]/20 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,40%)]/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
             <div className="relative z-10 space-y-6">
               <div className="flex items-center gap-4">
@@ -704,7 +717,7 @@ export default function Landing() {
       <section className="py-16 md:py-24 px-4 md:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="bg-gradient-to-br from-rose-100/50 to-rose-50 rounded-3xl p-8 md:p-12 lg:p-16 relative overflow-hidden">
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,60%)]/10 rounded-full blur-3xl" />
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,40%)]/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">
@@ -723,28 +736,30 @@ export default function Landing() {
         </div>
       </section>
 
+      </main>
+
       {/* Footer */}
-      <footer className="py-12 px-6 border-t border-gray-100">
+      <footer role="contentinfo" className="py-12 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
             <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-lg font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
-            <div className="flex gap-6 text-sm">
-              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+            <nav aria-label="Footer navigation" className="flex gap-6 text-sm">
+              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
                 Terms of Use
               </Link>
-              <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+              <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
                 Privacy Policy
               </Link>
-              <Link to="/license" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+              <Link to="/license" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
                 License
               </Link>
-            </div>
-            <div className="text-sm text-gray-500 text-center md:text-right">
-              <p>© 2025 Pronghorn. <Link to="/license" className="text-[hsl(350,80%,60%)] hover:underline">MIT License</Link> Open Source by the Government of Alberta.</p>
-              <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,60%)] hover:underline">
+            </nav>
+            <div className="text-sm text-gray-600 text-center md:text-right">
+              <p>© 2025 Pronghorn. <Link to="/license" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">MIT License</Link> Open Source by the Government of Alberta.</p>
+              <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
                 pronghorn.red
               </a>
             </div>
