@@ -38,14 +38,28 @@ export function TechStackTreeManager({ techStackId, onRefresh, onViewDocs }: Tec
   }, [techStackId]);
 
   const loadItems = async () => {
-    const { data } = await supabase
+    // Fetch ALL tech_stacks (matching Standards pattern)
+    const { data: allItems } = await supabase
       .from("tech_stacks")
       .select("*")
-      .eq("parent_id", techStackId)
       .order("name");
 
-    if (data) {
-      setItems(buildHierarchy(data));
+    if (allItems) {
+      // Recursively collect all descendant IDs starting from techStackId
+      const descendantIds = new Set<string>();
+      const collectDescendants = (parentId: string) => {
+        allItems
+          .filter((item) => item.parent_id === parentId)
+          .forEach((item) => {
+            descendantIds.add(item.id);
+            collectDescendants(item.id);
+          });
+      };
+      collectDescendants(techStackId);
+
+      // Filter to only include items that are descendants of this tech stack
+      const descendants = allItems.filter((item) => descendantIds.has(item.id));
+      setItems(buildHierarchy(descendants));
     }
   };
 
