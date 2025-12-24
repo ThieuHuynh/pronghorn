@@ -123,7 +123,7 @@ export function TechStackTreeManager({ techStackId, onRefresh, onViewDocs }: Tec
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {items.map((item) => (
         <TechStackItemNode
           key={item.id}
@@ -182,8 +182,8 @@ function TechStackItemNode({
   const versionDisplay = item.version ? `${item.version_constraint || "^"}${item.version}` : null;
 
   return (
-    <div className="border border-border rounded-lg p-2 md:p-3 space-y-2">
-      <div className="flex items-start gap-1 md:gap-2">
+    <div className="border border-border rounded-md p-2 space-y-1.5">
+      <div className="flex items-start gap-1">
         {item.children && item.children.length > 0 && (
           <Button
             variant="ghost"
@@ -249,9 +249,8 @@ function TechStackItemNode({
         </div>
       </div>
 
-      {/* Children */}
       {isExpanded && item.children && item.children.length > 0 && (
-        <div className="ml-3 md:ml-6 mt-2 space-y-2 border-l-2 border-border pl-2 md:pl-4">
+        <div className="ml-4 mt-1.5 space-y-1.5 border-l-2 border-border pl-3">
           {item.children.map((child) => (
             <TechStackItemNode
               key={child.id}

@@ -22,13 +22,13 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
   const { isAdmin } = useAdmin();
   const [isEditing, setIsEditing] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
+  const [isExpanded, setIsExpanded] = useState<string | undefined>(undefined);
   const [name, setName] = useState(techStack.name);
   const [description, setDescription] = useState(techStack.description || "");
   const [longDescription, setLongDescription] = useState(techStack.long_description || "");
   const [childCount, setChildCount] = useState(0);
 
   useEffect(() => {
-    // Count direct children for the accordion trigger
     const countChildren = async () => {
       const { count } = await supabase
         .from("tech_stacks")
@@ -53,20 +53,20 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="p-4 md:p-6">
+      <CardHeader className="p-3 md:p-4">
         {isEditing ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div>
-              <Label>Tech Stack Name</Label>
+              <Label className="text-xs">Tech Stack Name</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Tech stack name"
-                className="text-lg md:text-xl font-semibold"
+                className="text-base font-semibold h-8"
               />
             </div>
             <div>
-              <Label>Short Description</Label>
+              <Label className="text-xs">Short Description</Label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -76,22 +76,22 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
               />
             </div>
             <div>
-              <Label>Long Description (KB Article / Documentation)</Label>
+              <Label className="text-xs">Long Description</Label>
               <Textarea
                 value={longDescription}
                 onChange={(e) => setLongDescription(e.target.value)}
-                placeholder="Paste in full documentation, KB articles, or detailed explanations here..."
-                rows={6}
+                placeholder="Full documentation..."
+                rows={4}
                 className="text-sm font-mono"
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button size="sm" onClick={handleSave}>
-                <Check className="h-3 w-3 md:h-4 md:w-4 mr-2" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave} className="h-7">
+                <Check className="h-3 w-3 mr-1" />
                 Save
               </Button>
-              <Button size="sm" variant="outline" onClick={handleCancel}>
-                <X className="h-3 w-3 md:h-4 md:w-4 mr-2" />
+              <Button size="sm" variant="outline" onClick={handleCancel} className="h-7">
+                <X className="h-3 w-3 mr-1" />
                 Cancel
               </Button>
             </div>
@@ -99,35 +99,45 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
         ) : (
           <>
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-lg md:text-xl truncate">{techStack.name}</CardTitle>
-              <div className="flex gap-1 md:gap-2 flex-shrink-0">
-                <Button size="sm" variant="outline" onClick={() => setShowDocs(true)} className="gap-1">
-                  <BookOpen className="h-3 w-3 md:h-4 md:w-4" />
-                  <span className="hidden md:inline">Docs</span>
+              <CardTitle className="text-base md:text-lg truncate">{techStack.name}</CardTitle>
+              <div className="flex gap-1 flex-shrink-0">
+                <Button size="sm" variant="outline" onClick={() => setShowDocs(true)} className="h-7 gap-1 px-2">
+                  <BookOpen className="h-3 w-3" />
+                  <span className="hidden md:inline text-xs">Docs</span>
                 </Button>
                 {isAdmin && (
                   <>
-                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="h-7 w-7 p-0">
+                      <Edit className="h-3 w-3" />
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => onDelete(techStack.id)} className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
+                    <Button size="sm" variant="ghost" onClick={() => onDelete(techStack.id)} className="h-7 w-7 p-0">
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </>
                 )}
               </div>
             </div>
-            {techStack.description && <CardDescription className="text-xs md:text-sm">{techStack.description}</CardDescription>}
+            {techStack.description && <CardDescription className="text-xs mt-1">{techStack.description}</CardDescription>}
           </>
         )}
       </CardHeader>
 
-      <Accordion type="single" collapsible className="px-4 md:px-6 pb-4 md:pb-6">
-        <AccordionItem value="items" className="border-none">
-          <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
-            {childCount} item{childCount !== 1 ? 's' : ''}
+      <Accordion 
+        type="single" 
+        collapsible 
+        className="px-3 md:px-4 pb-3 md:pb-4"
+        value={isExpanded}
+        onValueChange={setIsExpanded}
+      >
+        <AccordionItem value="items" className="border rounded-md bg-muted/30">
+          <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline hover:bg-muted/50 rounded-md [&[data-state=open]>div>.expand-text]:hidden [&[data-state=closed]>div>.collapse-text]:hidden">
+            <div className="flex items-center gap-2 w-full">
+              <span className="font-medium">{childCount} item{childCount !== 1 ? 's' : ''}</span>
+              <span className="hidden md:inline text-xs text-muted-foreground expand-text">— Click to expand</span>
+              <span className="hidden md:inline text-xs text-muted-foreground collapse-text">— Click to collapse</span>
+            </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-2">
+          <AccordionContent className="px-3 pt-2 pb-3">
             <TechStackTreeManager
               techStackId={techStack.id}
               onRefresh={onRefresh}
