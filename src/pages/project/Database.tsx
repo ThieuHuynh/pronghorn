@@ -25,7 +25,6 @@ const Database = () => {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const isMobile = useIsMobile();
   const { isSuperAdmin } = useAdmin();
-  const isMobile = useIsMobile();
   
   // Project databases (Render)
   const { databases, isLoading, refresh, broadcastRefresh } = useRealtimeDatabases(

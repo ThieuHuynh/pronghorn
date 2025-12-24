@@ -14,7 +14,7 @@ import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
 import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2, FileArchive, Upload, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2, FileArchive, Upload, Loader2, CheckCircle, XCircle, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -22,9 +22,11 @@ import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdmin } from "@/contexts/AdminContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import JSZip from "jszip";
+import { SuperadminGitHubManager } from "@/components/superadmin/SuperadminGitHubManager";
 
 interface FileNode {
   name: string;
@@ -37,6 +39,7 @@ export default function Repository() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
+  const { isSuperAdmin } = useAdmin();
   const hasAccessToken = !!shareToken || !!user;
   const { toast } = useToast();
   const [managePATDialogOpen, setManagePATDialogOpen] = useState(false);
@@ -909,6 +912,12 @@ export default function Repository() {
                   <FileArchive className="h-4 w-4" />
                   Upload
                 </TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="manage" className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Manage
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="repos" className="space-y-6">
@@ -1284,6 +1293,12 @@ export default function Repository() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {isSuperAdmin && (
+                <TabsContent value="manage" className="space-y-6">
+                  <SuperadminGitHubManager />
+                </TabsContent>
+              )}
             </Tabs>
           </div>
         </main>
