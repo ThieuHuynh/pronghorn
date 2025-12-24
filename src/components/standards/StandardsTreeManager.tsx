@@ -159,43 +159,81 @@ function StandardNode({
           </Button>
         )}
 
-        <div className="flex-1 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">{standard.code}</Badge>
-                <span className="font-medium">{standard.title}</span>
-              </div>
-              {standard.description && (
-                <p className="text-sm text-muted-foreground mt-1">{standard.description}</p>
-              )}
-            </div>
-
-            <div className="flex gap-1 flex-shrink-0">
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Mobile Layout */}
+          <div className="flex flex-col gap-1 md:hidden">
+            <Badge variant="outline" className="text-xs w-fit">{standard.code}</Badge>
+            <span className="font-medium break-words">{standard.title}</span>
+            <div className="flex flex-wrap gap-1">
               {standard.long_description && onViewDocs && (
-                <Button variant="ghost" size="sm" onClick={() => onViewDocs(standard)} title="View docs">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onViewDocs(standard)} title="View docs">
                   <BookOpen className="h-3 w-3" />
                 </Button>
               )}
               {isAdmin && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => onAdd(standard.id)} title="Add sub-standard">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onAdd(standard.id)} title="Add sub-standard">
                     <Plus className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(standard.id)} title="Edit">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(standard.id)} title="Edit">
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowResources(!showResources)} title="Resources">
                     <FolderOpen className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
                     <Sparkles className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onDelete(standard.id)} title="Delete">
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </>
               )}
+            </div>
+            {standard.description && (
+              <p className="text-sm text-muted-foreground">{standard.description}</p>
+            )}
+          </div>
+
+          {/* Desktop Layout */}
+          <div className="hidden md:block">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">{standard.code}</Badge>
+                  <span className="font-medium">{standard.title}</span>
+                </div>
+                {standard.description && (
+                  <p className="text-sm text-muted-foreground mt-1">{standard.description}</p>
+                )}
+              </div>
+
+              <div className="flex gap-1 flex-shrink-0">
+                {standard.long_description && onViewDocs && (
+                  <Button variant="ghost" size="sm" onClick={() => onViewDocs(standard)} title="View docs">
+                    <BookOpen className="h-3 w-3" />
+                  </Button>
+                )}
+                {isAdmin && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => onAdd(standard.id)} title="Add sub-standard">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(standard.id)} title="Edit">
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources">
+                      <FolderOpen className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
+                      <Sparkles className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
