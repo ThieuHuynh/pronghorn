@@ -1,7 +1,5 @@
-import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Users, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
@@ -58,56 +56,67 @@ export function AgentInstancesCard({ agents, totalElements = 0 }: AgentInstances
         </div>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="max-h-64">
-          <div className="space-y-3">
-            {agents.map((agent) => {
-              const colorClass = agentColors[agent.agent_role] || "text-muted-foreground bg-muted";
-              const sectorSize = (agent.sector_end || 0) - (agent.sector_start || 0) + 1;
-              const progress = agent.sector_complete ? 100 : 50; // Simplified progress
-              
-              return (
-                <div
-                  key={agent.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg"
-                >
-                  <div className={`p-2 rounded-md ${colorClass}`}>
-                    {agent.sector_complete ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : agent.status === "active" ? (
-                      <Clock className="h-4 w-4 animate-pulse" />
-                    ) : (
-                      <AlertCircle className="h-4 w-4" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{agent.agent_name}</span>
-                      <Badge 
-                        variant={agent.sector_complete ? "default" : "outline"} 
-                        className="text-[10px]"
-                      >
-                        {agent.status}
-                      </Badge>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {agents.map((agent) => {
+            const colorClass = agentColors[agent.agent_role] || "text-muted-foreground bg-muted";
+            const sectorSize = (agent.sector_end || 0) - (agent.sector_start || 0) + 1;
+            const progress = agent.sector_complete ? 100 : 50;
+            
+            return (
+              <div
+                key={agent.id}
+                className="flex flex-col gap-3 p-4 border rounded-lg"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-md ${colorClass}`}>
+                      {agent.sector_complete ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : agent.status === "active" ? (
+                        <Clock className="h-4 w-4 animate-pulse" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4" />
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground">
-                        Sector: {agent.sector_start}-{agent.sector_end} ({sectorSize} elements)
+                    <div>
+                      <span className="font-medium text-sm block">{agent.agent_name}</span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {agent.agent_role.replace(/_/g, " ")}
                       </span>
                     </div>
-                    <Progress value={progress} className="h-1 mt-2" />
                   </div>
-
-                  {agent.consensus_vote !== null && (
-                    <Badge variant={agent.consensus_vote ? "default" : "destructive"}>
-                      {agent.consensus_vote ? "✓ Vote" : "✗ Vote"}
-                    </Badge>
-                  )}
+                  <Badge 
+                    variant={agent.sector_complete ? "default" : "outline"} 
+                    className="text-[10px]"
+                  >
+                    {agent.status}
+                  </Badge>
                 </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      Sector: {agent.sector_start}-{agent.sector_end}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {sectorSize} elements
+                    </span>
+                  </div>
+                  <Progress value={progress} className="h-1.5" />
+                </div>
+
+                {agent.consensus_vote !== null && (
+                  <Badge 
+                    variant={agent.consensus_vote ? "default" : "destructive"}
+                    className="w-fit"
+                  >
+                    {agent.consensus_vote ? "✓ Consensus Vote" : "✗ No Consensus"}
+                  </Badge>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );

@@ -310,70 +310,73 @@ export default function Audit() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column - Agents */}
-                <div className="lg:col-span-1">
+              <Tabs defaultValue="agents" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="agents" className="gap-2">
+                    <Users className="h-4 w-4" />
+                    Agents
+                    {agentInstances.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {agentInstances.filter(a => a.status === "active").length}/{agentInstances.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="tesseract" className="gap-2">
+                    <Grid3X3 className="h-4 w-4" />
+                    Tesseract
+                    {tesseractCells.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {tesseractCells.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="blackboard" className="gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Blackboard
+                    {blackboardEntries.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {blackboardEntries.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="results" className="gap-2">
+                    <CircleDot className="h-4 w-4" />
+                    Results
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="agents">
                   <AgentInstancesCard 
                     agents={agentInstances}
                     totalElements={tesseractCells.length}
                   />
-                </div>
+                </TabsContent>
 
-                {/* Right Column - Main Tabs */}
-                <div className="lg:col-span-2">
-                  <Tabs defaultValue="tesseract" className="space-y-4">
-                    <TabsList>
-                      <TabsTrigger value="tesseract" className="gap-2">
-                        <Grid3X3 className="h-4 w-4" />
-                        Tesseract
-                        {tesseractCells.length > 0 && (
-                          <Badge variant="secondary" className="ml-1">
-                            {tesseractCells.length}
-                          </Badge>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger value="blackboard" className="gap-2">
-                        <MessageSquare className="h-4 w-4" />
-                        Blackboard
-                        {blackboardEntries.length > 0 && (
-                          <Badge variant="secondary" className="ml-1">
-                            {blackboardEntries.length}
-                          </Badge>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger value="results" className="gap-2">
-                        <CircleDot className="h-4 w-4" />
-                        Results
-                      </TabsTrigger>
-                    </TabsList>
+                <TabsContent value="tesseract">
+                  <TesseractVisualizer
+                    cells={tesseractCells}
+                    currentIteration={session.current_iteration}
+                    onCellClick={(cell) => {
+                      toast.info(`${cell.x_element_label || cell.x_element_id}: ${cell.evidence_summary || "No evidence"}`);
+                    }}
+                  />
+                </TabsContent>
 
-                    <TabsContent value="tesseract">
-                      <TesseractVisualizer
-                        cells={tesseractCells}
-                        currentIteration={session.current_iteration}
-                        onCellClick={(cell) => {
-                          toast.info(`${cell.x_element_label || cell.x_element_id}: ${cell.evidence_summary || "No evidence"}`);
-                        }}
-                      />
-                    </TabsContent>
+                <TabsContent value="blackboard">
+                  <AuditBlackboard
+                    entries={blackboardEntries}
+                    currentIteration={session.current_iteration}
+                  />
+                </TabsContent>
 
-                    <TabsContent value="blackboard">
-                      <AuditBlackboard
-                        entries={blackboardEntries}
-                        currentIteration={session.current_iteration}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="results">
-                      <VennDiagramResults
-                        vennResult={session.venn_result}
-                        dataset1Label={session.dataset_1_type}
-                        dataset2Label={session.dataset_2_type}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </div>
+                <TabsContent value="results">
+                  <VennDiagramResults
+                    vennResult={session.venn_result}
+                    dataset1Label={session.dataset_1_type}
+                    dataset2Label={session.dataset_2_type}
+                  />
+                </TabsContent>
+              </Tabs>
             )}
           </div>
         </main>
