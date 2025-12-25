@@ -157,12 +157,16 @@ export default function Chat() {
   // Scroll the latest user message to the top of the viewport once after sending
   // We now do this imperatively in handleSendMessage to avoid repeated scrolling during streaming.
 
-  // Expand sidebar on desktop by default
+  // Expand sidebar on desktop, keep collapsed on mobile
+  const [hasSetInitialSidebar, setHasSetInitialSidebar] = useState(false);
   useEffect(() => {
-    if (!isMobile) {
-      setIsSidebarCollapsed(false);
+    // Only run once after isMobile is properly determined
+    if (!hasSetInitialSidebar && typeof window !== 'undefined') {
+      const isMobileDevice = window.innerWidth < 768;
+      setIsSidebarCollapsed(isMobileDevice);
+      setHasSetInitialSidebar(true);
     }
-  }, [isMobile]);
+  }, [hasSetInitialSidebar]);
 
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
