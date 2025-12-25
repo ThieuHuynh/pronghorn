@@ -438,6 +438,7 @@ serve(async (req) => {
           let agentResponse: any;
 
           if (selectedModel.startsWith("grok")) {
+            // Grok with strict JSON schema enforcement
             const response = await fetch(apiEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -449,18 +450,25 @@ serve(async (req) => {
                 ],
                 response_format: getGrokAuditSchema(),
                 max_tokens: 4096,
+                temperature: 0.7,
               }),
             });
             const data = await response.json();
-            agentResponse = parseAgentResponse(data.choices?.[0]?.message?.content || "{}");
+            if (!response.ok) {
+              console.error(`Grok API error for ${agent.role}:`, data);
+              throw new Error(`Grok API error: ${JSON.stringify(data)}`);
+            }
+            const rawText = data.choices?.[0]?.message?.content || "{}";
+            agentResponse = parseAgentResponse(rawText);
           } else if (selectedModel.startsWith("claude")) {
+            // Claude with strict tool use - response comes directly from tool_use.input
             const response = await fetch(apiEndpoint, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 "x-api-key": apiKey,
                 "anthropic-version": "2023-06-01",
-                "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15",
+                "anthropic-beta": "structured-outputs-2025-11-13",
               },
               body: JSON.stringify({
                 model: selectedModel,
@@ -472,20 +480,47 @@ serve(async (req) => {
               }),
             });
             const data = await response.json();
+            if (!response.ok) {
+              console.error(`Claude API error for ${agent.role}:`, data);
+              throw new Error(`Claude API error: ${JSON.stringify(data)}`);
+            }
             const toolUse = data.content?.find((c: any) => c.type === "tool_use");
-            agentResponse = toolUse?.input || parseAgentResponse(JSON.stringify(data));
+            if (toolUse?.input) {
+              // Tool input is already structured JSON, use directly (no parsing needed)
+              agentResponse = toolUse.input;
+              console.log(`Claude tool_use response for ${agent.role} - direct JSON`);
+            } else {
+              // Fallback to text parsing
+              const textBlock = data.content?.find((c: any) => c.type === "text");
+              agentResponse = parseAgentResponse(textBlock?.text || JSON.stringify(data));
+            }
           } else {
-            // Gemini
+            // Gemini with systemInstruction and responseMimeType
             const response = await fetch(`${apiEndpoint}?key=${apiKey}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-                generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4096 },
+                systemInstruction: {
+                  parts: [{ text: systemPrompt }],
+                },
+                contents: [{ 
+                  role: "user",
+                  parts: [{ text: userPrompt }] 
+                }],
+                generationConfig: { 
+                  responseMimeType: "application/json", 
+                  maxOutputTokens: 4096,
+                  temperature: 0.7,
+                },
               }),
             });
             const data = await response.json();
-            agentResponse = parseAgentResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+            if (!response.ok) {
+              console.error(`Gemini API error for ${agent.role}:`, data);
+              throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
+            }
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+            agentResponse = parseAgentResponse(rawText);
           }
 
           // Log the parsed response structure
