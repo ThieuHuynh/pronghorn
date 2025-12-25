@@ -280,6 +280,14 @@ serve(async (req) => {
     // PHASE 1: Build Problem Shape
     console.log("Building problem shape...");
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
+    console.log("Problem shape built:", {
+      d1Type: problemShape.dataset1.type,
+      d1Count: problemShape.dataset1.count,
+      d1Elements: problemShape.dataset1.elements.slice(0, 3).map((e: any) => ({ id: e.id, label: e.label })),
+      d2Type: problemShape.dataset2.type,
+      d2Count: problemShape.dataset2.count,
+      stepsCount: problemShape.steps.length,
+    });
 
     await supabase.rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
@@ -419,36 +427,70 @@ serve(async (req) => {
             agentResponse = parseAgentResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
           }
 
+          // Log the parsed response structure
+          console.log(`Agent ${agent.role} response structure:`, {
+            hasObservations: !!agentResponse.observations,
+            observationsCount: agentResponse.observations?.length || 0,
+            hasBlackboardEntry: !!agentResponse.blackboardEntry,
+            sectorComplete: agentResponse.sectorComplete,
+            consensusVote: agentResponse.consensusVote,
+          });
+
           // Process agent response
-          if (agentResponse.observations) {
+          if (agentResponse.observations && Array.isArray(agentResponse.observations)) {
+            console.log(`Processing ${agentResponse.observations.length} observations from ${agent.role}`);
             for (const obs of agentResponse.observations) {
-              await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
+              const elementIndex = problemShape.dataset1.elements.findIndex((e: any) => e.id === obs.elementId);
+              console.log(`Recording tesseract cell: elementId=${obs.elementId}, index=${elementIndex}, step=${obs.step}, polarity=${obs.polarity}`);
+              
+              const { error: cellError } = await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
-                p_x_index: problemShape.dataset1.elements.findIndex((e: any) => e.id === obs.elementId),
+                p_x_index: elementIndex >= 0 ? elementIndex : 0,
                 p_x_element_id: obs.elementId,
                 p_x_element_type: problemShape.dataset1.type,
                 p_x_element_label: obs.elementLabel || null,
-                p_y_step: obs.step,
+                p_y_step: obs.step || 1,
                 p_y_step_label: problemShape.steps.find((s) => s.step === obs.step)?.label || null,
-                p_z_polarity: obs.polarity,
+                p_z_polarity: typeof obs.polarity === 'number' ? obs.polarity : 0,
                 p_z_criticality: obs.criticality || null,
-                p_evidence_summary: obs.evidence,
+                p_evidence_summary: obs.evidence || null,
                 p_contributing_agents: [agent.role],
               });
+              
+              if (cellError) {
+                console.error(`Failed to insert tesseract cell:`, cellError);
+              } else {
+                console.log(`Tesseract cell inserted successfully`);
+                // Broadcast for real-time update
+                await channel.send({ type: "broadcast", event: "audit_refresh", payload: { type: "tesseract" } });
+              }
             }
+          } else {
+            console.log(`No observations from ${agent.role}, response:`, JSON.stringify(agentResponse).slice(0, 500));
           }
 
           if (agentResponse.blackboardEntry) {
-            await supabase.rpc("insert_audit_blackboard_with_token", {
+            console.log(`Recording blackboard entry from ${agent.role}:`, agentResponse.blackboardEntry.entryType);
+            const { error: bbError } = await supabase.rpc("insert_audit_blackboard_with_token", {
               p_session_id: sessionId,
               p_token: shareToken,
               p_agent_role: agent.role,
-              p_entry_type: agentResponse.blackboardEntry.entryType,
-              p_content: agentResponse.blackboardEntry.content,
+              p_entry_type: agentResponse.blackboardEntry.entryType || "observation",
+              p_content: agentResponse.blackboardEntry.content || "No content",
               p_iteration: iteration,
               p_confidence: agentResponse.blackboardEntry.confidence || null,
             });
+            
+            if (bbError) {
+              console.error(`Failed to insert blackboard entry:`, bbError);
+            } else {
+              console.log(`Blackboard entry inserted successfully`);
+              // Broadcast for real-time update
+              await channel.send({ type: "broadcast", event: "audit_refresh", payload: { type: "blackboard" } });
+            }
+          } else {
+            console.log(`No blackboard entry from ${agent.role}`);
           }
 
           // Update agent sector complete status
