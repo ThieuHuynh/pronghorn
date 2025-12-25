@@ -368,13 +368,49 @@ serve(async (req) => {
       systemPrompt: agentDefs[p.role]?.customPrompt || p.systemPrompt,
     }));
 
-    // Divide sectors among agents
-    const elementsPerAgent = Math.ceil(problemShape.dataset1.count / enabledPersonas.length);
-    const agents: AgentPersona[] = enabledPersonas.map((p, i) => ({
-      ...p,
-      sectorStart: i * elementsPerAgent,
-      sectorEnd: Math.min((i + 1) * elementsPerAgent - 1, problemShape.dataset1.count - 1),
-    }));
+    // Divide sectors among agents - ensure ALL agents get elements (overlap allowed)
+    const elementCount = problemShape.dataset1.count;
+    const agentCount = enabledPersonas.length;
+    
+    // If fewer elements than agents, each agent covers all elements from their perspective
+    // If more elements than agents, distribute evenly with proper bounds
+    const agents: AgentPersona[] = enabledPersonas.map((p, i) => {
+      let sectorStart: number;
+      let sectorEnd: number;
+      
+      if (elementCount <= agentCount) {
+        // Each agent analyzes ALL elements from their unique perspective
+        sectorStart = 0;
+        sectorEnd = elementCount - 1;
+      } else {
+        // Distribute elements evenly
+        const baseElements = Math.floor(elementCount / agentCount);
+        const remainder = elementCount % agentCount;
+        
+        // Agents with index < remainder get an extra element
+        if (i < remainder) {
+          sectorStart = i * (baseElements + 1);
+          sectorEnd = sectorStart + baseElements; // +1 element
+        } else {
+          sectorStart = remainder * (baseElements + 1) + (i - remainder) * baseElements;
+          sectorEnd = sectorStart + baseElements - 1;
+        }
+      }
+      
+      return {
+        ...p,
+        sectorStart,
+        sectorEnd: Math.min(sectorEnd, elementCount - 1), // Safety clamp
+      };
+    });
+    
+    console.log("Agent sector assignments:", agents.map(a => ({
+      role: a.role,
+      sector: `${a.sectorStart}-${a.sectorEnd}`,
+      elements: problemShape.dataset1.elements
+        .filter(e => e.index >= (a.sectorStart || 0) && e.index <= (a.sectorEnd || 0))
+        .map(e => e.label)
+    })));
 
     // Create agent instances in DB
     for (const agent of agents) {
