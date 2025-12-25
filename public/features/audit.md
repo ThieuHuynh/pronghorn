@@ -622,12 +622,13 @@ All follow `_with_token` pattern with `require_role(p_project_id, p_token, 'edit
 - [x] Create database migration (4 tables, RLS policies)
 - [x] Create RPC functions (14 functions with _with_token pattern)
 
-### Phase 2: Edge Function
+### Phase 2: Edge Function ✅
 
-- [ ] Create audit-orchestrator
-- [ ] Implement problem shape analysis
-- [ ] Implement agent spawning
-- [ ] Implement tool dispatcher
+- [x] Create audit-orchestrator edge function
+- [x] Implement problem shape analysis (buildProblemShape)
+- [x] Implement agent spawning with sector division
+- [x] Implement tool dispatcher with Grok/Claude/Gemini support
+- [x] Implement Venn result generation (generateVennResult)
 
 ### Phase 3: Frontend Components ✅
 
