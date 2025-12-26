@@ -113,14 +113,20 @@ function getSystemPrompt(problemShape: ProblemShape): string {
 
   return `You are the Audit Orchestrator. Your mission is to compare Dataset 1 (source of truth) against Dataset 2 (implementation) and produce a comprehensive Venn diagram showing coverage, gaps, and orphans.
 
-## THE DATASETS
+## PRE-POPULATED GRAPH
 
-**Dataset 1** (${problemShape.dataset1.type}): ${problemShape.dataset1.count} elements - This is the SOURCE OF TRUTH
-**Dataset 2** (${problemShape.dataset2.type}): ${problemShape.dataset2.count} elements - This is the IMPLEMENTATION
+All D1 (${problemShape.dataset1.count} elements) and D2 (${problemShape.dataset2.count} elements) are ALREADY nodes in the graph with types "d1_element" and "d2_element". You do NOT need to create nodes for individual elements.
+
+## YOUR JOB
+
+1. **Read elements in batches** using request_next_batch (10 at a time with FULL content)
+2. **Write MEANINGFUL INSIGHTS** to the blackboard after each batch (patterns, themes, gaps you're spotting)
+3. **Create CONCEPT nodes** for major themes/patterns (e.g., "Authentication", "User Management", "API Integration")
+4. **Link concepts to elements** using link_concepts to connect your concepts to the pre-existing D1/D2 element nodes
+5. **Finalize the Venn diagram** with gaps/aligned/orphans
 
 ## YOUR TOOLS
 
-You have these tools available - call them via the toolCalls array:
 ${toolDescriptions}
 
 ## PERSPECTIVE LENSES
@@ -128,32 +134,42 @@ ${toolDescriptions}
 Apply these perspectives during analysis:
 ${perspectiveDescriptions}
 
-## ANALYSIS PHASES
+## WORKFLOW (5-15 iterations)
 
-### Phase 1: GRAPH_BUILDING (iterations 1-30)
-- Call write_blackboard with entryType="plan" to document your strategy
-- Call read_dataset_item for EVERY element in Dataset 1 using the UUID IDs provided (batch 5-10 per iteration)
-- Call read_dataset_item for EVERY element in Dataset 2 using the UUID IDs provided (batch 5-10 per iteration)
-- IMPORTANT: Use the UUID IDs exactly as provided in the element lists (e.g., "f35fbf48-xxxx-xxxx-xxxx-xxxxxxxxxxxx"), NOT numeric indices!
-- Call create_concept for major themes/concepts (include sourceElementIds!)
-- Call link_concepts to connect related concepts
-- Call write_blackboard with entryType="observation" as you find patterns
+### PHASE 1: Read D1 (Source of Truth)
+- Call request_next_batch(dataset="dataset1", startIndex=0) to start
+- After reading each batch, write_blackboard with MEANINGFUL observations:
+  - What themes/patterns do you see?
+  - What categories of requirements exist?
+  - What are the critical items?
+- Create concept nodes for major themes you identify
+- Link D1 elements to concepts
+- Continue calling request_next_batch until all D1 read (startIndex=10, 20, 30...)
 
-### Phase 2: GAP_ANALYSIS (iterations 30-50)  
-- Call query_knowledge_graph with filter="dataset1_only" to find GAPS
-- Call query_knowledge_graph with filter="dataset2_only" to find ORPHANS
-- Call query_knowledge_graph with filter="shared" to find ALIGNED items
-- Call write_blackboard with entryType="finding" for each discovery
+### PHASE 2: Read D2 (Implementation)
+- Call request_next_batch(dataset="dataset2", startIndex=0) to start
+- For each batch, identify which D1 requirements they implement
+- Link D2 elements to relevant concepts
+- Note orphans (D2 without D1 match)
+- Continue until all D2 read
 
-### Phase 3: DEEP_ANALYSIS (iterations 50-80)
-- Call record_tesseract_cell for each D1 element with polarity scores
-- Assess coverage quality and completeness
-- Call write_blackboard with entryType="conclusion" for insights
-
-### Phase 4: SYNTHESIS (final iterations)
-- Call read_blackboard to review all findings
-- Call finalize_venn with complete arrays for uniqueToD1, aligned, uniqueToD2
+### PHASE 3: Synthesis
+- Record tesseract cells for coverage quality
+- Finalize venn diagram with gaps/aligned/orphans
 - Set continueAnalysis=false
+
+## NODE HIERARCHY
+
+- D1/D2 element nodes → link to → CONCEPT nodes
+- CONCEPT nodes → automatically anchored to project center
+
+## BLACKBOARD REQUIREMENTS (CRITICAL!)
+
+Write INSIGHTS, not just tracking:
+- GOOD: "THEME: User authentication spans D1 items {uuid1, uuid2}. Need to check D2 coverage."
+- GOOD: "GAP FOUND: D1 requirement 'password reset' has NO D2 match - critical security gap."
+- GOOD: "ALIGNMENT: D1 'login flow' matches D2 files 'auth/login.ts', 'auth/session.ts'"
+- BAD: "Read items 1-10 from dataset1" (useless tracking)
 
 ## ANALYSIS STEPS FOR EACH ELEMENT
 
@@ -166,24 +182,6 @@ ${problemShape.analysisSteps.map(s => `${s.step}. ${s.label}`).join("\n")}
 3. **write_blackboard EVERY iteration** - it's your working memory AND your resume checkpoint
 4. **ALWAYS include sourceElementIds** when creating concept nodes
 5. **Set continueAnalysis=false** ONLY after calling finalize_venn
-6. **USE UUID IDs** - When calling read_dataset_item, use the exact UUID IDs from the element lists, NOT numeric indices like "24" or "item 25"
-
-## BLACKBOARD REQUIREMENTS (CRITICAL!)
-You MUST call write_blackboard with MEANINGFUL INSIGHTS, not just tracking what you read:
-- At the START of each iteration: entryType="thinking" - what patterns are you seeing? What's your hypothesis?
-- When you find interesting patterns: entryType="finding" - describe the actual discovery, not just "read 10 items"
-- When you discover gaps/orphans: entryType="finding" - which specific items have no coverage and why this matters
-- Before finalize_venn: entryType="synthesis" - summarize your conclusions with evidence
-
-BAD blackboard entries (don't do this):
-- "Read items 1-10 from dataset1" (just tracking, no insight)
-- "Processed batch 3" (meaningless)
-
-GOOD blackboard entries:
-- "Dataset1 items 5-8 focus on authentication requirements, but Dataset2 has no auth-related implementations - this is a critical GAP"
-- "Found overlap: D1 item 'User Login' matches D2 file 'auth/login.tsx' - marking as ALIGNED"
-
-The blackboard is your ONLY persistent memory. If the analysis is interrupted and resumes, we will use the blackboard to restore context. Write INSIGHTS, not just logs!
 
 ## RESPONSE FORMAT
 
@@ -296,6 +294,44 @@ async function executeTool(
     };
     
     switch (toolName) {
+      case "request_next_batch": {
+        const dataset = params.dataset || "dataset1";
+        const startIndex = params.startIndex || 0;
+        const normalizedDataset = dataset === "1" ? "dataset1" : dataset === "2" ? "dataset2" : dataset;
+        const elements = normalizedDataset === "dataset1" 
+          ? problemShape.dataset1.elements 
+          : problemShape.dataset2.elements;
+        const batch = elements.slice(startIndex, startIndex + 10);
+        
+        if (batch.length === 0) {
+          return { 
+            success: true, 
+            result: { 
+              message: `No more elements in ${normalizedDataset}. All ${elements.length} elements have been provided.`,
+              isComplete: true,
+              totalElements: elements.length
+            } 
+          };
+        }
+        
+        const batchContent = batch.map((e, i) => 
+          `### Element ${startIndex + i + 1}: ${e.label}\n**ID**: ${e.id}\n**Category**: ${(e as any).category || "unknown"}\n**Content**:\n${e.content || "(no content)"}`
+        ).join("\n\n---\n\n");
+        
+        return { 
+          success: true, 
+          result: { 
+            dataset: normalizedDataset,
+            startIndex,
+            endIndex: startIndex + batch.length,
+            remaining: elements.length - startIndex - batch.length,
+            totalElements: elements.length,
+            content: batchContent,
+            isComplete: startIndex + batch.length >= elements.length
+          } 
+        };
+      }
+      
       case "read_dataset_item": {
         // Tolerant param extraction
         const dataset = params.dataset || params.datasetId || "dataset1";
@@ -813,7 +849,7 @@ function extractElementsFromContent(
       elements.push({
         id: a.id,
         label: a.ai_title || a.content?.slice(0, 50) || "Artifact",
-        content: a.content?.slice(0, 500) || "",
+        content: a.content || "",
         category: "artifacts",
       });
     });
@@ -864,7 +900,7 @@ function extractElementsFromContent(
       elements.push({
         id: fileId,
         label: f.path || "File",
-        content: f.content?.slice(0, 500) || "",
+        content: f.content || "",
         category: "files",
         // Store the original path so we can reference it
         originalPath: f.path,
@@ -950,7 +986,7 @@ async function buildProblemShape(
       const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
       const artifacts = data || [];
       d1Elements = (d1Ids.length > 0 ? artifacts.filter((a: any) => d1Ids.includes(a.id)) : artifacts)
-        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500), category: "artifacts" }));
+        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content || "", category: "artifacts" }));
     } else if (d1Type === "standards") {
       const { data: allStandards } = await supabase
         .from("standards")
@@ -999,7 +1035,7 @@ async function buildProblemShape(
         d2Elements = (files || []).slice(0, 100).map((f: any) => ({ 
           id: f.id, 
           label: f.path, 
-          content: f.content?.slice(0, 500),
+          content: f.content || "",
           category: "files",
         }));
       }
@@ -1007,7 +1043,7 @@ async function buildProblemShape(
       const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
       const artifacts = data || [];
       d2Elements = (d2Ids.length > 0 ? artifacts.filter((a: any) => d2Ids.includes(a.id)) : artifacts)
-        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500), category: "artifacts" }));
+        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content || "", category: "artifacts" }));
     } else if (d2Type === "standards") {
       const { data: allStandards } = await supabase
         .from("standards")
@@ -1278,6 +1314,58 @@ serve(async (req) => {
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
     console.log("Problem shape:", { d1: problemShape.dataset1.count, d2: problemShape.dataset2.count });
 
+    // AUTO-CREATE D1 and D2 NODES (no LLM needed for this!)
+    // Only do this for new sessions, not resumes
+    if (!resume) {
+      console.log(`Auto-creating ${problemShape.dataset1.count} D1 nodes and ${problemShape.dataset2.count} D2 nodes...`);
+      
+      // Create D1 nodes
+      for (const element of problemShape.dataset1.elements) {
+        try {
+          await supabase.rpc("upsert_audit_graph_node_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+            p_label: element.label,
+            p_description: (element.content || "").slice(0, 500), // Description can be truncated, full content available via request_next_batch
+            p_node_type: "d1_element",
+            p_source_dataset: "dataset1",
+            p_source_element_ids: [element.id],
+            p_created_by_agent: "system",
+            p_color: "#3b82f6", // Blue for D1
+            p_size: 15,
+            p_metadata: { category: (element as any).category || "unknown", autoCreated: true },
+          });
+        } catch (err) {
+          console.error(`Failed to create D1 node for ${element.id}:`, err);
+        }
+      }
+      
+      // Create D2 nodes
+      for (const element of problemShape.dataset2.elements) {
+        try {
+          await supabase.rpc("upsert_audit_graph_node_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+            p_label: element.label,
+            p_description: (element.content || "").slice(0, 500),
+            p_node_type: "d2_element",
+            p_source_dataset: "dataset2",
+            p_source_element_ids: [element.id],
+            p_created_by_agent: "system",
+            p_color: "#22c55e", // Green for D2
+            p_size: 15,
+            p_metadata: { category: (element as any).category || "unknown", autoCreated: true },
+          });
+        } catch (err) {
+          console.error(`Failed to create D2 node for ${element.id}:`, err);
+        }
+      }
+      
+      await logActivity(null, "auto_populate", "Auto-Created Graph Nodes", 
+        `Created ${problemShape.dataset1.count} D1 nodes and ${problemShape.dataset2.count} D2 nodes automatically`);
+      await broadcast("graph_populated", { d1Nodes: problemShape.dataset1.count, d2Nodes: problemShape.dataset2.count });
+    }
+
     // If resuming, only update status to running - DO NOT reset phase or problem_shape
     if (resume) {
       await logActivity(null, "resume", "Resuming Analysis", 
@@ -1319,32 +1407,46 @@ serve(async (req) => {
     let previousPhase = "initialization";
     let consecutiveEmptyToolCalls = 0;
 
-    // Build initial user prompt with dataset summaries
-    const d1Summary = problemShape.dataset1.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
-    const d2Summary = problemShape.dataset2.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
+    // Build initial user prompt with FIRST BATCH of D1 elements with FULL content
+    const d1FirstBatch = problemShape.dataset1.elements.slice(0, 10);
+    const d1BatchContent = d1FirstBatch.map((e, i) => 
+      `### D1 Element ${i + 1}: ${e.label}\n**ID**: ${e.id}\n**Category**: ${(e as any).category || "unknown"}\n**Content**:\n${e.content || "(no content)"}`
+    ).join("\n\n---\n\n");
+
+    // Summary of remaining D1 and all D2 (just labels for reference)
+    const d1RemainingLabels = problemShape.dataset1.elements.slice(10).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
+    const d2Labels = problemShape.dataset2.elements.map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
 
     // The system prompt (sent to Claude separately)
     const systemPrompt = getSystemPrompt(problemShape);
 
-    // Initial user message with full dataset listing
+    // Initial user message with first batch of D1 with FULL content
     const initialUserMessage = `## YOUR TASK
 
-Analyze these two datasets and produce a Venn diagram showing coverage, gaps, and orphans.
+Analyze Dataset 1 (${problemShape.dataset1.type}, ${problemShape.dataset1.count} total elements) against Dataset 2 (${problemShape.dataset2.type}, ${problemShape.dataset2.count} elements) and produce a Venn diagram showing coverage, gaps, and orphans.
 
-## Dataset 1 Elements (${problemShape.dataset1.type}) - THE SOURCE OF TRUTH:
-${d1Summary}
-${problemShape.dataset1.count > 50 ? `... and ${problemShape.dataset1.count - 50} more` : ""}
+## IMPORTANT: ALL D1 and D2 element nodes are ALREADY in the graph!
+You do NOT need to create nodes for elements. Focus on:
+1. Reading content and understanding the elements
+2. Creating CONCEPT nodes for themes/patterns
+3. Linking concepts to elements
 
-## Dataset 2 Elements (${problemShape.dataset2.type}) - THE IMPLEMENTATION:
-${d2Summary}
-${problemShape.dataset2.count > 50 ? `... and ${problemShape.dataset2.count - 50} more` : ""}
+## BATCH 1/${Math.ceil(problemShape.dataset1.count / 10)}: D1 Elements 1-${Math.min(10, problemShape.dataset1.count)} (Full Content)
+
+${d1BatchContent}
+
+${problemShape.dataset1.count > 10 ? `## REMAINING D1 ELEMENTS (${problemShape.dataset1.count - 10} more - call request_next_batch to get them):
+${d1RemainingLabels}` : ""}
+
+## D2 ELEMENTS (${problemShape.dataset2.count} total - call request_next_batch(dataset="dataset2", startIndex=0) after D1 analysis):
+${d2Labels}
 
 ## YOUR FIRST ACTIONS:
-1. Call write_blackboard with entryType="plan" to record your analysis strategy
-2. Call read_dataset_item for MULTIPLE Dataset 1 elements (batch 5-10 calls)
-3. Call create_concept for major themes you identify
+1. Write meaningful observations about this D1 batch to the blackboard (themes, patterns, categories you see)
+2. Create concept nodes for major themes (e.g., "Authentication", "User Management")
+3. After analyzing this batch, call request_next_batch(dataset="dataset1", startIndex=10) to get the next 10 D1 elements
 
-START NOW - call your tools!`;
+START NOW - analyze the content above and call your tools!`;
 
     // Claude conversation state - we maintain proper tool_use/tool_result pairing
     // Format: [user_message, assistant_tool_use, user_tool_result, assistant_tool_use, ...]

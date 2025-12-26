@@ -75,6 +75,8 @@ const nodeTypeColors: Record<string, string> = {
   requirement: "#3b82f6", // blue - D1 source elements
   canvas_node: "#22c55e", // green - D2 source elements
   anchor: "#8b5cf6", // violet - project anchor
+  d1_element: "#3b82f6", // blue - D1 source elements
+  d2_element: "#22c55e", // green - D2 source elements
 };
 
 // Node shapes/sizes by type
@@ -87,6 +89,8 @@ const nodeTypeSizes: Record<string, number> = {
   risk: 18,
   opportunity: 18,
   anchor: 35, // Large for anchor node
+  d1_element: 15, // Smaller for source elements
+  d2_element: 15, // Smaller for source elements
 };
 
 // Edge type styling

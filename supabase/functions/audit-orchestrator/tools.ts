@@ -9,8 +9,20 @@ export interface ToolDefinition {
 
 export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   {
+    name: "request_next_batch",
+    description: "Request the next batch of 10 elements from D1 or D2 with FULL content. Use this to systematically read through all elements. D1 and D2 element nodes are already created in the graph - focus on analysis and concept creation.",
+    parameters: {
+      type: "object",
+      properties: {
+        dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset to get the next batch from" },
+        startIndex: { type: "integer", description: "Starting index (0-based) for the batch" },
+      },
+      required: ["dataset", "startIndex"],
+    },
+  },
+  {
     name: "read_dataset_item",
-    description: "Read the full content of a specific item from Dataset 1 or Dataset 2. Use this to get detailed information about a requirement, file, or artifact. Accepts partial UUIDs (8-char prefix).",
+    description: "Read the full content of a specific item from Dataset 1 or Dataset 2. Use this for deep dives into specific items. Accepts partial UUIDs (8-char prefix).",
     parameters: {
       type: "object",
       properties: {
@@ -323,7 +335,7 @@ export function getGrokToolSchema() {
               properties: {
                 tool: { 
                   type: "string", 
-                  enum: ["read_dataset_item", "query_knowledge_graph", "get_concept_links", 
+                  enum: ["request_next_batch", "read_dataset_item", "query_knowledge_graph", "get_concept_links", 
                          "write_blackboard", "read_blackboard", "create_concept", 
                          "link_concepts", "record_tesseract_cell", "finalize_venn"],
                   description: "Name of the tool to invoke" 
@@ -371,7 +383,7 @@ export function getGeminiFunctionDeclarations() {
           properties: {
             tool: { 
               type: "string", 
-              enum: ["read_dataset_item", "query_knowledge_graph", "get_concept_links", 
+              enum: ["request_next_batch", "read_dataset_item", "query_knowledge_graph", "get_concept_links", 
                      "write_blackboard", "read_blackboard", "create_concept", 
                      "link_concepts", "record_tesseract_cell", "finalize_venn"],
               description: "Name of the tool to invoke" 

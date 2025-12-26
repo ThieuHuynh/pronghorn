@@ -126,13 +126,21 @@ export default function Audit() {
         },
       });
       
+      // Detect timeout vs real error - Edge Functions timeout after ~60s but continue running
+      const isTimeout = orchestratorError?.message?.includes('timeout') || 
+                        orchestratorError?.message?.includes('connection') ||
+                        orchestratorError?.name === 'FunctionsRelayError';
+      
       // Check for actual errors - edge functions return errors in data.error sometimes
-      if (orchestratorError) {
+      if (orchestratorError && !isTimeout) {
         console.error("Resume orchestrator error:", orchestratorError);
         toast.error("Failed to resume audit: " + (orchestratorError.message || "Unknown error"));
       } else if (data?.error) {
         console.error("Resume returned error in data:", data.error);
         toast.error("Resume error: " + data.error);
+      } else if (isTimeout) {
+        // Don't show error for timeouts - function continues in background
+        console.log("Edge function timed out but continues running in background");
       } else {
         // Only show success toast if we actually resumed successfully
         console.log("Audit resumed successfully", data);
@@ -234,7 +242,7 @@ export default function Audit() {
         toast.success("Audit session created, starting orchestrator...");
         
         // Call the audit-orchestrator edge function
-        const { error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
+        const { data, error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
           body: {
             sessionId: newSession.id,
             projectId,
@@ -242,9 +250,16 @@ export default function Audit() {
           },
         });
         
-        if (orchestratorError) {
+        // Detect timeout vs real error
+        const isTimeout = orchestratorError?.message?.includes('timeout') || 
+                          orchestratorError?.message?.includes('connection') ||
+                          orchestratorError?.name === 'FunctionsRelayError';
+        
+        if (orchestratorError && !isTimeout) {
           console.error("Orchestrator error:", orchestratorError);
           toast.error("Failed to start audit orchestrator");
+        } else if (data?.error) {
+          toast.error("Orchestrator error: " + data.error);
         } else {
           toast.success("Audit orchestrator started");
         }
