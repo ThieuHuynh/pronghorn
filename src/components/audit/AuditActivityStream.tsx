@@ -254,14 +254,11 @@ function CondensedIterationRow({
         <CollapsibleTrigger asChild>
           <button className="w-full p-2 text-left">
             <div className="flex items-center justify-between gap-2">
-              {/* Left: Iteration number and phase */}
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="text-xl font-bold text-primary min-w-[2ch] text-center">
+              {/* Left: Iteration number */}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="text-lg font-bold text-primary min-w-[2ch] text-center">
                   {summary.iteration}
                 </div>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap truncate max-w-[100px]">
-                  {summary.phase || 'PROCESSING'}
-                </Badge>
                 {isExpanded ? (
                   <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 ) : (
