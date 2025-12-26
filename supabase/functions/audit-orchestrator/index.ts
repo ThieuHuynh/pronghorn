@@ -47,6 +47,26 @@ interface OrchestratorResponse {
   continueAnalysis: boolean;
 }
 
+// Generate a stable UUID-like ID from a file path for use as element ID
+// This creates a deterministic ID so the same file always gets the same ID
+function generateStableFileId(path: string, index: number): string {
+  // Simple hash-based UUID v4-like generation from path
+  // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  const str = `file:${path}:${index}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  // Convert hash to hex and pad
+  const hex = Math.abs(hash).toString(16).padStart(8, '0');
+  const hex2 = Math.abs(hash * 31).toString(16).padStart(12, '0');
+  
+  return `f${hex.slice(0, 7)}-${hex.slice(0, 4)}-4${hex.slice(1, 4)}-8${hex.slice(4, 7)}-${hex2.slice(0, 12)}`;
+}
+
 // ==================== CONVERSATION ARCHITECTURE ====================
 // 
 // Claude requires strict tool_use/tool_result pairing. Our architecture:
@@ -166,10 +186,16 @@ function parseOrchestratorResponse(rawText: string): OrchestratorResponse {
   const tryParse = (jsonStr: string): OrchestratorResponse | null => {
     try {
       const parsed = JSON.parse(jsonStr);
+      // CRITICAL: Ensure toolCalls is always an array
+      let toolCalls = parsed.toolCalls || parsed.tool_calls || [];
+      if (!Array.isArray(toolCalls)) {
+        console.warn("toolCalls was not an array, converting:", typeof toolCalls);
+        toolCalls = [];
+      }
       return {
         thinking: parsed.thinking || parsed.reasoning || "",
         perspective: parsed.perspective,
-        toolCalls: parsed.toolCalls || parsed.tool_calls || [],
+        toolCalls,
         continueAnalysis: parsed.continueAnalysis ?? parsed.continue_analysis ?? true,
       };
     } catch {
@@ -220,12 +246,32 @@ async function executeTool(
   try {
     console.log(`[Tool: ${toolName}]`, JSON.stringify(params));
     
-    // Helper to resolve partial IDs to full UUIDs
+    // Helper to resolve partial IDs, labels, or file paths to full UUIDs
     const resolveElementId = (partialId: string): string | null => {
-      const d1Match = problemShape.dataset1.elements.find(e => e.id === partialId || e.id.startsWith(partialId));
-      if (d1Match) return d1Match.id;
-      const d2Match = problemShape.dataset2.elements.find(e => e.id === partialId || e.id.startsWith(partialId));
-      if (d2Match) return d2Match.id;
+      // First, try exact match
+      const d1Exact = problemShape.dataset1.elements.find(e => e.id === partialId);
+      if (d1Exact) return d1Exact.id;
+      const d2Exact = problemShape.dataset2.elements.find(e => e.id === partialId);
+      if (d2Exact) return d2Exact.id;
+      
+      // Try partial UUID match (prefix)
+      const d1Partial = problemShape.dataset1.elements.find(e => e.id.startsWith(partialId));
+      if (d1Partial) return d1Partial.id;
+      const d2Partial = problemShape.dataset2.elements.find(e => e.id.startsWith(partialId));
+      if (d2Partial) return d2Partial.id;
+      
+      // Try matching by label (file paths, names, etc.) - for when LLM passes file paths
+      const d1Label = problemShape.dataset1.elements.find(e => e.label === partialId);
+      if (d1Label) return d1Label.id;
+      const d2Label = problemShape.dataset2.elements.find(e => e.label === partialId);
+      if (d2Label) return d2Label.id;
+      
+      // Try matching by originalPath for file elements
+      const d1Path = problemShape.dataset1.elements.find((e: any) => e.originalPath === partialId);
+      if (d1Path) return d1Path.id;
+      const d2Path = problemShape.dataset2.elements.find((e: any) => e.originalPath === partialId);
+      if (d2Path) return d2Path.id;
+      
       return null;
     };
     
@@ -709,8 +755,8 @@ function getClaudeResponseTool() {
 // Helper to extract elements from ProjectSelectionResult content
 function extractElementsFromContent(
   content: any
-): Array<{ id: string; label: string; content?: string; category: string }> {
-  const elements: Array<{ id: string; label: string; content?: string; category: string }> = [];
+): Array<{ id: string; label: string; content?: string; category: string; originalPath?: string }> {
+  const elements: Array<{ id: string; label: string; content?: string; category: string; originalPath?: string }> = [];
   
   if (!content) return elements;
   
@@ -774,14 +820,19 @@ function extractElementsFromContent(
     });
   }
   
-  // Files
+  // Files - IMPORTANT: file.path is NOT a UUID, so we need to generate a stable ID
+  // We use the existing f.id if available, otherwise generate a deterministic UUID from the path
   if (content.files && Array.isArray(content.files)) {
-    content.files.forEach((f: any) => {
+    content.files.forEach((f: any, index: number) => {
+      // Use real ID if available, otherwise create a stable pseudo-UUID from path hash
+      const fileId = f.id || generateStableFileId(f.path, index);
       elements.push({
-        id: f.path || f.id,
+        id: fileId,
         label: f.path || "File",
         content: f.content?.slice(0, 500) || "",
         category: "files",
+        // Store the original path so we can reference it
+        originalPath: f.path,
       });
     });
   }
