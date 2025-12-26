@@ -160,26 +160,42 @@ export function AuditConfigurationDialog({
           label: a.ai_title || a.content?.slice(0, 40) || "Untitled",
         }));
       } else if (type === "standards") {
-        // Query standards table directly to get actual titles
-        const { data } = await supabase
-          .from("standards")
-          .select("id, code, title, description")
-          .order("order_index");
-        items = (data || []).map((s: any) => ({
-          id: s.id,
-          label: s.code ? `${s.code}: ${s.title || 'Untitled'}` : (s.title || 'Untitled'),
-        }));
+        // Get project-linked standard IDs first, then fetch actual standards data
+        const { data: projectStandards } = await supabase.rpc("get_project_standards_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        });
+        if (projectStandards && projectStandards.length > 0) {
+          const linkedIds = projectStandards.map((ps: any) => ps.standard_id);
+          const { data: standardsData } = await supabase
+            .from("standards")
+            .select("id, code, title, description")
+            .in("id", linkedIds)
+            .order("order_index");
+          items = (standardsData || []).map((s: any) => ({
+            id: s.id,
+            label: s.code ? `${s.code}: ${s.title || 'Untitled'}` : (s.title || 'Untitled'),
+          }));
+        }
       } else if (type === "tech_stacks") {
-        // Query tech_stacks table directly to get actual names
-        const { data } = await supabase
-          .from("tech_stacks")
-          .select("id, name, description, icon, type")
-          .order("name");
-        items = (data || []).map((ts: any) => ({
-          id: ts.id,
-          label: ts.name || 'Untitled',
-          type: ts.type || 'tech_stack',
-        }));
+        // Get project-linked tech stack IDs first, then fetch actual tech stacks data
+        const { data: projectTechStacks } = await supabase.rpc("get_project_tech_stacks_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        });
+        if (projectTechStacks && projectTechStacks.length > 0) {
+          const linkedIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
+          const { data: techStacksData } = await supabase
+            .from("tech_stacks")
+            .select("id, name, description, icon, type")
+            .in("id", linkedIds)
+            .order("name");
+          items = (techStacksData || []).map((ts: any) => ({
+            id: ts.id,
+            label: ts.name || 'Untitled',
+            type: ts.type || 'tech_stack',
+          }));
+        }
       } else if (type === "repository_files") {
         const { data: repos } = await supabase.rpc("get_project_repos_with_token", {
           p_project_id: projectId,
