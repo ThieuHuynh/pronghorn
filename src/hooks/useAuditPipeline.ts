@@ -65,6 +65,7 @@ interface PipelineInput {
   shareToken: string;
   d1Elements: Element[];
   d2Elements: Element[];
+  onGraphUpdate?: () => void; // Callback to refresh graph data after updates
 }
 
 const BASE_URL = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1";
@@ -207,7 +208,7 @@ export function useAuditPipeline() {
     setError(null);
     abortRef.current = false;
 
-    const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
+    const { sessionId, projectId, shareToken, d1Elements, d2Elements, onGraphUpdate } = input;
 
     // Initialize steps
     const initialSteps: PipelineStep[] = [
@@ -275,6 +276,7 @@ export function useAuditPipeline() {
       }
 
       updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
+      onGraphUpdate?.(); // Refresh graph to show new D1/D2 nodes
 
       // Update session status
       await supabase.rpc("update_audit_session_with_token", {
@@ -528,6 +530,9 @@ export function useAuditPipeline() {
           addStepDetail("d2", `Added concept to graph: ${concept.label} (${concept.elementIds.length} links)`);
         }
       }
+      
+      // Refresh graph after adding all D1/D2 concept nodes and edges
+      onGraphUpdate?.();
 
       setProgress({ 
         phase: "merging_concepts", 
@@ -787,6 +792,7 @@ export function useAuditPipeline() {
       }
 
       updateStep("graph", { status: "completed", message: "Graph built", progress: 100, completedAt: new Date() });
+      onGraphUpdate?.(); // Refresh graph after merge/rebuild
 
       setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
 
