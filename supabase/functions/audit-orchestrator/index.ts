@@ -152,12 +152,44 @@ async function executeTool(
   const { supabase, sessionId, shareToken, problemShape, logActivity, rpc } = context;
 
   try {
+    console.log(`[Tool: ${toolName}]`, JSON.stringify(params));
+    
+    // Helper to resolve partial IDs to full UUIDs
+    const resolveElementId = (partialId: string): string | null => {
+      const d1Match = problemShape.dataset1.elements.find(e => e.id === partialId || e.id.startsWith(partialId));
+      if (d1Match) return d1Match.id;
+      const d2Match = problemShape.dataset2.elements.find(e => e.id === partialId || e.id.startsWith(partialId));
+      if (d2Match) return d2Match.id;
+      return null;
+    };
+    
     switch (toolName) {
       case "read_dataset_item": {
-        const { dataset, itemId } = params;
-        const elements = dataset === "dataset1" ? problemShape.dataset1.elements : problemShape.dataset2.elements;
-        const item = elements.find(e => e.id === itemId);
-        return { success: true, result: item || { error: "Item not found" } };
+        // Handle parameter name variations (LLM might use datasetId/elementId or dataset/itemId)
+        const dataset = params.dataset || params.datasetId;
+        const itemId = params.itemId || params.elementId || params.id;
+        
+        // Normalize dataset identifier (handle integer, string, or enum)
+        let datasetKey: string;
+        if (dataset === "dataset1" || dataset === 1 || dataset === "1" || dataset === "dataset_1") {
+          datasetKey = "dataset1";
+        } else {
+          datasetKey = "dataset2";
+        }
+        
+        const elements = datasetKey === "dataset1" 
+          ? problemShape.dataset1.elements 
+          : problemShape.dataset2.elements;
+        
+        // Support partial ID matching (8-char prefix like "a203ec4d")
+        const item = elements.find(e => e.id === itemId || e.id.startsWith(itemId));
+        
+        if (item) {
+          console.log(`[read_dataset_item] Found item:`, item.id);
+          return { success: true, result: item };
+        }
+        console.log(`[read_dataset_item] Item not found: ${itemId} in ${datasetKey}`);
+        return { success: true, result: { error: `Item ${itemId} not found in ${datasetKey}` } };
       }
 
       case "query_knowledge_graph": {
@@ -193,7 +225,7 @@ async function executeTool(
       }
 
       case "get_concept_links": {
-        const { nodeId } = params;
+        const nodeId = params.nodeId || params.id;
         const nodes = await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken });
         const node = nodes?.find((n: any) => n.id === nodeId || n.id.startsWith(nodeId));
         if (!node) return { success: false, error: "Node not found", result: null };
@@ -205,7 +237,19 @@ async function executeTool(
       }
 
       case "write_blackboard": {
-        const { entryType, content, confidence = 0.7, targetAgent } = params;
+        // Handle parameter variations (LLM might send 'entry' as single field)
+        let entryType = params.entryType || params.entry_type || params.type || "observation";
+        let content = params.content || params.entry || params.message || params.text || "";
+        const confidence = params.confidence ?? 0.7;
+        const targetAgent = params.targetAgent || params.target_agent || null;
+        
+        // If 'entry' contains the content directly and no content was provided
+        if (params.entry && typeof params.entry === 'string' && !params.content) {
+          content = params.entry;
+        }
+        
+        console.log(`[write_blackboard] entryType=${entryType}, content length=${content.length}`);
+        
         await rpc("insert_audit_blackboard_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
@@ -214,7 +258,8 @@ async function executeTool(
           p_content: content,
           p_iteration: 0,
           p_confidence: confidence,
-          p_target_agent: targetAgent || null,
+          p_target_agent: targetAgent,
+          p_evidence: null,
         });
         await logActivity("orchestrator", "blackboard_write", `Blackboard: ${entryType}`, content.slice(0, 200));
         return { success: true, result: { written: true } };
@@ -228,10 +273,26 @@ async function executeTool(
       }
 
       case "create_concept": {
-        const { label, description, nodeType, sourceDataset, sourceElementIds } = params;
+        // Handle parameter name variations (LLM might use 'name' instead of 'label')
+        const label = params.label || params.name;
+        const description = params.description;
+        const nodeType = params.nodeType || params.node_type || params.type || "dataset1_concept";
+        const sourceDataset = params.sourceDataset || params.source_dataset || "dataset1";
+        const sourceElementIds = params.sourceElementIds || params.source_element_ids || [];
+        
         if (!sourceElementIds || sourceElementIds.length === 0) {
           return { success: false, error: "sourceElementIds is REQUIRED - concepts must link to source artifacts", result: null };
         }
+        
+        // Resolve partial IDs to full UUIDs
+        const resolvedIds: string[] = [];
+        for (const partialId of sourceElementIds) {
+          const resolved = resolveElementId(partialId) || partialId;
+          resolvedIds.push(resolved);
+        }
+        
+        console.log(`[create_concept] label=${label}, resolvedIds=`, resolvedIds);
+        
         await rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
@@ -239,7 +300,7 @@ async function executeTool(
           p_description: description,
           p_node_type: nodeType,
           p_source_dataset: sourceDataset,
-          p_source_element_ids: sourceElementIds,
+          p_source_element_ids: resolvedIds,
           p_created_by_agent: "orchestrator",
         });
         await logActivity("orchestrator", "node_insert", `Created concept: ${label}`, description?.slice(0, 200));
@@ -247,12 +308,16 @@ async function executeTool(
       }
 
       case "link_concepts": {
-        const { sourceNodeId, targetNodeId, edgeType, label } = params;
+        const sourceNodeId = params.sourceNodeId || params.source_node_id || params.sourceId;
+        const targetNodeId = params.targetNodeId || params.target_node_id || params.targetId;
+        const edgeType = params.edgeType || params.edge_type || params.type || "relates_to";
+        const label = params.label;
+        
         const nodes = await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken });
         
-        const resolveId = (prefix: string) => nodes?.find((n: any) => n.id === prefix || n.id.startsWith(prefix))?.id;
-        const srcId = resolveId(sourceNodeId);
-        const tgtId = resolveId(targetNodeId);
+        const resolveNodeId = (prefix: string) => nodes?.find((n: any) => n.id === prefix || n.id.startsWith(prefix))?.id;
+        const srcId = resolveNodeId(sourceNodeId);
+        const tgtId = resolveNodeId(targetNodeId);
         
         if (!srcId || !tgtId) {
           return { success: false, error: `Could not resolve node IDs: src=${sourceNodeId}, tgt=${targetNodeId}`, result: null };
@@ -272,14 +337,26 @@ async function executeTool(
       }
 
       case "record_tesseract_cell": {
-        const { elementId, elementLabel, step, stepLabel, polarity, criticality, evidenceSummary } = params;
-        const elementIndex = problemShape.dataset1.elements.findIndex(e => e.id === elementId);
+        // Handle parameter name variations
+        const elementId = params.elementId || params.element_id || params.id;
+        const elementLabel = params.elementLabel || params.element_label || params.label;
+        const step = params.step || params.y_step || 1;
+        const stepLabel = params.stepLabel || params.step_label || params.y_step_label;
+        const polarity = params.polarity ?? params.z_polarity ?? 0;
+        const criticality = params.criticality || params.z_criticality;
+        const evidenceSummary = params.evidenceSummary || params.evidence_summary || params.evidence;
+        
+        // Resolve partial element ID
+        const resolvedElementId = resolveElementId(elementId) || elementId;
+        const elementIndex = problemShape.dataset1.elements.findIndex(e => e.id === resolvedElementId);
+        
+        console.log(`[record_tesseract_cell] elementId=${resolvedElementId}, step=${step}, polarity=${polarity}`);
         
         await rpc("upsert_audit_tesseract_cell_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_x_index: elementIndex >= 0 ? elementIndex : 0,
-          p_x_element_id: elementId,
+          p_x_element_id: resolvedElementId,
           p_x_element_type: problemShape.dataset1.type,
           p_x_element_label: elementLabel || null,
           p_y_step: step,
@@ -289,7 +366,7 @@ async function executeTool(
           p_evidence_summary: evidenceSummary,
           p_contributing_agents: ["orchestrator"],
         });
-        await logActivity("orchestrator", "tesseract_cell", `Tesseract: ${elementLabel || elementId}`, `Step ${step}, Polarity: ${polarity}`);
+        await logActivity("orchestrator", "tesseract_cell", `Tesseract: ${elementLabel || resolvedElementId}`, `Step ${step}, Polarity: ${polarity}`);
         return { success: true, result: { recorded: true } };
       }
 
