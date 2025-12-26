@@ -1,6 +1,6 @@
 // Audit Pipeline Phase 1: Extract concepts from dataset elements
 // Called twice in parallel - once for D1, once for D2
-// Processes elements in batches to avoid timeout/payload issues
+// Processes elements in batches to manage LLM calls
 // Returns concepts with linked element IDs via SSE streaming
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -39,18 +39,19 @@ async function extractConceptsFromBatch(
   batchIndex: number,
   totalBatches: number,
   dataset: string,
-  geminiKey: string
+  geminiKey: string,
+  sendSSE: (event: string, data: any) => Promise<void>
 ): Promise<ExtractedConcept[]> {
   const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
   
-  // Build element list with full content (up to 500 chars per element)
+  // Build element list with FULL content - NO TRUNCATION
   const elementsText = elements.map((e, i) => {
-    const content = (e.content || "").slice(0, 500);
     return `[Element ${i + 1}]
 ID: ${e.id}
 Label: ${e.label}
 Category: ${e.category || "unknown"}
-Content: ${content}`;
+Content:
+${e.content || "(empty)"}`;
   }).join("\n\n---\n\n");
 
   const prompt = `You are analyzing ${datasetLabel} elements (batch ${batchIndex + 1}/${totalBatches}).
@@ -79,6 +80,21 @@ CRITICAL RULES:
 2. Use the exact UUIDs from the elements
 3. Return ONLY valid JSON, no other text`;
 
+  // Log payload size
+  const payloadChars = prompt.length;
+  const estimatedTokens = Math.ceil(payloadChars / 4); // rough estimate: 4 chars per token
+  console.log(`[${dataset}] Batch ${batchIndex + 1}/${totalBatches}: ${payloadChars} chars (~${estimatedTokens} tokens)`);
+
+  await sendSSE("progress", { 
+    phase: `${dataset}_extraction`, 
+    message: `Batch ${batchIndex + 1}/${totalBatches}: ${payloadChars.toLocaleString()} chars (~${estimatedTokens.toLocaleString()} tokens)`,
+    progress: Math.round(((batchIndex + 0.5) / totalBatches) * 80) + 10,
+    batch: batchIndex + 1,
+    totalBatches,
+    payloadChars,
+    estimatedTokens
+  });
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
     {
@@ -88,7 +104,7 @@ CRITICAL RULES:
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
           responseMimeType: "application/json",
         },
       }),
@@ -98,13 +114,13 @@ CRITICAL RULES:
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`[${dataset}] Batch ${batchIndex + 1} Gemini error:`, response.status, errorText);
-    throw new Error(`Gemini API error: ${response.status}`);
+    throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 200)}`);
   }
 
   const result = await response.json();
   const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
   
-  console.log(`[${dataset}] Batch ${batchIndex + 1} response length: ${rawText.length}`);
+  console.log(`[${dataset}] Batch ${batchIndex + 1} response: ${rawText.length} chars`);
 
   // Parse JSON with recovery
   let parsed: { concepts: ExtractedConcept[] };
@@ -152,13 +168,20 @@ serve(async (req) => {
       const { sessionId, projectId, shareToken, dataset, elements }: ExtractRequest = await req.json();
       
       const datasetLabel = dataset === "d1" ? "D1" : "D2";
-      console.log(`[${dataset}] Starting batched extraction for ${elements.length} elements`);
+      
+      // Calculate total content size
+      const totalContentChars = elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
+      const totalEstimatedTokens = Math.ceil(totalContentChars / 4);
+      
+      console.log(`[${dataset}] Starting extraction: ${elements.length} elements, ${totalContentChars.toLocaleString()} chars (~${totalEstimatedTokens.toLocaleString()} tokens total)`);
 
       await sendSSE("progress", { 
         phase: `${dataset}_extraction`, 
-        message: `Starting ${datasetLabel} analysis (${elements.length} elements)...`,
-        progress: 0,
-        elementCount: elements.length
+        message: `Starting ${datasetLabel}: ${elements.length} elements, ${totalContentChars.toLocaleString()} chars (~${totalEstimatedTokens.toLocaleString()} tokens)`,
+        progress: 5,
+        elementCount: elements.length,
+        totalContentChars,
+        totalEstimatedTokens
       });
 
       // Split elements into batches
@@ -167,22 +190,20 @@ serve(async (req) => {
         batches.push(elements.slice(i, i + BATCH_SIZE));
       }
 
-      console.log(`[${dataset}] Split into ${batches.length} batches of ${BATCH_SIZE}`);
+      console.log(`[${dataset}] Split into ${batches.length} batches of up to ${BATCH_SIZE} elements`);
+
+      await sendSSE("progress", { 
+        phase: `${dataset}_extraction`, 
+        message: `Processing ${batches.length} batches...`,
+        progress: 10,
+        batchCount: batches.length
+      });
 
       const allConcepts: ExtractedConcept[] = [];
 
-      // Process each batch
+      // Process each batch sequentially to avoid rate limits
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
-        const progressPercent = Math.round((batchIndex / batches.length) * 80) + 10;
-
-        await sendSSE("progress", { 
-          phase: `${dataset}_extraction`, 
-          message: `Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} elements)...`,
-          progress: progressPercent,
-          batch: batchIndex + 1,
-          totalBatches: batches.length
-        });
 
         try {
           const batchConcepts = await extractConceptsFromBatch(
@@ -190,7 +211,8 @@ serve(async (req) => {
             batchIndex, 
             batches.length, 
             dataset, 
-            geminiKey
+            geminiKey,
+            sendSSE
           );
 
           console.log(`[${dataset}] Batch ${batchIndex + 1} extracted ${batchConcepts.length} concepts`);
@@ -203,27 +225,40 @@ serve(async (req) => {
               batch: batchIndex + 1,
               label: concept.label,
               description: concept.description,
-              elementCount: concept.elementIds.length
+              elementCount: concept.elementIds.length,
+              elementIds: concept.elementIds
             });
           }
-        } catch (batchError) {
-          console.error(`[${dataset}] Batch ${batchIndex + 1} failed:`, batchError);
+
           await sendSSE("progress", { 
             phase: `${dataset}_extraction`, 
-            message: `Batch ${batchIndex + 1} failed, continuing...`,
-            progress: progressPercent,
-            error: true
+            message: `Batch ${batchIndex + 1}/${batches.length} complete: ${batchConcepts.length} concepts`,
+            progress: Math.round(((batchIndex + 1) / batches.length) * 80) + 10,
+            batch: batchIndex + 1,
+            totalBatches: batches.length,
+            conceptsSoFar: allConcepts.length
+          });
+
+        } catch (batchError) {
+          const errMsg = batchError instanceof Error ? batchError.message : String(batchError);
+          console.error(`[${dataset}] Batch ${batchIndex + 1} failed:`, errMsg);
+          await sendSSE("progress", { 
+            phase: `${dataset}_extraction`, 
+            message: `Batch ${batchIndex + 1} failed: ${errMsg.slice(0, 100)}`,
+            progress: Math.round(((batchIndex + 1) / batches.length) * 80) + 10,
+            error: true,
+            errorMessage: errMsg
           });
           // Continue with other batches
         }
       }
 
-      console.log(`[${dataset}] Total extracted: ${allConcepts.length} concepts`);
+      console.log(`[${dataset}] Extraction complete: ${allConcepts.length} concepts from ${elements.length} elements`);
 
       await sendSSE("progress", { 
         phase: `${dataset}_extraction`, 
-        message: `Extracted ${allConcepts.length} concepts from ${elements.length} elements`,
-        progress: 90,
+        message: `Complete: ${allConcepts.length} concepts from ${elements.length} elements`,
+        progress: 95,
         conceptCount: allConcepts.length
       });
 
@@ -233,7 +268,7 @@ serve(async (req) => {
         p_token: shareToken,
         p_agent_role: `${dataset}_extractor`,
         p_entry_type: `${dataset}_concepts`,
-        p_content: `Extracted ${allConcepts.length} concepts from ${elements.length} elements:\n${allConcepts.map(c => `• ${c.label} (${c.elementIds.length} elements)`).join("\n")}`,
+        p_content: `Extracted ${allConcepts.length} concepts from ${elements.length} elements (${totalContentChars.toLocaleString()} chars):\n${allConcepts.map(c => `• ${c.label} (${c.elementIds.length} elements)`).join("\n")}`,
         p_iteration: 1,
         p_confidence: 0.9,
         p_evidence: null,
@@ -248,12 +283,19 @@ serve(async (req) => {
         p_activity_type: "concept_extraction",
         p_title: `${datasetLabel} Concept Extraction Complete`,
         p_content: `Extracted ${allConcepts.length} concepts from ${elements.length} elements across ${batches.length} batches`,
-        p_metadata: { conceptCount: allConcepts.length, elementCount: elements.length, batchCount: batches.length, dataset },
+        p_metadata: { 
+          conceptCount: allConcepts.length, 
+          elementCount: elements.length, 
+          batchCount: batches.length, 
+          dataset,
+          totalContentChars,
+          totalEstimatedTokens
+        },
       });
 
       await sendSSE("progress", { 
         phase: `${dataset}_extraction`, 
-        message: `Complete! ${allConcepts.length} concepts`,
+        message: `Done! ${allConcepts.length} concepts`,
         progress: 100
       });
 
@@ -262,7 +304,9 @@ serve(async (req) => {
         concepts: allConcepts, 
         dataset, 
         elementCount: elements.length,
-        batchCount: batches.length
+        batchCount: batches.length,
+        totalContentChars,
+        totalEstimatedTokens
       });
       
       await sendSSE("done", { success: true });
