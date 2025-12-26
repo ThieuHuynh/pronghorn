@@ -72,47 +72,51 @@ Respond with concepts you believe should be graph nodes.`;
 function getGraphBuildingPrompt(problemShape: ProblemShape, persona: AgentPersona, existingNodes: any[], existingEdges: any[], iteration: number): string {
   // Use shortened 8-char IDs for readability
   const shortId = (id: string) => id.slice(0, 8);
-  const nodesList = existingNodes.map(n => `- ${shortId(n.id)}: ${n.label} (${n.node_type})`).join("\n") || "(no nodes yet)";
+  
+  // Build a clear list of VALID node IDs that can be used for edges
+  const validNodeIds = existingNodes.map(n => shortId(n.id));
+  const nodesList = existingNodes.map(n => `  ${shortId(n.id)} = "${n.label}"`).join("\n") || "(no nodes yet)";
   
   // Build ID lookup for edge display
   const idToLabel = new Map(existingNodes.map((n: any) => [n.id, n.label]));
   const edgesList = existingEdges.map(e => {
     const srcLabel = idToLabel.get(e.source_node_id) || shortId(e.source_node_id);
     const tgtLabel = idToLabel.get(e.target_node_id) || shortId(e.target_node_id);
-    return `- ${shortId(e.source_node_id)} -> ${shortId(e.target_node_id)}: ${srcLabel} ${e.edge_type} ${tgtLabel}`;
+    return `  ${shortId(e.source_node_id)} -> ${shortId(e.target_node_id)} (${e.edge_type})`;
   }).join("\n") || "(no edges yet)";
 
   return `You are ${persona.name}, an expert ${persona.role}.
 
 ## Phase: KNOWLEDGE GRAPH BUILDING (Iteration ${iteration})
-We are collaboratively building a knowledge graph to understand the audit scope.
 
 ## Your Perspective
 ${persona.systemPrompt}
 
-## Dataset 1: ${problemShape.dataset1.type} (${problemShape.dataset1.count} elements)
-${problemShape.dataset1.elements.map(e => `- ${e.label} (ID: ${e.id})`).join("\n")}
+## Dataset 1: ${problemShape.dataset1.type}
+${problemShape.dataset1.elements.map(e => `- ${e.label}`).join("\n")}
 
 ## Dataset 2: ${problemShape.dataset2.type}
 ${problemShape.dataset2.summary}
 
-## Current Knowledge Graph
-
-### Nodes (ID: Label):
+## EXISTING NODES (use these EXACT 8-char IDs for edges):
 ${nodesList}
 
-### Edges (sourceId -> targetId: relationship):
+## EXISTING EDGES:
 ${edgesList}
 
-## Your Task
-1. Review the current graph from your ${persona.role} perspective
-2. Propose NEW nodes (concepts) or edges (relationships) that should be added
-3. For edges, use the 8-character node IDs shown above (e.g., "a1b2c3d4")
-4. Vote on whether the graph is COMPLETE (has all necessary structure for audit)
+## VALID NODE IDs FOR EDGES:
+${validNodeIds.length > 0 ? validNodeIds.join(", ") : "(none yet)"}
 
-IMPORTANT: 
-- Only propose nodes/edges that are truly missing. Do not duplicate existing ones.
-- For edges, use the exact 8-character node ID prefix shown in the Nodes list.`;
+## Your Task
+1. Propose NEW nodes that should be added (you create the label/description)
+2. Propose NEW edges between EXISTING nodes listed above
+3. Vote on whether the graph is COMPLETE
+
+## CRITICAL RULES FOR EDGES:
+- sourceNodeId and targetNodeId MUST be one of the VALID NODE IDs listed above
+- Do NOT invent new IDs - you can ONLY connect nodes that already exist
+- If no nodes exist yet, you cannot propose edges
+- Copy the 8-character ID exactly as shown (e.g., "${validNodeIds[0] || 'a1b2c3d4'}")`;
 }
 
 function getAssignmentPrompt(persona: AgentPersona, graphNodes: any[]): string {
@@ -971,18 +975,26 @@ serve(async (req) => {
           
           // Build prefix-to-full-ID map (8-char prefix -> full UUID)
           const prefixToFullId = new Map<string, string>();
+          const prefixToLabel = new Map<string, string>();
           for (const n of (refreshedNodes || [])) {
             const prefix = n.id.slice(0, 8).toLowerCase();
             prefixToFullId.set(prefix, n.id);
+            prefixToLabel.set(prefix, n.label);
           }
-          console.log(`Edge resolution: ${prefixToFullId.size} nodes available (using 8-char ID prefixes)`);
+          
+          const validPrefixes = Array.from(prefixToFullId.keys());
+          console.log(`Edge resolution: ${validPrefixes.length} valid IDs: ${validPrefixes.join(", ")}`);
 
           let edgesInserted = 0;
           let edgesFailed = 0;
+          const failedEdgeDetails: string[] = [];
+          
           for (const edge of response.proposedEdges || []) {
             // Get IDs from the response (support both camelCase and snake_case)
-            const sourceIdPrefix = (edge.sourceNodeId || edge.source_node_id || "").toLowerCase().slice(0, 8);
-            const targetIdPrefix = (edge.targetNodeId || edge.target_node_id || "").toLowerCase().slice(0, 8);
+            const sourceIdRaw = edge.sourceNodeId || edge.source_node_id || "";
+            const targetIdRaw = edge.targetNodeId || edge.target_node_id || "";
+            const sourceIdPrefix = sourceIdRaw.toLowerCase().slice(0, 8);
+            const targetIdPrefix = targetIdRaw.toLowerCase().slice(0, 8);
             
             const sourceId = prefixToFullId.get(sourceIdPrefix);
             const targetId = prefixToFullId.get(targetIdPrefix);
@@ -1003,16 +1015,20 @@ serve(async (req) => {
               } catch (err) {
                 console.error(`Edge insertion failed: ${err}`);
                 edgesFailed++;
+                failedEdgeDetails.push(`${sourceIdRaw}->${targetIdRaw}: DB error`);
               }
             } else {
-              console.warn(`Edge skipped - IDs not found: source="${sourceIdPrefix}" (${sourceId ? 'found' : 'NOT FOUND'}), target="${targetIdPrefix}" (${targetId ? 'found' : 'NOT FOUND'})`);
+              console.warn(`Edge skipped: "${sourceIdRaw}" -> "${targetIdRaw}" (valid IDs were: ${validPrefixes.join(", ")})`);
               edgesFailed++;
+              failedEdgeDetails.push(`"${sourceIdRaw}"->"${targetIdRaw}"`);
             }
           }
           
           if (response.proposedEdges?.length > 0) {
-            await logActivity(agent.role, "edge_insert", `${agent.name} added ${edgesInserted} edges`, 
-              `Inserted: ${edgesInserted}, Failed: ${edgesFailed} (ID mismatches)`);
+            const details = edgesFailed > 0 
+              ? `Inserted: ${edgesInserted}, Failed: ${edgesFailed}\nLLM used invalid IDs: ${failedEdgeDetails.slice(0, 5).join(", ")}${failedEdgeDetails.length > 5 ? '...' : ''}\nValid IDs were: ${validPrefixes.join(", ")}`
+              : `Inserted: ${edgesInserted}`;
+            await logActivity(agent.role, "edge_insert", `${agent.name} added ${edgesInserted} edges`, details);
           }
 
           // Blackboard
