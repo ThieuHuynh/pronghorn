@@ -348,6 +348,7 @@ export default function Audit() {
             shareToken: shareToken!,
             d1Elements,
             d2Elements,
+            onGraphUpdate: () => refreshSession(newSession.id), // Refresh graph after each step
           });
           
           // Refresh session data after pipeline completes
