@@ -127,24 +127,24 @@ function extractIteration(activity: ActivityEntry): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// Extract phase from activity - prefer display name for better UI
+// Extract phase from activity - ONLY from phase_change activities or explicit phase metadata
 function extractPhase(activity: ActivityEntry): string | null {
-  // First check for phaseDisplayName (human-readable)
-  if (activity.metadata?.phaseDisplayName) {
-    return String(activity.metadata.phaseDisplayName);
-  }
-  // Then check for phase_change activity titles (they now have nice names)
+  // Only extract phase from phase_change activities (they define the current phase)
   if (activity.activity_type === 'phase_change') {
-    // Don't return generic titles like "Audit Started"
+    // Check for phaseDisplayName first (human-readable)
+    if (activity.metadata?.phaseDisplayName) {
+      return String(activity.metadata.phaseDisplayName);
+    }
+    // Check for raw phase and convert to display name
+    if (activity.metadata?.phase) {
+      const rawPhase = String(activity.metadata.phase);
+      return PHASE_DISPLAY_NAMES[rawPhase] || rawPhase;
+    }
+    // Use the title if it's not a generic one
     const title = activity.title;
     if (title !== 'Audit Started' && title !== 'Audit Complete') {
       return title;
     }
-  }
-  // Fallback to raw phase from metadata and convert to display name
-  if (activity.metadata?.phase) {
-    const rawPhase = String(activity.metadata.phase);
-    return PHASE_DISPLAY_NAMES[rawPhase] || rawPhase;
   }
   return null;
 }
