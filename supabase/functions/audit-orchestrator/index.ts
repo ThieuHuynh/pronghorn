@@ -70,8 +70,17 @@ Respond with concepts you believe should be graph nodes.`;
 }
 
 function getGraphBuildingPrompt(problemShape: ProblemShape, persona: AgentPersona, existingNodes: any[], existingEdges: any[], iteration: number): string {
-  const nodesList = existingNodes.map(n => `- [${n.id}] ${n.label}: ${n.description || 'No description'} (type: ${n.node_type})`).join("\n") || "(no nodes yet)";
-  const edgesList = existingEdges.map(e => `- ${e.source_node_id} -> ${e.target_node_id}: ${e.label || e.edge_type}`).join("\n") || "(no edges yet)";
+  // Use shortened 8-char IDs for readability
+  const shortId = (id: string) => id.slice(0, 8);
+  const nodesList = existingNodes.map(n => `- ${shortId(n.id)}: ${n.label} (${n.node_type})`).join("\n") || "(no nodes yet)";
+  
+  // Build ID lookup for edge display
+  const idToLabel = new Map(existingNodes.map((n: any) => [n.id, n.label]));
+  const edgesList = existingEdges.map(e => {
+    const srcLabel = idToLabel.get(e.source_node_id) || shortId(e.source_node_id);
+    const tgtLabel = idToLabel.get(e.target_node_id) || shortId(e.target_node_id);
+    return `- ${shortId(e.source_node_id)} -> ${shortId(e.target_node_id)}: ${srcLabel} ${e.edge_type} ${tgtLabel}`;
+  }).join("\n") || "(no edges yet)";
 
   return `You are ${persona.name}, an expert ${persona.role}.
 
@@ -89,19 +98,21 @@ ${problemShape.dataset2.summary}
 
 ## Current Knowledge Graph
 
-### Nodes:
+### Nodes (ID: Label):
 ${nodesList}
 
-### Edges:
+### Edges (sourceId -> targetId: relationship):
 ${edgesList}
 
 ## Your Task
 1. Review the current graph from your ${persona.role} perspective
 2. Propose NEW nodes (concepts) or edges (relationships) that should be added
-3. Consider: Are there missing concepts? Missing relationships? 
+3. For edges, use the 8-character node IDs shown above (e.g., "a1b2c3d4")
 4. Vote on whether the graph is COMPLETE (has all necessary structure for audit)
 
-IMPORTANT: Only propose nodes/edges that are truly missing. Do not duplicate existing ones.`;
+IMPORTANT: 
+- Only propose nodes/edges that are truly missing. Do not duplicate existing ones.
+- For edges, use the exact 8-character node ID prefix shown in the Nodes list.`;
 }
 
 function getAssignmentPrompt(persona: AgentPersona, graphNodes: any[]): string {
@@ -229,12 +240,12 @@ function getGrokGraphBuildingSchema() {
             items: {
               type: "object",
               properties: {
-                sourceNodeLabel: { type: "string" },
-                targetNodeLabel: { type: "string" },
+                sourceNodeId: { type: "string", description: "8-character node ID prefix from the Nodes list" },
+                targetNodeId: { type: "string", description: "8-character node ID prefix from the Nodes list" },
                 edgeType: { type: "string", enum: ["relates_to", "depends_on", "implements", "conflicts_with", "supports"] },
                 label: { type: "string" },
               },
-              required: ["sourceNodeLabel", "targetNodeLabel", "edgeType"],
+              required: ["sourceNodeId", "targetNodeId", "edgeType"],
             },
           },
           graphCompleteVote: { type: "boolean" },
@@ -358,13 +369,25 @@ function getClaudeConferenceTool() {
 function getClaudeGraphBuildingTool() {
   return {
     name: "submit_graph_updates",
-    description: "Submit proposed graph nodes, edges, and vote on graph completeness.",
+    description: "Submit proposed graph nodes, edges (using 8-char node ID prefixes), and vote on graph completeness.",
     input_schema: {
       type: "object",
       properties: {
         reasoning: { type: "string" },
         proposedNodes: { type: "array", items: { type: "object" } },
-        proposedEdges: { type: "array", items: { type: "object" } },
+        proposedEdges: { 
+          type: "array", 
+          items: { 
+            type: "object",
+            properties: {
+              sourceNodeId: { type: "string", description: "8-character node ID prefix" },
+              targetNodeId: { type: "string", description: "8-character node ID prefix" },
+              edgeType: { type: "string" },
+              label: { type: "string" }
+            },
+            required: ["sourceNodeId", "targetNodeId", "edgeType"]
+          } 
+        },
         graphCompleteVote: { type: "boolean" },
         blackboardEntry: { type: "object", properties: { content: { type: "string" } }, required: ["content"] },
       },
@@ -937,50 +960,29 @@ serve(async (req) => {
             }
           }
 
-          // Insert edges (need to resolve labels to IDs)
+          // Insert edges using short ID prefix matching
           const refreshedNodes = await rpc("get_audit_graph_nodes_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
           });
           
-          // Build label-to-ID map with normalized labels
-          const labelToId = new Map<string, string>();
-          const allLabels: string[] = [];
+          // Build prefix-to-full-ID map (8-char prefix -> full UUID)
+          const prefixToFullId = new Map<string, string>();
           for (const n of (refreshedNodes || [])) {
-            const normalizedLabel = n.label.toLowerCase().trim();
-            labelToId.set(normalizedLabel, n.id);
-            allLabels.push(normalizedLabel);
+            const prefix = n.id.slice(0, 8).toLowerCase();
+            prefixToFullId.set(prefix, n.id);
           }
-          console.log(`Edge resolution: ${allLabels.length} nodes available for matching`);
-
-          // Helper for fuzzy label matching
-          const findNodeId = (label: string): string | undefined => {
-            if (!label) return undefined;
-            const normalized = label.toLowerCase().trim();
-            
-            // Exact match first
-            if (labelToId.has(normalized)) return labelToId.get(normalized);
-            
-            // Try partial match (label contains or is contained)
-            for (const [nodeLabel, nodeId] of labelToId.entries()) {
-              if (nodeLabel.includes(normalized) || normalized.includes(nodeLabel)) {
-                console.log(`Fuzzy match: "${label}" -> "${nodeLabel}"`);
-                return nodeId;
-              }
-            }
-            
-            return undefined;
-          };
+          console.log(`Edge resolution: ${prefixToFullId.size} nodes available (using 8-char ID prefixes)`);
 
           let edgesInserted = 0;
           let edgesFailed = 0;
           for (const edge of response.proposedEdges || []) {
-            // Support both camelCase and snake_case field names
-            const sourceLabel = edge.sourceNodeLabel || edge.source_node_label || edge.source;
-            const targetLabel = edge.targetNodeLabel || edge.target_node_label || edge.target;
+            // Get IDs from the response (support both camelCase and snake_case)
+            const sourceIdPrefix = (edge.sourceNodeId || edge.source_node_id || "").toLowerCase().slice(0, 8);
+            const targetIdPrefix = (edge.targetNodeId || edge.target_node_id || "").toLowerCase().slice(0, 8);
             
-            const sourceId = findNodeId(sourceLabel);
-            const targetId = findNodeId(targetLabel);
+            const sourceId = prefixToFullId.get(sourceIdPrefix);
+            const targetId = prefixToFullId.get(targetIdPrefix);
             
             if (sourceId && targetId) {
               try {
@@ -994,20 +996,20 @@ serve(async (req) => {
                   p_created_by_agent: agent.role,
                 });
                 edgesInserted++;
-                console.log(`Edge inserted: "${sourceLabel}" -> "${targetLabel}"`);
+                console.log(`Edge inserted: ${sourceIdPrefix} -> ${targetIdPrefix}`);
               } catch (err) {
                 console.error(`Edge insertion failed: ${err}`);
                 edgesFailed++;
               }
             } else {
-              console.warn(`Edge skipped - labels not found: source="${sourceLabel}" (${sourceId ? 'found' : 'NOT FOUND'}), target="${targetLabel}" (${targetId ? 'found' : 'NOT FOUND'})`);
+              console.warn(`Edge skipped - IDs not found: source="${sourceIdPrefix}" (${sourceId ? 'found' : 'NOT FOUND'}), target="${targetIdPrefix}" (${targetId ? 'found' : 'NOT FOUND'})`);
               edgesFailed++;
             }
           }
           
           if (response.proposedEdges?.length > 0) {
             await logActivity(agent.role, "edge_insert", `${agent.name} added ${edgesInserted} edges`, 
-              `Inserted: ${edgesInserted}, Failed: ${edgesFailed} (label mismatches or errors)`);
+              `Inserted: ${edgesInserted}, Failed: ${edgesFailed} (ID mismatches)`);
           }
 
           // Blackboard
