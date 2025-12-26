@@ -260,7 +260,11 @@ Return ONLY the JSON object, no other text.`;
     } catch (error: unknown) {
       console.error("Concept merge error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
-      await sendSSE("error", { message: errMsg });
+      try {
+        await sendSSE("error", { message: errMsg });
+      } catch {
+        // Stream may be closed
+      }
     } finally {
       try {
         await writer.close();

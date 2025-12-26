@@ -329,7 +329,11 @@ serve(async (req) => {
       const errMsg = error instanceof Error ? error.message : String(error);
       await sendSSE("error", { message: errMsg });
     } finally {
-      await writer.close();
+      try {
+        await writer.close();
+      } catch {
+        // Already closed
+      }
     }
   })();
 

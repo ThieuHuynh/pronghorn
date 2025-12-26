@@ -78,7 +78,10 @@ async function streamSSE(
   onError: (error: string) => void
 ): Promise<any> {
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  if (!reader) {
+    console.warn("[streamSSE] No response body");
+    return null;
+  }
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -104,10 +107,11 @@ async function streamSSE(
         let dataStr = "";
         
         for (const line of lines) {
-          if (line.startsWith("event:")) {
-            eventType = line.slice(6).trim();
-          } else if (line.startsWith("data:")) {
-            dataStr = line.slice(5).trim();
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith("event:")) {
+            eventType = trimmedLine.slice(6).trim();
+          } else if (trimmedLine.startsWith("data:")) {
+            dataStr = trimmedLine.slice(5).trim();
           }
         }
         
@@ -122,24 +126,59 @@ async function streamSSE(
             case "concept":
               onConcept(data);
               break;
+            case "cell":
+              onConcept(data); // Reuse concept callback for cell events
+              break;
             case "result":
               result = data;
               onResult(data);
               break;
             case "done":
-              // Stream complete - ignore
+              // Stream complete - we're done
               break;
             case "error":
               onError(data.message || String(data));
               break;
           }
         } catch {
-          // Skip unparseable data
+          // Skip unparseable data - not valid JSON yet
         }
       }
     }
+    
+    // Process any remaining buffer content after stream ends
+    if (buffer.trim()) {
+      const lines = buffer.split("\n");
+      let eventType = "";
+      let dataStr = "";
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("event:")) {
+          eventType = trimmedLine.slice(6).trim();
+        } else if (trimmedLine.startsWith("data:")) {
+          dataStr = trimmedLine.slice(5).trim();
+        }
+      }
+      if (eventType && dataStr) {
+        try {
+          const data = JSON.parse(dataStr);
+          if (eventType === "result") {
+            result = data;
+            onResult(data);
+          }
+        } catch {
+          // Final buffer not valid JSON
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[streamSSE] Stream error:", err);
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // Already released
+    }
   }
 
   return result;
@@ -482,6 +521,37 @@ export function useAuditPipeline() {
         p_token: shareToken,
       });
 
+      // If merge returned nothing useful, fall back to raw extracted concepts
+      const hasMergeResults = mergedConcepts.length > 0 || unmergedD1Concepts.length > 0 || unmergedD2Concepts.length > 0;
+      
+      if (!hasMergeResults && (d1Concepts.length > 0 || d2Concepts.length > 0)) {
+        addStepDetail("graph", "Merge returned empty, using raw extracted concepts");
+        
+        // Convert raw D1 concepts to merged format for tesseract analysis
+        for (const c of d1Concepts) {
+          mergedConcepts.push({
+            mergedLabel: c.label,
+            mergedDescription: c.description,
+            d1ConceptLabels: [c.label],
+            d2ConceptLabels: [],
+            d1Ids: c.elementIds,
+            d2Ids: [],
+          });
+        }
+        
+        // Convert raw D2 concepts to merged format for tesseract analysis
+        for (const c of d2Concepts) {
+          mergedConcepts.push({
+            mergedLabel: c.label,
+            mergedDescription: c.description,
+            d1ConceptLabels: [],
+            d2ConceptLabels: [c.label],
+            d1Ids: [],
+            d2Ids: c.elementIds,
+          });
+        }
+      }
+
       // Create merged concept nodes and edges
       for (const concept of mergedConcepts) {
         const { data: conceptNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
@@ -626,11 +696,30 @@ export function useAuditPipeline() {
 
       let tesseractCells: any[] = [];
       if (tesseractResponse.ok) {
-        const tesseractResult = await tesseractResponse.json();
-        tesseractCells = tesseractResult?.cells || [];
+        await streamSSE(
+          tesseractResponse,
+          (data) => {
+            updateStep("tesseract", { 
+              message: data.message || `Analyzing ${data.current || 0}/${data.total || 0}`, 
+              progress: data.progress || 50 
+            });
+          },
+          (data) => {
+            // Cell event
+            addStepDetail("tesseract", `${data.conceptLabel}: polarity ${data.polarity?.toFixed(2)}`);
+          },
+          (data) => {
+            tesseractCells = data.cells || [];
+          },
+          (err) => {
+            console.error("[tesseract] Stream error:", err);
+          }
+        );
         updateStep("tesseract", { status: "completed", message: `${tesseractCells.length} cells`, progress: 100, completedAt: new Date() });
       } else {
-        updateStep("tesseract", { status: "error", message: "Failed", progress: 0 });
+        const errText = await tesseractResponse.text();
+        console.error("[tesseract] HTTP error:", tesseractResponse.status, errText);
+        updateStep("tesseract", { status: "error", message: `Failed: ${errText.slice(0, 50)}`, progress: 0 });
       }
 
       setProgress({ phase: "generating_venn", message: "Generating Venn...", progress: 85 });
