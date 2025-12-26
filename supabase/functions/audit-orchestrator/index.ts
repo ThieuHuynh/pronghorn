@@ -310,16 +310,17 @@ async function executeTool(
           return { success: false, result: null, error: "Content is required for write_blackboard" };
         }
         
+        // Note: Parameter order matches existing DB function signature
         await rpc("insert_audit_blackboard_with_token", {
           p_session_id: sessionId,
-          p_token: shareToken,
+          p_iteration: 0,
           p_agent_role: "orchestrator",
           p_entry_type: entryType,
           p_content: content,
-          p_iteration: 0, // Will be set by caller
+          p_token: shareToken,
+          p_evidence: null,
           p_confidence: confidence,
           p_target_agent: targetAgent,
-          p_evidence: null,
         });
         
         return { success: true, result: { entryType, contentLength: content.length } };
@@ -362,24 +363,27 @@ async function executeTool(
           return { success: false, result: null, error: "Label is required for create_concept" };
         }
         
-        // Resolve partial IDs
+        // Resolve partial IDs to full UUIDs
         sourceElementIds = sourceElementIds.map((id: string) => resolveElementId(id) || id);
         
-        const data = await rpc("insert_audit_graph_node_with_token", {
+        // Use upsert_audit_graph_node_with_token (not insert)
+        const data = await rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: label,
           p_description: description,
           p_node_type: "concept",
           p_source_dataset: sourceDataset,
-          p_source_element_ids: sourceElementIds,
+          p_source_element_ids: sourceElementIds, // Must be uuid[] - resolved above
           p_created_by_agent: "orchestrator",
+          p_x_position: 0,
+          p_y_position: 0,
           p_color: sourceDataset === "dataset1" ? "#3b82f6" : sourceDataset === "dataset2" ? "#22c55e" : "#a855f7",
           p_size: 30,
           p_metadata: {},
         });
         
-        return { success: true, result: { nodeId: data.id, label, sourceDataset, sourceElementIds } };
+        return { success: true, result: { nodeId: data?.id, label, sourceDataset, sourceElementIds } };
       }
       
       case "link_concepts": {
@@ -458,19 +462,21 @@ async function executeTool(
         const criticality = params.criticality || "info";
         const evidenceSummary = params.evidenceSummary || params.evidence_summary || params.evidence || "";
         
-        // Resolve element ID
+        // Resolve element ID to full UUID
         const resolvedElementId = resolveElementId(elementId) || elementId;
         
+        // Use existing upsert_audit_tesseract_cell_with_token function
+        // Note: p_x_element_id must be uuid type
         await rpc("upsert_audit_tesseract_cell_with_token", {
           p_session_id: sessionId,
-          p_token: shareToken,
-          p_x_element_id: resolvedElementId,
-          p_x_element_label: elementLabel,
+          p_x_element_id: resolvedElementId, // Must be valid UUID
           p_x_element_type: problemShape.dataset1.type,
           p_x_index: 0,
           p_y_step: step,
-          p_y_step_label: stepLabel,
           p_z_polarity: polarity,
+          p_token: shareToken,
+          p_x_element_label: elementLabel,
+          p_y_step_label: stepLabel,
           p_z_criticality: criticality,
           p_evidence_summary: evidenceSummary,
           p_evidence_refs: null,
