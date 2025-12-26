@@ -814,6 +814,7 @@ export function useAuditPipeline() {
 
         const processTesseractConcept = async (concept: typeof conceptsForTesseract[0], index: number): Promise<void> => {
           const conceptName = concept.conceptLabel.slice(0, 40);
+          console.log(`[tesseract] === START concept ${index + 1}/${totalConcepts}: ${conceptName} ===`);
           
           try {
             // Calculate payload size for debugging
@@ -829,29 +830,55 @@ export function useAuditPipeline() {
             const d2ContentSize = concept.d2Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
 
             addStepDetail("tesseract", `Starting: ${conceptName} (${payloadSizeKB}KB payload, D1: ${Math.round(d1ContentSize/1024)}KB, D2: ${Math.round(d2ContentSize/1024)}KB)`);
-            console.log(`[tesseract] Processing ${conceptName}: payload=${payloadSizeKB}KB, D1=${concept.d1Elements.length} els (${Math.round(d1ContentSize/1024)}KB), D2=${concept.d2Elements.length} els (${Math.round(d2ContentSize/1024)}KB)`);
+            console.log(`[tesseract] Sending payload: ${payloadSizeKB}KB`);
 
-            const response = await fetch(`${BASE_URL}/audit-build-tesseract`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: payloadStr,
-            });
+            let response: Response;
+            try {
+              response = await fetch(`${BASE_URL}/audit-build-tesseract`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: payloadStr,
+              });
+            } catch (fetchErr: any) {
+              const fetchErrMsg = `${conceptName}: Fetch failed - ${fetchErr?.message || 'Network error'}`;
+              console.error(`[tesseract] Fetch error:`, fetchErrMsg);
+              addStepDetail("tesseract", `❌ ${fetchErrMsg}`);
+              errorCount++;
+              return;
+            }
+
+            console.log(`[tesseract] Response status: ${response.status}`);
 
             if (!response.ok) {
-              const errorText = await response.text().catch(() => "Unknown error");
+              let errorText = "Unknown error";
+              try {
+                errorText = await response.text();
+              } catch (e) {
+                console.error(`[tesseract] Failed to read error text:`, e);
+              }
               const errorMsg = `${conceptName}: HTTP ${response.status} - ${errorText.slice(0, 300)}`;
-              console.error(`[tesseract] Failed:`, errorMsg);
+              console.error(`[tesseract] HTTP error:`, errorMsg);
               addStepDetail("tesseract", `❌ ${errorMsg}`);
               errorCount++;
               return;
             }
 
             // Parse JSON response (not SSE)
-            const result = await response.json();
+            let result: any;
+            try {
+              result = await response.json();
+              console.log(`[tesseract] Parsed JSON result:`, JSON.stringify(result).slice(0, 200));
+            } catch (jsonErr: any) {
+              const jsonErrMsg = `${conceptName}: JSON parse failed - ${jsonErr?.message || 'Unknown'}`;
+              console.error(`[tesseract] JSON parse error:`, jsonErrMsg);
+              addStepDetail("tesseract", `❌ ${jsonErrMsg}`);
+              errorCount++;
+              return;
+            }
             
             if (!result.success) {
               const errorMsg = `${conceptName}: ${result.error || 'Unknown error from edge function'}`;
-              console.error(`[tesseract] Failed:`, errorMsg);
+              console.error(`[tesseract] Edge function reported failure:`, errorMsg);
               addStepDetail("tesseract", `❌ ${errorMsg}`);
               errorCount++;
               return;
@@ -859,6 +886,7 @@ export function useAuditPipeline() {
 
             // Process cells from response
             if (result.cells && result.cells.length > 0) {
+              console.log(`[tesseract] Got ${result.cells.length} cells`);
               for (const c of result.cells) {
                 const cell: LocalTesseractCell = {
                   id: localId(),
@@ -873,9 +901,11 @@ export function useAuditPipeline() {
                 
                 const polarityStr = c.polarity >= 0 ? `+${c.polarity.toFixed(2)}` : c.polarity.toFixed(2);
                 addStepDetail("tesseract", `✓ ${c.conceptLabel}: ${polarityStr}`);
+                console.log(`[tesseract] Added cell: ${c.conceptLabel} = ${polarityStr}`);
                 updateResults(); // Update immediately so UI reflects new cell
               }
               completedCount++;
+              console.log(`[tesseract] === END concept ${index + 1}: SUCCESS ===`);
             } else {
               // No cells returned - edge function errors are in result.errors
               if (result.errors && result.errors.length > 0) {
@@ -884,16 +914,19 @@ export function useAuditPipeline() {
                 addStepDetail("tesseract", `❌ ${errorMsg}`);
                 errorCount++;
               } else {
+                console.warn(`[tesseract] No cells returned for ${conceptName}`);
                 addStepDetail("tesseract", `⚠ ${conceptName}: No cells returned`);
                 errorCount++;
               }
+              console.log(`[tesseract] === END concept ${index + 1}: NO CELLS ===`);
             }
 
           } catch (err: any) {
             const errorMsg = `${conceptName}: ${err?.message || 'Unknown error'}`;
-            console.error(`[tesseract] Error:`, errorMsg);
+            console.error(`[tesseract] Uncaught error:`, err);
             addStepDetail("tesseract", `❌ ${errorMsg}`);
             errorCount++;
+            console.log(`[tesseract] === END concept ${index + 1}: ERROR ===`);
           }
         };
 
