@@ -303,10 +303,10 @@ export default function Audit() {
               });
             });
             
-            // Files
-            content.files?.forEach((f, i) => {
+            // Files - use crypto.randomUUID() since files don't have DB IDs
+            content.files?.forEach((f) => {
               elements.push({
-                id: `file-${i}-${f.path.replace(/[^a-zA-Z0-9]/g, '-')}`,
+                id: crypto.randomUUID(),
                 label: f.path,
                 content: f.content || "",
                 category: "files",
@@ -323,10 +323,10 @@ export default function Audit() {
               });
             });
             
-            // Databases
+            // Databases - use crypto.randomUUID() since these are composite objects
             content.databases?.forEach(d => {
               elements.push({
-                id: `${d.databaseId}-${d.schemaName}-${d.name}`,
+                id: crypto.randomUUID(),
                 label: `${d.schemaName}.${d.name}`,
                 content: d.definition || JSON.stringify(d.columns || []),
                 category: "database",

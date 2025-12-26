@@ -154,21 +154,37 @@ Return ONLY the JSON object, no other text.`;
         progress: 60 
       });
 
-      // Parse JSON from response
+      // Parse JSON from response with robust error handling
       let parsed: { concepts: ExtractedConcept[]; unmappedIds?: string[] };
       try {
         parsed = JSON.parse(rawText);
-      } catch {
+      } catch (parseErr) {
+        console.log("Initial JSON parse failed, trying alternatives. Raw text length:", rawText.length);
+        console.log("Raw text preview:", rawText.slice(0, 500));
+        
+        // Try to extract JSON from markdown code block
         const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[1]);
+          try {
+            parsed = JSON.parse(jsonMatch[1]);
+          } catch {
+            console.log("Code block JSON parse failed");
+            throw new Error(`Failed to parse JSON from code block: ${String(parseErr)}`);
+          }
         } else {
+          // Try to find JSON object in the text
           const firstBrace = rawText.indexOf("{");
           const lastBrace = rawText.lastIndexOf("}");
           if (firstBrace !== -1 && lastBrace > firstBrace) {
-            parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+            const jsonCandidate = rawText.slice(firstBrace, lastBrace + 1);
+            try {
+              parsed = JSON.parse(jsonCandidate);
+            } catch {
+              console.log("Extracted JSON parse failed. Candidate:", jsonCandidate.slice(0, 500));
+              throw new Error(`Failed to parse extracted JSON: ${String(parseErr)}`);
+            }
           } else {
-            throw new Error("Could not parse JSON from LLM response");
+            throw new Error(`Could not find JSON in LLM response. Raw text: ${rawText.slice(0, 200)}`);
           }
         }
       }
