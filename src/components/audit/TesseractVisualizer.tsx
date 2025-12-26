@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Grid3X3, Layers, ZoomIn, ZoomOut } from "lucide-react";
+import { Grid3X3, Layers, ZoomIn, ZoomOut, FileJson, FileSpreadsheet, X } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type TesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
@@ -27,6 +27,7 @@ export function TesseractVisualizer({
 }: TesseractVisualizerProps) {
   const [zoom, setZoom] = useState(1);
   const [showLabels, setShowLabels] = useState(true);
+  const [selectedCell, setSelectedCell] = useState<TesseractCell | null>(null);
 
   // Build grid structure from cells - ensure we have proper x/y grid layout
   const { xElements, ySteps, cellMap, maxPolarity } = useMemo(() => {
@@ -106,6 +107,74 @@ export function TesseractVisualizer({
     }
   };
 
+  // Handle cell click - set selected cell and call parent handler
+  const handleCellClick = useCallback((cell: TesseractCell) => {
+    setSelectedCell(cell);
+    onCellClick?.(cell);
+  }, [onCellClick]);
+
+  // Export as JSON
+  const exportAsJson = useCallback(() => {
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      iteration: currentIteration,
+      stats: {
+        totalCells: cells.length,
+        elements: xElements.length,
+        steps: ySteps.length,
+      },
+      cells: cells.map(cell => ({
+        elementId: cell.x_element_id,
+        elementLabel: cell.x_element_label,
+        elementType: cell.x_element_type,
+        step: cell.y_step,
+        stepLabel: cell.y_step_label,
+        polarity: cell.z_polarity,
+        criticality: cell.z_criticality,
+        evidenceSummary: cell.evidence_summary,
+        contributingAgents: cell.contributing_agents,
+      })),
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tesseract-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [cells, currentIteration, xElements.length, ySteps.length]);
+
+  // Export as CSV
+  const exportAsCsv = useCallback(() => {
+    const rows = [
+      ["Element ID", "Element Label", "Element Type", "Step", "Step Label", "Polarity", "Criticality", "Evidence Summary", "Contributing Agents"],
+      ...cells.map(cell => [
+        cell.x_element_id,
+        cell.x_element_label || "",
+        cell.x_element_type,
+        cell.y_step.toString(),
+        cell.y_step_label || "",
+        cell.z_polarity.toString(),
+        cell.z_criticality || "",
+        cell.evidence_summary || "",
+        (cell.contributing_agents || []).join("; "),
+      ]),
+    ];
+    const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tesseract-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [cells]);
+
   const cellSize = 40 * zoom;
 
   // Show empty grid skeleton when no cells but session exists
@@ -127,7 +196,7 @@ export function TesseractVisualizer({
           </CardTitle>
           
           {/* Controls row */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             <Button
               variant="outline"
               size="icon"
@@ -154,10 +223,61 @@ export function TesseractVisualizer({
             >
               <ZoomIn className="h-4 w-4" />
             </Button>
+            {cells.length > 0 && (
+              <>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button variant="outline" size="sm" className="h-8" onClick={exportAsJson}>
+                  <FileJson className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">JSON</span>
+                </Button>
+                <Button variant="outline" size="sm" className="h-8" onClick={exportAsCsv}>
+                  <FileSpreadsheet className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">CSV</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
+        {/* Selected cell detail panel */}
+        {selectedCell && (
+          <div className="mb-4 p-3 rounded-lg border bg-muted/30">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-sm">{selectedCell.x_element_label || `Element ${selectedCell.x_index}`}</span>
+                  <Badge variant="outline" className="text-xs">{selectedCell.y_step_label || `Step ${selectedCell.y_step}`}</Badge>
+                  <Badge variant={getCriticalityVariant(selectedCell.z_criticality)}>
+                    {selectedCell.z_criticality || "info"}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Polarity: {selectedCell.z_polarity.toFixed(2)}
+                  </span>
+                </div>
+                {selectedCell.evidence_summary && (
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCell.evidence_summary}
+                  </p>
+                )}
+                {selectedCell.contributing_agents && selectedCell.contributing_agents.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Contributors: {selectedCell.contributing_agents.join(", ")}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => setSelectedCell(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {showEmptyGrid ? (
           <div className="space-y-4">
             <div className="text-center text-muted-foreground mb-4">
@@ -238,6 +358,7 @@ export function TesseractVisualizer({
                   {/* Cells */}
                   {xElements.map(([xIndex]) => {
                     const cell = cellMap.get(`${xIndex}-${yStep}`);
+                    const isSelected = selectedCell?.id === cell?.id;
                     return (
                       <TooltipProvider key={`${xIndex}-${yStep}`}>
                         <Tooltip>
@@ -245,11 +366,12 @@ export function TesseractVisualizer({
                             <div
                               style={{ width: cellSize, height: cellSize }}
                               className={`
-                                border border-border/50 flex items-center justify-center cursor-pointer
+                                border flex items-center justify-center cursor-pointer
                                 transition-all duration-200 hover:ring-2 hover:ring-primary/50
                                 ${cell ? getPolarityColor(cell.z_polarity) : "bg-muted/30"}
+                                ${isSelected ? "ring-2 ring-primary border-primary" : "border-border/50"}
                               `}
-                              onClick={() => cell && onCellClick?.(cell)}
+                              onClick={() => cell && handleCellClick(cell)}
                             >
                               {cell?.z_criticality && (
                                 <span className="text-[8px] font-bold text-white drop-shadow">
