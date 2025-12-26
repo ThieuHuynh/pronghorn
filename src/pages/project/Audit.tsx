@@ -9,6 +9,7 @@ import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
+import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { useAuditPipeline, PipelineProgress } from "@/hooks/useAuditPipeline";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ export default function Audit() {
   const manualStopRef = useRef(false);
   
   // New pipeline hook
-  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, error: pipelineError, abort: abortPipeline } = useAuditPipeline();
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline } = useAuditPipeline();
   
   const {
     session,
@@ -669,10 +670,17 @@ export default function Audit() {
                 </div>
 
                 <TabsContent value="activity">
-                  <AuditActivityStream
-                    activities={activityStream}
-                    isLoading={isLoading}
-                  />
+                  {isPipelineRunning || pipelineSteps.length > 0 ? (
+                    <PipelineActivityStream
+                      steps={pipelineSteps}
+                      isRunning={isPipelineRunning}
+                    />
+                  ) : (
+                    <AuditActivityStream
+                      activities={activityStream}
+                      isLoading={isLoading}
+                    />
+                  )}
                 </TabsContent>
 
                 <TabsContent value="graph">

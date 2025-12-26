@@ -1,5 +1,5 @@
 // Hook for orchestrating the new audit pipeline
-// Calls edge functions in sequence with simple JSON responses
+// Streams SSE events and tracks progress for each phase
 
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,8 +23,18 @@ export interface PipelineProgress {
   d1ConceptCount?: number;
   d2ConceptCount?: number;
   mergedCount?: number;
-  tesseractCurrent?: number;
-  tesseractTotal?: number;
+}
+
+export interface PipelineStep {
+  id: string;
+  phase: PipelinePhase;
+  title: string;
+  status: "pending" | "running" | "completed" | "error";
+  message: string;
+  progress: number;
+  startedAt?: Date;
+  completedAt?: Date;
+  details?: string[];
 }
 
 interface Concept {
@@ -59,11 +69,79 @@ interface PipelineInput {
 
 const BASE_URL = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1";
 
+// Parse SSE stream and call callbacks for each event
+async function streamSSE(
+  response: Response,
+  onProgress: (data: any) => void,
+  onConcept: (data: any) => void,
+  onResult: (data: any) => void,
+  onError: (error: string) => void
+): Promise<any> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: any = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    let currentEvent = "";
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        currentEvent = line.slice(7).trim();
+      } else if (line.startsWith("data: ") && currentEvent) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          switch (currentEvent) {
+            case "progress":
+              onProgress(data);
+              break;
+            case "concept":
+              onConcept(data);
+              break;
+            case "result":
+              result = data;
+              onResult(data);
+              break;
+            case "error":
+              onError(data.message);
+              break;
+          }
+        } catch (e) {
+          console.warn("Failed to parse SSE data:", line);
+        }
+        currentEvent = "";
+      }
+    }
+  }
+
+  return result;
+}
+
 export function useAuditPipeline() {
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress>({ phase: "idle", message: "", progress: 0 });
+  const [steps, setSteps] = useState<PipelineStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef(false);
+
+  const updateStep = useCallback((id: string, updates: Partial<PipelineStep>) => {
+    setSteps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  const addStepDetail = useCallback((id: string, detail: string) => {
+    setSteps(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      return { ...s, details: [...(s.details || []), detail] };
+    }));
+  }, []);
 
   const runPipeline = useCallback(async (input: PipelineInput) => {
     setIsRunning(true);
@@ -71,6 +149,18 @@ export function useAuditPipeline() {
     abortRef.current = false;
 
     const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
+
+    // Initialize steps
+    const initialSteps: PipelineStep[] = [
+      { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts (${d1Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
+      { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts (${d2Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
+      { id: "merge", phase: "merging_concepts", title: "Merge Concepts", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "graph", phase: "building_graph", title: "Build Graph Edges", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", status: "pending", message: "Waiting...", progress: 0 },
+    ];
+    setSteps(initialSteps);
 
     let d1Concepts: Concept[] = [];
     let d2Concepts: Concept[] = [];
@@ -82,17 +172,13 @@ export function useAuditPipeline() {
       // ========================================
       // PHASE 0: Create D1 and D2 nodes immediately
       // ========================================
-      setProgress({ 
-        phase: "creating_nodes", 
-        message: `Creating ${d1Elements.length} D1 and ${d2Elements.length} D2 nodes...`, 
-        progress: 5 
-      });
+      setProgress({ phase: "creating_nodes", message: `Creating ${d1Elements.length + d2Elements.length} nodes...`, progress: 5 });
+      updateStep("nodes", { status: "running", message: "Creating nodes...", startedAt: new Date() });
 
-      console.log(`[Pipeline] Creating ${d1Elements.length} D1 nodes...`);
-      
       // Create all D1 nodes
-      for (const element of d1Elements) {
-        const { error: nodeError } = await supabase.rpc("upsert_audit_graph_node_with_token", {
+      for (let i = 0; i < d1Elements.length; i++) {
+        const element = d1Elements[i];
+        await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
@@ -101,20 +187,19 @@ export function useAuditPipeline() {
           p_source_dataset: "dataset1",
           p_source_element_ids: [element.id],
           p_created_by_agent: "pipeline",
-          p_color: "#3b82f6", // Blue for D1
+          p_color: "#3b82f6",
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        if (nodeError) {
-          console.error(`[Pipeline] Error creating D1 node:`, nodeError);
+        if (i % 5 === 0) {
+          addStepDetail("nodes", `Created D1 node: ${element.label.slice(0, 40)}...`);
         }
       }
 
-      console.log(`[Pipeline] Creating ${d2Elements.length} D2 nodes...`);
-      
       // Create all D2 nodes
-      for (const element of d2Elements) {
-        const { error: nodeError } = await supabase.rpc("upsert_audit_graph_node_with_token", {
+      for (let i = 0; i < d2Elements.length; i++) {
+        const element = d2Elements[i];
+        await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
@@ -123,14 +208,16 @@ export function useAuditPipeline() {
           p_source_dataset: "dataset2",
           p_source_element_ids: [element.id],
           p_created_by_agent: "pipeline",
-          p_color: "#22c55e", // Green for D2
+          p_color: "#22c55e",
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        if (nodeError) {
-          console.error(`[Pipeline] Error creating D2 node:`, nodeError);
+        if (i % 5 === 0) {
+          addStepDetail("nodes", `Created D2 node: ${element.label.slice(0, 40)}...`);
         }
       }
+
+      updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
 
       // Update session status
       await supabase.rpc("update_audit_session_with_token", {
@@ -145,52 +232,54 @@ export function useAuditPipeline() {
       // ========================================
       // PHASE 1: Extract D1 and D2 concepts in parallel
       // ========================================
-      setProgress({ 
-        phase: "extracting_d1", 
-        message: `Extracting concepts from ${d1Elements.length} D1 and ${d2Elements.length} D2 elements...`, 
-        progress: 15 
+      setProgress({ phase: "extracting_d1", message: "Extracting concepts...", progress: 15 });
+      updateStep("d1", { status: "running", message: "Calling LLM...", startedAt: new Date() });
+      updateStep("d2", { status: "running", message: "Calling LLM...", startedAt: new Date() });
+
+      // Start both extractions in parallel
+      const d1Promise = fetch(`${BASE_URL}/audit-extract-concepts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, projectId, shareToken, dataset: "d1", elements: d1Elements }),
       });
 
-      console.log(`[Pipeline] Calling concept extraction for D1 and D2...`);
+      const d2Promise = fetch(`${BASE_URL}/audit-extract-concepts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, projectId, shareToken, dataset: "d2", elements: d2Elements }),
+      });
 
-      const [d1Response, d2Response] = await Promise.all([
-        fetch(`${BASE_URL}/audit-extract-concepts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, projectId, shareToken, dataset: "d1", elements: d1Elements }),
-        }),
-        fetch(`${BASE_URL}/audit-extract-concepts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, projectId, shareToken, dataset: "d2", elements: d2Elements }),
-        }),
-      ]);
+      const [d1Response, d2Response] = await Promise.all([d1Promise, d2Promise]);
 
-      // Parse D1 results
+      // Stream D1 results
       if (!d1Response.ok) {
-        const errText = await d1Response.text();
-        console.error(`[Pipeline] D1 extraction failed:`, errText);
-        throw new Error(`D1 concept extraction failed: ${d1Response.status}`);
+        throw new Error(`D1 extraction failed: ${d1Response.status}`);
       }
-      const d1Result = await d1Response.json();
-      if (!d1Result.success) {
-        throw new Error(`D1 extraction error: ${d1Result.error}`);
-      }
-      d1Concepts = d1Result.concepts || [];
-      console.log(`[Pipeline] D1 returned ${d1Concepts.length} concepts`);
+      const d1Result = await streamSSE(
+        d1Response,
+        (data) => updateStep("d1", { message: data.message, progress: data.progress }),
+        (data) => addStepDetail("d1", `Concept ${data.index + 1}/${data.total}: ${data.label}`),
+        (data) => {
+          d1Concepts = data.concepts || [];
+          updateStep("d1", { status: "completed", message: `${d1Concepts.length} concepts`, progress: 100, completedAt: new Date() });
+        },
+        (err) => updateStep("d1", { status: "error", message: err })
+      );
 
-      // Parse D2 results
+      // Stream D2 results
       if (!d2Response.ok) {
-        const errText = await d2Response.text();
-        console.error(`[Pipeline] D2 extraction failed:`, errText);
-        throw new Error(`D2 concept extraction failed: ${d2Response.status}`);
+        throw new Error(`D2 extraction failed: ${d2Response.status}`);
       }
-      const d2Result = await d2Response.json();
-      if (!d2Result.success) {
-        throw new Error(`D2 extraction error: ${d2Result.error}`);
-      }
-      d2Concepts = d2Result.concepts || [];
-      console.log(`[Pipeline] D2 returned ${d2Concepts.length} concepts`);
+      const d2Result = await streamSSE(
+        d2Response,
+        (data) => updateStep("d2", { message: data.message, progress: data.progress }),
+        (data) => addStepDetail("d2", `Concept ${data.index + 1}/${data.total}: ${data.label}`),
+        (data) => {
+          d2Concepts = data.concepts || [];
+          updateStep("d2", { status: "completed", message: `${d2Concepts.length} concepts`, progress: 100, completedAt: new Date() });
+        },
+        (err) => updateStep("d2", { status: "error", message: err })
+      );
 
       setProgress({ 
         phase: "merging_concepts", 
@@ -205,11 +294,11 @@ export function useAuditPipeline() {
       // ========================================
       // PHASE 2: Merge concepts
       // ========================================
+      updateStep("merge", { status: "running", message: "Calling merge LLM...", startedAt: new Date() });
+
       const d1ForMerge = d1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds }));
       const d2ForMerge = d2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds }));
 
-      console.log(`[Pipeline] Calling merge-concepts...`);
-      
       const mergeResponse = await fetch(`${BASE_URL}/audit-merge-concepts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -217,16 +306,14 @@ export function useAuditPipeline() {
       });
 
       if (!mergeResponse.ok) {
-        const errText = await mergeResponse.text();
-        console.error(`[Pipeline] Merge failed:`, errText);
-        throw new Error(`Merge concepts failed: ${mergeResponse.status}`);
+        throw new Error(`Merge failed: ${mergeResponse.status}`);
       }
-      
+
       const mergeResult = await mergeResponse.json();
       if (!mergeResult.success) {
         throw new Error(`Merge error: ${mergeResult.error}`);
       }
-      
+
       mergedConcepts = mergeResult.mergedConcepts || [];
       unmergedD1Concepts = (mergeResult.unmergedD1Concepts || []).map((c: any) => ({
         label: c.label,
@@ -239,11 +326,16 @@ export function useAuditPipeline() {
         elementIds: c.d2Ids || [],
       }));
 
-      console.log(`[Pipeline] Merge returned ${mergedConcepts.length} merged, ${unmergedD1Concepts.length} unmerged D1, ${unmergedD2Concepts.length} unmerged D2`);
+      updateStep("merge", { 
+        status: "completed", 
+        message: `${mergedConcepts.length} merged, ${unmergedD1Concepts.length} gaps, ${unmergedD2Concepts.length} orphans`, 
+        progress: 100, 
+        completedAt: new Date() 
+      });
 
       setProgress({ 
         phase: "building_graph", 
-        message: `Creating ${mergedConcepts.length} merged concept nodes and edges...`, 
+        message: `Creating concept nodes and edges...`, 
         progress: 50,
         mergedCount: mergedConcepts.length
       });
@@ -251,10 +343,10 @@ export function useAuditPipeline() {
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 2.5: Build graph nodes for concepts and create edges
+      // PHASE 2.5: Build graph edges
       // ========================================
-      
-      // First, get all existing nodes so we can link to them
+      updateStep("graph", { status: "running", message: "Fetching nodes...", startedAt: new Date() });
+
       const { data: allNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
@@ -271,13 +363,12 @@ export function useAuditPipeline() {
           p_source_dataset: "both",
           p_source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
           p_created_by_agent: "pipeline",
-          p_color: "#a855f7", // Purple for merged concepts
+          p_color: "#a855f7",
           p_size: 25,
-          p_metadata: { merged: true, d1Count: concept.d1Ids.length, d2Count: concept.d2Ids.length },
+          p_metadata: { merged: true },
         });
 
         if (conceptNode?.id) {
-          // Create edges from D1 elements to concept
           for (const d1Id of concept.d1Ids) {
             const d1Node = allNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
             if (d1Node) {
@@ -294,8 +385,6 @@ export function useAuditPipeline() {
               });
             }
           }
-
-          // Create edges from D2 elements to concept
           for (const d2Id of concept.d2Ids) {
             const d2Node = allNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
             if (d2Node) {
@@ -313,9 +402,10 @@ export function useAuditPipeline() {
             }
           }
         }
+        addStepDetail("graph", `Created merged concept: ${concept.mergedLabel}`);
       }
 
-      // Create nodes for unmerged D1 concepts (gaps - requirements not met)
+      // Create gap concept nodes
       for (const concept of unmergedD1Concepts) {
         const { data: gapNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
@@ -326,12 +416,10 @@ export function useAuditPipeline() {
           p_source_dataset: "dataset1",
           p_source_element_ids: concept.elementIds,
           p_created_by_agent: "pipeline",
-          p_color: "#ef4444", // Red for gaps
+          p_color: "#ef4444",
           p_size: 22,
-          p_metadata: { gap: true, unmerged: true },
+          p_metadata: { gap: true },
         });
-
-        // Create edges from D1 elements to gap concept
         if (gapNode?.id) {
           for (const d1Id of concept.elementIds) {
             const d1Node = allNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
@@ -350,9 +438,10 @@ export function useAuditPipeline() {
             }
           }
         }
+        addStepDetail("graph", `Created gap concept: ${concept.label}`);
       }
 
-      // Create nodes for unmerged D2 concepts (orphans - impl without requirements)
+      // Create orphan concept nodes
       for (const concept of unmergedD2Concepts) {
         const { data: orphanNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
@@ -363,12 +452,10 @@ export function useAuditPipeline() {
           p_source_dataset: "dataset2",
           p_source_element_ids: concept.elementIds,
           p_created_by_agent: "pipeline",
-          p_color: "#f59e0b", // Orange for orphans
+          p_color: "#f59e0b",
           p_size: 22,
-          p_metadata: { orphan: true, unmerged: true },
+          p_metadata: { orphan: true },
         });
-
-        // Create edges from D2 elements to orphan concept
         if (orphanNode?.id) {
           for (const d2Id of concept.elementIds) {
             const d2Node = allNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
@@ -387,59 +474,48 @@ export function useAuditPipeline() {
             }
           }
         }
+        addStepDetail("graph", `Created orphan concept: ${concept.label}`);
       }
 
-      setProgress({ 
-        phase: "building_tesseract", 
-        message: `Analyzing ${mergedConcepts.length} merged concepts for alignment...`, 
-        progress: 65,
-        tesseractTotal: mergedConcepts.length
-      });
+      updateStep("graph", { status: "completed", message: "Graph built", progress: 100, completedAt: new Date() });
+
+      setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
       // PHASE 3: Build tesseract
       // ========================================
-      console.log(`[Pipeline] Calling build-tesseract...`);
-      
+      updateStep("tesseract", { status: "running", message: "Analyzing concepts...", startedAt: new Date() });
+
       const tesseractResponse = await fetch(`${BASE_URL}/audit-build-tesseract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          sessionId, projectId, shareToken, 
-          mergedConcepts, 
-          d1Elements, 
-          d2Elements 
-        }),
+        body: JSON.stringify({ sessionId, projectId, shareToken, mergedConcepts, d1Elements, d2Elements }),
       });
 
       let tesseractCells: any[] = [];
       if (tesseractResponse.ok) {
         const tesseractResult = await tesseractResponse.json();
         tesseractCells = tesseractResult?.cells || [];
-        console.log(`[Pipeline] Tesseract returned ${tesseractCells.length} cells`);
+        updateStep("tesseract", { status: "completed", message: `${tesseractCells.length} cells`, progress: 100, completedAt: new Date() });
       } else {
-        console.error(`[Pipeline] Tesseract failed, continuing...`);
+        updateStep("tesseract", { status: "error", message: "Failed", progress: 0 });
       }
 
-      setProgress({ 
-        phase: "generating_venn", 
-        message: "Generating final Venn analysis...", 
-        progress: 85 
-      });
+      setProgress({ phase: "generating_venn", message: "Generating Venn...", progress: 85 });
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
       // PHASE 4: Generate Venn
       // ========================================
-      console.log(`[Pipeline] Calling generate-venn...`);
-      
+      updateStep("venn", { status: "running", message: "Generating analysis...", startedAt: new Date() });
+
       await fetch(`${BASE_URL}/audit-generate-venn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           sessionId, projectId, shareToken,
           mergedConcepts,
           unmergedD1Concepts: unmergedD1Concepts.map(c => ({ ...c, d1Ids: c.elementIds })),
@@ -450,6 +526,8 @@ export function useAuditPipeline() {
         }),
       });
 
+      updateStep("venn", { status: "completed", message: "Complete", progress: 100, completedAt: new Date() });
+
       // Update session to completed
       await supabase.rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
@@ -458,16 +536,14 @@ export function useAuditPipeline() {
         p_phase: "completed",
       });
 
-      setProgress({ phase: "completed", message: "Audit pipeline complete!", progress: 100 });
-      console.log(`[Pipeline] Complete!`);
+      setProgress({ phase: "completed", message: "Pipeline complete!", progress: 100 });
 
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[Pipeline] Error:`, errMsg);
+      console.error("[Pipeline] Error:", errMsg);
       setError(errMsg);
       setProgress({ phase: "error", message: errMsg, progress: 0 });
-      
-      // Update session with error status
+
       await supabase.rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
@@ -476,11 +552,11 @@ export function useAuditPipeline() {
     } finally {
       setIsRunning(false);
     }
-  }, []);
+  }, [updateStep, addStepDetail]);
 
   const abort = useCallback(() => {
     abortRef.current = true;
   }, []);
 
-  return { runPipeline, isRunning, progress, error, abort };
+  return { runPipeline, isRunning, progress, steps, error, abort };
 }
