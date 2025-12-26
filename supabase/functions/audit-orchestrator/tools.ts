@@ -118,16 +118,16 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   },
   {
     name: "link_concepts",
-    description: "Create an edge between two existing concept nodes in the knowledge graph. IMPORTANT: Use the graph node IDs returned by create_concept or query_knowledge_graph, NOT the source element IDs from the datasets.",
+    description: "Create an edge between ANY two existing nodes in the knowledge graph (d1_element, d2_element, concept, requirement, etc). CRITICAL: After analyzing each D2 element, you MUST call this tool to create 'implements' edges from the D2 node to relevant concepts. Use the D2 element's 8-char UUID prefix as sourceNodeId and the concept's label or ID as targetNodeId. Without these edges, D2 elements appear as orphans! Accepts 8-char prefix, full UUID, source element ID, or node label for both parameters.",
     parameters: {
       type: "object",
       properties: {
-        sourceNodeId: { type: "string", description: "The source GRAPH NODE ID (from create_concept result or query_knowledge_graph). Accepts 8-char prefix, full UUID, source element ID, or node label." },
-        targetNodeId: { type: "string", description: "The target GRAPH NODE ID (from create_concept result or query_knowledge_graph). Accepts 8-char prefix, full UUID, source element ID, or node label." },
+        sourceNodeId: { type: "string", description: "Source node: D2 element 8-char prefix (e.g., 'f023058a'), concept label (e.g., 'Authentication'), or full graph node UUID" },
+        targetNodeId: { type: "string", description: "Target node: Concept label (e.g., 'User Management'), D1 element 8-char prefix, or full graph node UUID" },
         edgeType: { 
           type: "string", 
           enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"],
-          description: "The type of relationship between the concepts" 
+          description: "Use 'implements' for D2→Concept links, 'relates_to' for concept relationships" 
         },
         label: { type: "string", description: "Optional: human-readable label for this edge" },
       },
@@ -243,10 +243,10 @@ const TOOL_PARAMS_SCHEMA = {
     sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"], description: "Which dataset this concept originates from" },
     sourceElementIds: { type: "array", items: { type: "string" }, description: "REQUIRED: UUIDs or 8-char prefixes of source artifacts" },
     
-    // link_concepts params - accepts graph node IDs, source element IDs, or node labels
-    sourceNodeId: { type: "string", description: "Source GRAPH NODE ID (from create_concept or query_knowledge_graph), source element ID, or node label" },
-    targetNodeId: { type: "string", description: "Target GRAPH NODE ID (from create_concept or query_knowledge_graph), source element ID, or node label" },
-    edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Relationship type" },
+    // link_concepts params - CRITICAL for D2→Concept linking
+    sourceNodeId: { type: "string", description: "D2 element 8-char prefix (e.g., 'f023058a'), concept label, or full graph node UUID. Use D2 prefixes to link implementation files!" },
+    targetNodeId: { type: "string", description: "Concept label (e.g., 'Authentication'), D1 element prefix, or full graph node UUID" },
+    edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Use 'implements' for D2→Concept edges" },
     
     // record_tesseract_cell params
     elementId: { type: "string", description: "Dataset 1 element ID" },

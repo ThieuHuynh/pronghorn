@@ -146,7 +146,7 @@ ${perspectiveDescriptions}
 - Link D1 elements to concepts
 - Continue calling request_next_batch until all D1 read (startIndex=10, 20, 30...)
 
-### PHASE 2: Read D2 (Implementation) - CRITICAL DEEP ANALYSIS
+### PHASE 2: Read D2 (Implementation) - CRITICAL DEEP ANALYSIS + MANDATORY LINKING
 
 For each D2 element (code file), you MUST perform DEEP ANALYSIS:
 1. **Identify ALL functions/exports** in the file - list each function name and its purpose
@@ -156,12 +156,12 @@ For each D2 element (code file), you MUST perform DEEP ANALYSIS:
 
 **EXAMPLE OF GOOD D2 ANALYSIS:**
 \`\`\`
-File: auth/login.ts
+File: auth/login.ts (ID: f023058a)
 Functions found:
-- validateCredentials(email, password): Validates user login → MAPS TO D1 "User Authentication" (uuid1)
-- generateToken(userId): Creates JWT → MAPS TO D1 "Session Management" (uuid2)  
-- refreshToken(token): Extends session → MAPS TO D1 "Session Management" (uuid2)
-MISSING: No password reset function → GAP for D1 "Password Reset" (uuid3)
+- validateCredentials(email, password): Validates user login → MAPS TO concept "Authentication & Authorization"
+- generateToken(userId): Creates JWT → MAPS TO concept "Session Management"  
+- refreshToken(token): Extends session → MAPS TO concept "Session Management"
+MISSING: No password reset function → GAP for D1 "Password Reset"
 \`\`\`
 
 **EXAMPLE OF BAD D2 ANALYSIS (DO NOT DO THIS):**
@@ -169,12 +169,36 @@ MISSING: No password reset function → GAP for D1 "Password Reset" (uuid3)
 File: auth/login.ts - handles authentication. MAPS TO: D1 Auth requirements.
 \`\`\`
 
+## ⚠️ MANDATORY D2 LINKING - FAILURE = ORPHANS ⚠️
+
+After analyzing EACH D2 element, you MUST IMMEDIATELY call link_concepts:
+
+\`\`\`json
+{
+  "tool": "link_concepts",
+  "params": {
+    "sourceNodeId": "f023058a",   // D2 element 8-char prefix
+    "targetNodeId": "Authentication & Authorization",  // concept label OR concept ID
+    "edgeType": "implements"
+  }
+}
+\`\`\`
+
+**CRITICAL RULES:**
+- Every D2 file that does ANYTHING useful MUST have at least 1 edge to a concept
+- Use the D2 element's 8-character UUID prefix (shown in each batch, e.g., "f6c1e03e")
+- Use the concept's label (e.g., "User Management") or its 8-char ID prefix
+- edgeType should be "implements" for D2→Concept links
+- If a D2 file has NO edges, it becomes an ORPHAN and the audit is incomplete
+
 **MANDATORY ACTIONS FOR EACH D2 BATCH:**
 - Call request_next_batch(dataset="dataset2", startIndex=N)
-- For EACH D2 element, call **link_concepts** to connect it to matching concepts:
-  \`link_concepts(sourceNodeId="<D2 8-char UUID prefix>", targetNodeId="<concept node ID>", edgeType="implements")\`
+- For EACH D2 element in the batch:
+  1. Analyze it deeply (list functions, map to D1)
+  2. IMMEDIATELY call link_concepts to connect it to concepts
+  3. If it maps to multiple concepts, call link_concepts multiple times
 - Write detailed blackboard entry with function-level mappings
-- Continue until all D2 read
+- Continue until all D2 read AND linked
 
 ### PHASE 3: Synthesis
 - Record tesseract cells for coverage quality
@@ -1139,9 +1163,15 @@ async function buildContextSummary(
   
   const nodeCount = (nodes || []).length;
   const edgeCount = (edges || []).length;
-  const d1Nodes = (nodes || []).filter((n: any) => n.source_dataset === "dataset1").length;
-  const d2Nodes = (nodes || []).filter((n: any) => n.source_dataset === "dataset2").length;
-  const sharedNodes = (nodes || []).filter((n: any) => n.source_dataset === "both").length;
+  const d1Nodes = (nodes || []).filter((n: any) => n.node_type === "d1_element").length;
+  const d2Nodes = (nodes || []).filter((n: any) => n.node_type === "d2_element").length;
+  const conceptNodes = (nodes || []).filter((n: any) => n.node_type === "concept" || n.node_type?.includes("concept")).length;
+  
+  // Calculate D2 orphans - D2 nodes with NO outgoing "implements" edges
+  const implementsEdges = (edges || []).filter((e: any) => e.edge_type === "implements");
+  const linkedD2Ids = new Set(implementsEdges.map((e: any) => e.source_node_id));
+  const d2NodesList = (nodes || []).filter((n: any) => n.node_type === "d2_element");
+  const orphanD2Count = d2NodesList.filter((n: any) => !linkedD2Ids.has(n.id)).length;
   
   // Blackboard usage warning
   let blackboardWarning = "";
@@ -1151,15 +1181,26 @@ You MUST write to the blackboard more frequently. The blackboard is your checkpo
 Call write_blackboard NOW with your current findings before proceeding with other tools!`;
   }
   
+  // D2 orphan warning - CRITICAL
+  let orphanWarning = "";
+  if (d2Nodes > 0 && orphanD2Count > 0) {
+    orphanWarning = `\n\n🚨 CRITICAL ORPHAN WARNING 🚨
+D2 Elements with NO edges: ${orphanD2Count}/${d2Nodes}
+You MUST call link_concepts for each unlinked D2 element!
+Use: link_concepts(sourceNodeId="<D2 8-char prefix>", targetNodeId="<concept label>", edgeType="implements")`;
+  }
+  
   return `## CURRENT STATE (Iteration ${iteration}, Phase: ${currentPhase})
 
 ### Knowledge Graph
-- Total Nodes: ${nodeCount} (D1: ${d1Nodes}, D2: ${d2Nodes}, Shared: ${sharedNodes})
-- Total Edges: ${edgeCount}
+- Total Nodes: ${nodeCount} (D1 elements: ${d1Nodes}, D2 elements: ${d2Nodes}, Concepts: ${conceptNodes})
+- Total Edges: ${edgeCount} (Implements edges: ${implementsEdges.length})
+- **D2 Orphans (UNLINKED)**: ${orphanD2Count}/${d2Nodes} ${orphanD2Count > 0 ? "⚠️ NEEDS LINKING!" : "✓"}
 
 ### Blackboard Entries: ${allBlackboard.length} total
 ${blackboardSummary}
 ${blackboardWarning}
+${orphanWarning}
 
 ### Your Next Steps
 Based on phase ${currentPhase}, you should:

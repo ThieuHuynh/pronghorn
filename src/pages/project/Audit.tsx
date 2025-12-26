@@ -269,18 +269,27 @@ export default function Audit() {
           },
         });
         
-        // Detect timeout vs real error
+        // Detect timeout vs real error - Edge Functions timeout after ~60s but continue running
         const isTimeout = orchestratorError?.message?.includes('timeout') || 
                           orchestratorError?.message?.includes('connection') ||
-                          orchestratorError?.name === 'FunctionsRelayError';
+                          orchestratorError?.message?.includes('body stream') ||
+                          orchestratorError?.message?.includes('EOF') ||
+                          orchestratorError?.message?.includes('network') ||
+                          orchestratorError?.message?.includes('Failed to send') ||
+                          orchestratorError?.message?.includes('aborted') ||
+                          orchestratorError?.name === 'FunctionsRelayError' ||
+                          orchestratorError?.name === 'FunctionsFetchError';
         
         if (orchestratorError && !isTimeout) {
           console.error("Orchestrator error:", orchestratorError);
           toast.error("Failed to start audit orchestrator");
         } else if (data?.error) {
           toast.error("Orchestrator error: " + data.error);
-        } else {
+        } else if (!isTimeout) {
           toast.success("Audit orchestrator started");
+        } else {
+          // Timeout is expected - function continues in background
+          console.log("Edge function timed out but continues running in background");
         }
       }
     } catch (err) {
