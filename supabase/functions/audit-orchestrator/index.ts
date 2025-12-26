@@ -26,6 +26,7 @@ interface AuditRequest {
   sessionId: string;
   projectId: string;
   shareToken: string;
+  resume?: boolean; // Flag to indicate resuming a stale session
 }
 
 interface ProblemShape {
@@ -161,9 +162,18 @@ ${problemShape.analysisSteps.map(s => `${s.step}. ${s.label}`).join("\n")}
 
 1. **ALWAYS call at least one tool** in every response
 2. **BATCH tool calls** - call up to 10 tools at once for efficiency  
-3. **write_blackboard frequently** - it's your working memory
+3. **write_blackboard EVERY iteration** - it's your working memory AND your resume checkpoint
 4. **ALWAYS include sourceElementIds** when creating concept nodes
 5. **Set continueAnalysis=false** ONLY after calling finalize_venn
+
+## BLACKBOARD REQUIREMENTS (CRITICAL!)
+You MUST call write_blackboard:
+- At the START of each iteration with your current plan (entryType="thinking")
+- After processing each batch of elements with your findings (entryType="batch_findings")
+- When you discover gaps or orphans (entryType="finding")
+- Before finalize_venn with your synthesis (entryType="synthesis")
+
+The blackboard is your ONLY persistent memory. If the analysis is interrupted and resumes, we will use the blackboard to restore context. Write frequently!
 
 ## RESPONSE FORMAT
 
@@ -1037,7 +1047,8 @@ async function buildContextSummary(
     p_token: shareToken,
   });
   
-  const recentBlackboard = (blackboard || []).slice(-10);
+  const allBlackboard = blackboard || [];
+  const recentBlackboard = allBlackboard.slice(-10);
   const blackboardSummary = recentBlackboard.length > 0
     ? recentBlackboard.map((e: any) => `[${e.entry_type}] ${e.content.slice(0, 200)}`).join("\n")
     : "(empty - use write_blackboard to record your thoughts!)";
@@ -1048,23 +1059,107 @@ async function buildContextSummary(
   const d2Nodes = (nodes || []).filter((n: any) => n.source_dataset === "dataset2").length;
   const sharedNodes = (nodes || []).filter((n: any) => n.source_dataset === "both").length;
   
+  // Blackboard usage warning
+  let blackboardWarning = "";
+  if (iteration > 3 && allBlackboard.length < Math.floor(iteration / 2)) {
+    blackboardWarning = `\n\n⚠️ WARNING: You have only ${allBlackboard.length} blackboard entries after ${iteration} iterations!
+You MUST write to the blackboard more frequently. The blackboard is your checkpoint - if the analysis restarts, we lose progress without it.
+Call write_blackboard NOW with your current findings before proceeding with other tools!`;
+  }
+  
   return `## CURRENT STATE (Iteration ${iteration}, Phase: ${currentPhase})
 
 ### Knowledge Graph
 - Total Nodes: ${nodeCount} (D1: ${d1Nodes}, D2: ${d2Nodes}, Shared: ${sharedNodes})
 - Total Edges: ${edgeCount}
 
-### Recent Blackboard Entries
+### Blackboard Entries: ${allBlackboard.length} total
 ${blackboardSummary}
+${blackboardWarning}
 
 ### Your Next Steps
 Based on phase ${currentPhase}, you should:
-${currentPhase === "graph_building" ? "- Read more dataset items\n- Create concept nodes\n- Link related concepts" : ""}
+${currentPhase === "graph_building" ? "- Read more dataset items\n- Create concept nodes\n- Link related concepts\n- Write findings to blackboard" : ""}
 ${currentPhase === "gap_analysis" ? "- Query graph for gaps (dataset1_only)\n- Query graph for orphans (dataset2_only)\n- Record findings to blackboard" : ""}
-${currentPhase === "deep_analysis" ? "- Record tesseract cells for D1 elements\n- Assess coverage quality\n- Write conclusions" : ""}
+${currentPhase === "deep_analysis" ? "- Record tesseract cells for D1 elements\n- Assess coverage quality\n- Write conclusions to blackboard" : ""}
 ${currentPhase === "synthesis" ? "- Review blackboard findings\n- Call finalize_venn with your results\n- Set continueAnalysis=false" : ""}
 
 CALL YOUR TOOLS NOW!`;
+}
+
+// ==================== BUILD RESUME CONTEXT ====================
+
+async function buildResumeContext(
+  supabase: any,
+  sessionId: string,
+  shareToken: string,
+  session: any,
+  problemShape: ProblemShape
+): Promise<string> {
+  // Get all blackboard entries for context
+  const { data: blackboard } = await supabase.rpc("get_audit_blackboard_with_token", {
+    p_session_id: sessionId,
+    p_token: shareToken,
+  });
+  
+  // Get graph stats
+  const { data: nodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+    p_session_id: sessionId,
+    p_token: shareToken,
+  });
+  
+  const { data: edges } = await supabase.rpc("get_audit_graph_edges_with_token", {
+    p_session_id: sessionId,
+    p_token: shareToken,
+  });
+  
+  const allBlackboard = blackboard || [];
+  const nodeCount = (nodes || []).length;
+  const edgeCount = (edges || []).length;
+  const d1Nodes = (nodes || []).filter((n: any) => n.source_dataset === "dataset1").length;
+  const d2Nodes = (nodes || []).filter((n: any) => n.source_dataset === "dataset2").length;
+  const sharedNodes = (nodes || []).filter((n: any) => n.source_dataset === "both").length;
+  
+  // Build summary of blackboard entries by type
+  const entryTypes: Record<string, string[]> = {};
+  for (const entry of allBlackboard) {
+    if (!entryTypes[entry.entry_type]) {
+      entryTypes[entry.entry_type] = [];
+    }
+    entryTypes[entry.entry_type].push(entry.content.slice(0, 200));
+  }
+  
+  const blackboardSummary = Object.entries(entryTypes).map(([type, entries]) => 
+    `### ${type} (${entries.length} entries)\n${entries.slice(-3).map(e => `- ${e}`).join("\n")}`
+  ).join("\n\n");
+
+  return `## RESUMING ANALYSIS
+
+The previous analysis session was interrupted. You are resuming from where it left off.
+
+### Session State
+- **Current Iteration**: ${session.current_iteration || 0}
+- **Current Phase**: ${session.phase || "graph_building"}
+- **Max Iterations**: ${session.max_iterations}
+
+### Datasets
+- **Dataset 1** (${problemShape.dataset1.type}): ${problemShape.dataset1.count} elements
+- **Dataset 2** (${problemShape.dataset2.type}): ${problemShape.dataset2.count} elements
+
+### Knowledge Graph Progress
+- Total Nodes: ${nodeCount} (D1: ${d1Nodes}, D2: ${d2Nodes}, Shared: ${sharedNodes})
+- Total Edges: ${edgeCount}
+
+### Blackboard Memory (${allBlackboard.length} entries)
+${blackboardSummary || "(No blackboard entries yet)"}
+
+### Instructions
+1. Review the blackboard to understand what work has been completed
+2. Continue from where the analysis left off
+3. Do NOT repeat work that's already recorded in the blackboard
+4. Continue with the ${session.phase || "graph_building"} phase
+
+CALL YOUR TOOLS NOW to continue the analysis!`;
 }
 
 // ==================== MAIN HANDLER ====================
@@ -1083,8 +1178,8 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
-    const { sessionId, projectId, shareToken }: AuditRequest = await req.json();
-    console.log("Starting audit orchestrator v3:", { sessionId, projectId });
+    const { sessionId, projectId, shareToken, resume = false }: AuditRequest = await req.json();
+    console.log("Starting audit orchestrator v3:", { sessionId, projectId, resume });
 
     await supabase.rpc("set_share_token", { token: shareToken });
 
@@ -1177,9 +1272,9 @@ serve(async (req) => {
     // ==================== MAIN ORCHESTRATION LOOP ====================
     
     const MAX_ITERATIONS = session.max_iterations || 100;
-    let iteration = 0;
+    let iteration = resume ? (session.current_iteration || 0) : 0;
     let analysisComplete = false;
-    let currentPhase = "graph_building";
+    let currentPhase = resume ? (session.phase || "graph_building") : "graph_building";
     let previousPhase = "initialization";
     let consecutiveEmptyToolCalls = 0;
 
@@ -1215,6 +1310,17 @@ START NOW - call your tools!`;
     const claudeMessages: ClaudeMessage[] = [];
     let lastToolUseId: string | null = null;
 
+    // If resuming, build resume context instead of initial message
+    if (resume) {
+      console.log(`Resuming from iteration ${iteration}, phase ${currentPhase}`);
+      await logActivity(null, "resume", `Resuming Analysis`, 
+        `Continuing from iteration ${iteration}, phase: ${currentPhase}`,
+        { iteration, phase: currentPhase, resumed: true });
+      
+      const resumeContext = await buildResumeContext(supabase, sessionId, shareToken, session, problemShape);
+      claudeMessages.push({ role: "user", content: resumeContext });
+    }
+
     while (iteration < MAX_ITERATIONS && !analysisComplete) {
       iteration++;
       console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS}, Phase: ${currentPhase} ===`);
@@ -1244,8 +1350,8 @@ START NOW - call your tools!`;
       // BUILD THE USER MESSAGE FOR THIS ITERATION
       let userMessageContent: string;
       
-      if (iteration === 1) {
-        // First iteration: send the initial task message
+      if (claudeMessages.length === 0) {
+        // First iteration (new session) or first iteration after resume: send the initial/resume message
         userMessageContent = initialUserMessage;
         claudeMessages.push({ role: "user", content: userMessageContent });
       }
@@ -1419,7 +1525,7 @@ START NOW - call your tools!`;
       if (response.thinking) {
         await logActivity("orchestrator", "thinking", 
           `${response.perspective ? `[${response.perspective.toUpperCase()}] ` : ""}Orchestrator Thinking`, 
-          response.thinking);
+          response.thinking, { iteration, phase: currentPhase });
       }
 
       // EXECUTE TOOL CALLS
@@ -1467,7 +1573,7 @@ CALL YOUR TOOLS NOW!`;
         const parallelResults = await Promise.all(
           parallelCalls.map(async (toolCall) => {
             await logActivity("orchestrator", "tool_call", `Tool: ${toolCall.tool}`, 
-              JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool });
+              JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool, iteration, phase: currentPhase });
             
             const result = await executeTool(toolCall.tool, toolCall.params, toolContext);
             return { toolCall, result };
@@ -1478,7 +1584,7 @@ CALL YOUR TOOLS NOW!`;
         const sequentialResults: Array<{ toolCall: ToolCall; result: { success: boolean; result?: unknown; error?: string } }> = [];
         for (const toolCall of sequentialCalls) {
           await logActivity("orchestrator", "tool_call", `Tool: ${toolCall.tool}`, 
-            JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool });
+            JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool, iteration, phase: currentPhase });
           
           const result = await executeTool(toolCall.tool, toolCall.params, toolContext);
           sequentialResults.push({ toolCall, result });
@@ -1493,7 +1599,7 @@ CALL YOUR TOOLS NOW!`;
             : `Error: ${result.error}`;
           
           await logActivity("orchestrator", result.success ? "success" : "error", 
-            `${toolCall.tool}: ${result.success ? "Success" : "Failed"}`, resultSummary);
+            `${toolCall.tool}: ${result.success ? "Success" : "Failed"}`, resultSummary, { iteration, phase: currentPhase });
           
           if (result.success) {
             successCount++;

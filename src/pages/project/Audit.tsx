@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Network,
   Brain,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -50,6 +51,9 @@ export default function Audit() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+  const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const lastResumeAttemptRef = useRef<number>(0);
   
   const {
     session,
@@ -95,6 +99,90 @@ export default function Audit() {
     
     loadSessions();
   }, [projectId, shareToken, selectedSessionId]);
+
+  // Resume orchestrator function
+  const resumeOrchestrator = useCallback(async (sessionToResume: AuditSession) => {
+    if (isResuming) return;
+    
+    // Prevent rapid re-attempts (wait at least 30s between attempts)
+    const now = Date.now();
+    if (now - lastResumeAttemptRef.current < 30000) {
+      console.log("Skipping resume - too soon since last attempt");
+      return;
+    }
+    lastResumeAttemptRef.current = now;
+    
+    setIsResuming(true);
+    console.log("Resuming stale audit session:", sessionToResume.id);
+    
+    try {
+      const { error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
+        body: {
+          sessionId: sessionToResume.id,
+          projectId,
+          shareToken,
+          resume: true,
+        },
+      });
+      
+      if (orchestratorError) {
+        console.error("Resume orchestrator error:", orchestratorError);
+        toast.error("Failed to resume audit");
+      } else {
+        toast.success("Audit resumed");
+      }
+    } catch (err) {
+      console.error("Resume failed:", err);
+      toast.error("Failed to resume audit");
+    } finally {
+      setIsResuming(false);
+    }
+  }, [projectId, shareToken, isResuming]);
+
+  // Monitor for stale "running" sessions and auto-resume
+  useEffect(() => {
+    if (!session || !shareToken || !projectId) return;
+    
+    // Only monitor running sessions
+    const isActiveSession = session.status === "running" || session.status === "agents_active" || session.status === "analyzing_shape";
+    if (!isActiveSession) {
+      if (staleCheckRef.current) {
+        clearInterval(staleCheckRef.current);
+        staleCheckRef.current = null;
+      }
+      return;
+    }
+
+    const checkForStaleSession = () => {
+      if (isResuming) return;
+      
+      const updatedAt = new Date(session.updated_at);
+      const staleness = Date.now() - updatedAt.getTime();
+      
+      // If session hasn't been updated in 70 seconds but still "running", it's likely timed out
+      if (staleness > 70000) {
+        console.log(`Session appears stale (${Math.round(staleness/1000)}s since last update), auto-resuming...`);
+        resumeOrchestrator(session);
+      }
+    };
+
+    // Check immediately and then every 15 seconds
+    checkForStaleSession();
+    staleCheckRef.current = setInterval(checkForStaleSession, 15000);
+
+    return () => {
+      if (staleCheckRef.current) {
+        clearInterval(staleCheckRef.current);
+        staleCheckRef.current = null;
+      }
+    };
+  }, [session, projectId, shareToken, isResuming, resumeOrchestrator]);
+
+  // Manual resume handler
+  const handleManualResume = async () => {
+    if (!session) return;
+    await resumeOrchestrator(session);
+  };
 
   const handleStartAudit = async (config: AuditConfiguration) => {
     setIsStarting(true);
@@ -247,6 +335,20 @@ export default function Audit() {
                             Stop
                           </Button>
                         </>
+                      )}
+                      
+                      {/* Manual Resume Button for stale sessions */}
+                      {session && (session.status === "running" || session.status === "agents_active") && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleManualResume}
+                          disabled={isResuming}
+                          className="hidden sm:flex"
+                        >
+                          <RotateCcw className={`h-4 w-4 mr-2 ${isResuming ? "animate-spin" : ""}`} />
+                          {isResuming ? "Resuming..." : "Resume"}
+                        </Button>
                       )}
                     </>
                   )}

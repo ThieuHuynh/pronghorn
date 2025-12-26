@@ -153,8 +153,8 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
       const { data: edges } = await supabase.rpc("get_audit_graph_edges_with_token", { p_session_id: sid, p_token: shareToken });
       setGraphEdges((edges as AuditGraphEdge[]) || []);
 
-      // Load activity stream
-      const { data: activities } = await supabase.rpc("get_audit_activity_stream_with_token", { p_session_id: sid, p_token: shareToken, p_limit: 200 });
+      // Load activity stream (increased limit to support longer audits)
+      const { data: activities } = await supabase.rpc("get_audit_activity_stream_with_token", { p_session_id: sid, p_token: shareToken, p_limit: 1000 });
       setActivityStream((activities as AuditActivityEntry[]) || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
