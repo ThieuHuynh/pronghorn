@@ -10,12 +10,12 @@ export interface ToolDefinition {
 export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   {
     name: "read_dataset_item",
-    description: "Read the full content of a specific item from Dataset 1 or Dataset 2. Use this to get detailed information about a requirement, file, or artifact.",
+    description: "Read the full content of a specific item from Dataset 1 or Dataset 2. Use this to get detailed information about a requirement, file, or artifact. Accepts partial UUIDs (8-char prefix).",
     parameters: {
       type: "object",
       properties: {
-        dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset the item belongs to" },
-        itemId: { type: "string", description: "The UUID of the item to read" },
+        dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset: 'dataset1' or 'dataset2' (also accepts 1, 2, or 'dataset_1'/'dataset_2')" },
+        itemId: { type: "string", description: "The UUID or 8-char prefix of the item to read (e.g., 'a203ec4d')" },
       },
       required: ["dataset", "itemId"],
     },
@@ -83,11 +83,11 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   },
   {
     name: "create_concept",
-    description: "Create a new concept node in the knowledge graph. CRITICAL: You MUST specify which source artifacts this concept relates to.",
+    description: "Create a new concept node in the knowledge graph. CRITICAL: You MUST specify which source artifacts this concept relates to. Accepts partial UUIDs (8-char prefix) for sourceElementIds.",
     parameters: {
       type: "object",
       properties: {
-        label: { type: "string", description: "Short label for the concept" },
+        label: { type: "string", description: "Short label for the concept (also accepts 'name')" },
         description: { type: "string", description: "Detailed description of what this concept represents" },
         nodeType: { 
           type: "string", 
@@ -98,7 +98,7 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
         sourceElementIds: { 
           type: "array", 
           items: { type: "string" },
-          description: "REQUIRED: UUIDs of the source artifacts this concept represents" 
+          description: "REQUIRED: UUIDs or 8-char prefixes of the source artifacts this concept represents (e.g., ['a203ec4d', 'fb4f0382'])" 
         },
       },
       required: ["label", "description", "nodeType", "sourceDataset", "sourceElementIds"],
