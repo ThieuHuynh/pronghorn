@@ -118,13 +118,18 @@ function extractToolName(title: string): string | null {
 
 // Extract iteration number from activity title or metadata
 function extractIteration(activity: ActivityEntry): number | null {
-  // Check metadata first
-  if (activity.metadata?.iteration !== undefined) {
-    return Number(activity.metadata.iteration);
+  // Check metadata first (most reliable)
+  if (activity.metadata?.iteration !== undefined && activity.metadata.iteration !== null) {
+    const iter = Number(activity.metadata.iteration);
+    if (!isNaN(iter)) return iter;
   }
-  // Check title for "Iteration X" pattern
+  // Check title for "Iteration X" pattern (e.g., "LLM Request (Iteration 5)" or "Iteration 5")
   const match = activity.title.match(/Iteration\s+(\d+)/i);
-  return match ? parseInt(match[1], 10) : null;
+  if (match) {
+    const iter = parseInt(match[1], 10);
+    if (!isNaN(iter)) return iter;
+  }
+  return null;
 }
 
 // Extract phase from activity - look for "thinking" activities with "Phase: xxx" content
@@ -258,7 +263,7 @@ function CondensedIterationRow({
                   {summary.iteration}
                 </div>
                 {summary.phase && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap truncate max-w-[80px]">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
                     {summary.phase}
                   </Badge>
                 )}
@@ -329,20 +334,31 @@ export function AuditActivityStream({ activities, isLoading }: AuditActivityStre
   // Aggregate activities into iteration summaries
   const iterationSummaries = useMemo(() => {
     const summaryMap = new Map<number, IterationSummary>();
-    let currentPhase = 'INITIALIZATION';
+    let currentPhase = 'Initialization';
     let currentIteration = 0;
-
-    // Process activities in chronological order
+    
+    // First pass: find all explicitly-marked iterations to understand the range
     const sortedActivities = [...activities].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
+    
+    // Build a map of activity times to their explicit iterations (for better grouping)
+    const activityIterations = new Map<string, number>();
+    for (const activity of sortedActivities) {
+      const extracted = extractIteration(activity);
+      if (extracted !== null) {
+        activityIterations.set(activity.id, extracted);
+      }
+    }
 
     for (const activity of sortedActivities) {
-      // Extract or infer iteration
+      // Extract or infer iteration - use explicit if available, else inherit current
       const extractedIteration = extractIteration(activity);
       if (extractedIteration !== null) {
         currentIteration = extractedIteration;
       }
+      // Use current iteration for this activity
+      const activityIteration = extractedIteration ?? currentIteration;
 
       // Extract phase changes
       const extractedPhase = extractPhase(activity);
@@ -351,9 +367,9 @@ export function AuditActivityStream({ activities, isLoading }: AuditActivityStre
       }
 
       // Get or create summary for this iteration
-      if (!summaryMap.has(currentIteration)) {
-        summaryMap.set(currentIteration, {
-          iteration: currentIteration,
+      if (!summaryMap.has(activityIteration)) {
+        summaryMap.set(activityIteration, {
+          iteration: activityIteration,
           phase: currentPhase,
           startTime: new Date(activity.created_at),
           endTime: new Date(activity.created_at),
@@ -364,10 +380,13 @@ export function AuditActivityStream({ activities, isLoading }: AuditActivityStre
         });
       }
 
-      const summary = summaryMap.get(currentIteration)!;
+      const summary = summaryMap.get(activityIteration)!;
       summary.activities.push(activity);
       summary.endTime = new Date(activity.created_at);
-      summary.phase = currentPhase;
+      // Update phase if changed
+      if (extractedPhase) {
+        summary.phase = extractedPhase;
+      }
 
       // Categorize activity
       if (activity.activity_type === 'tool_call') {
@@ -378,7 +397,7 @@ export function AuditActivityStream({ activities, isLoading }: AuditActivityStre
         } else {
           summary.toolCalls.other++;
         }
-      } else if (activity.activity_type === 'llm_call') {
+      } else if (activity.activity_type === 'llm_call' || activity.activity_type === 'llm_request') {
         summary.llmCalls++;
       } else if (activity.activity_type === 'error' || activity.activity_type === 'failure') {
         summary.errors++;
