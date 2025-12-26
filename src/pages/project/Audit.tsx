@@ -77,6 +77,9 @@ export default function Audit() {
     updateSessionStatus,
     refreshSession,
     pruneOrphanNodes,
+    addGraphNodes,
+    addGraphEdges,
+    removeGraphNodes,
   } = useRealtimeAudit(projectId!, selectedSessionId);
 
   // Load all sessions for this project
@@ -348,7 +351,10 @@ export default function Audit() {
             shareToken: shareToken!,
             d1Elements,
             d2Elements,
-            onGraphUpdate: () => refreshSession(newSession.id), // Refresh graph after each step
+            // Optimistic graph updates
+            onNodesAdded: (nodes) => addGraphNodes(nodes),
+            onEdgesAdded: (edges) => addGraphEdges(edges),
+            onNodesRemoved: (nodeIds) => removeGraphNodes(nodeIds),
           });
           
           // Refresh session data after pipeline completes

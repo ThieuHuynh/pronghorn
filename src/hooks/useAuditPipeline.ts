@@ -59,13 +59,37 @@ interface Element {
   category?: string;
 }
 
+interface GraphNode {
+  id: string;
+  label: string;
+  description: string;
+  node_type: string;
+  source_dataset: string;
+  source_element_ids: string[];
+  color: string;
+  size: number;
+  metadata: Record<string, any>;
+}
+
+interface GraphEdge {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  edge_type: string;
+  label: string;
+  weight: number;
+  metadata: Record<string, any>;
+}
+
 interface PipelineInput {
   sessionId: string;
   projectId: string;
   shareToken: string;
   d1Elements: Element[];
   d2Elements: Element[];
-  onGraphUpdate?: () => void; // Callback to refresh graph data after updates
+  onNodesAdded?: (nodes: GraphNode[]) => void; // Optimistic: add nodes
+  onEdgesAdded?: (edges: GraphEdge[]) => void; // Optimistic: add edges
+  onNodesRemoved?: (nodeIds: string[]) => void; // Optimistic: remove nodes
 }
 
 const BASE_URL = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1";
@@ -208,7 +232,7 @@ export function useAuditPipeline() {
     setError(null);
     abortRef.current = false;
 
-    const { sessionId, projectId, shareToken, d1Elements, d2Elements, onGraphUpdate } = input;
+    const { sessionId, projectId, shareToken, d1Elements, d2Elements, onNodesAdded, onEdgesAdded, onNodesRemoved } = input;
 
     // Initialize steps
     const initialSteps: PipelineStep[] = [
@@ -229,16 +253,20 @@ export function useAuditPipeline() {
     let unmergedD2Concepts: Concept[] = [];
 
     try {
+      // Track created nodes for optimistic updates
+      const createdNodes: GraphNode[] = [];
+      const createdEdges: GraphEdge[] = [];
+      
       // ========================================
       // PHASE 0: Create D1 and D2 nodes immediately
       // ========================================
       setProgress({ phase: "creating_nodes", message: `Creating ${d1Elements.length + d2Elements.length} nodes...`, progress: 5 });
       updateStep("nodes", { status: "running", message: "Creating nodes...", startedAt: new Date() });
 
-      // Create all D1 nodes - log EVERY node, no truncation
+      // Create all D1 nodes with optimistic updates
       for (let i = 0; i < d1Elements.length; i++) {
         const element = d1Elements[i];
-        const { error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
+        const { data: nodeData, error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
@@ -251,14 +279,29 @@ export function useAuditPipeline() {
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        // Log EVERY node created, no skipping
+        
+        if (nodeData?.id && !error) {
+          const newNode: GraphNode = {
+            id: nodeData.id,
+            label: element.label,
+            description: (element.content || "").slice(0, 2000),
+            node_type: "d1_element",
+            source_dataset: "dataset1",
+            source_element_ids: [element.id],
+            color: "#3b82f6",
+            size: 15,
+            metadata: { category: element.category || "unknown" },
+          };
+          createdNodes.push(newNode);
+          onNodesAdded?.([newNode]); // Optimistic update
+        }
         addStepDetail("nodes", `Created D1 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
       }
 
-      // Create all D2 nodes - log EVERY node, no truncation
+      // Create all D2 nodes with optimistic updates
       for (let i = 0; i < d2Elements.length; i++) {
         const element = d2Elements[i];
-        const { error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
+        const { data: nodeData, error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
@@ -271,12 +314,26 @@ export function useAuditPipeline() {
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        // Log EVERY node created, no skipping
+        
+        if (nodeData?.id && !error) {
+          const newNode: GraphNode = {
+            id: nodeData.id,
+            label: element.label,
+            description: (element.content || "").slice(0, 2000),
+            node_type: "d2_element",
+            source_dataset: "dataset2",
+            source_element_ids: [element.id],
+            color: "#22c55e",
+            size: 15,
+            metadata: { category: element.category || "unknown" },
+          };
+          createdNodes.push(newNode);
+          onNodesAdded?.([newNode]); // Optimistic update
+        }
         addStepDetail("nodes", `Created D2 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
       }
 
       updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
-      onGraphUpdate?.(); // Refresh graph to show new D1/D2 nodes
 
       // Update session status
       await supabase.rpc("update_audit_session_with_token", {
@@ -453,7 +510,7 @@ export function useAuditPipeline() {
         p_token: shareToken,
       });
       
-      // Create D1 concept nodes and link to D1 elements
+      // Create D1 concept nodes and link to D1 elements - use createdNodes for lookups
       for (const concept of d1Concepts) {
         const { data: d1ConceptNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
@@ -470,11 +527,28 @@ export function useAuditPipeline() {
         });
         
         if (d1ConceptNode?.id) {
+          // Optimistic update for concept node
+          const newConceptNode: GraphNode = {
+            id: d1ConceptNode.id,
+            label: concept.label,
+            description: concept.description,
+            node_type: "concept",
+            source_dataset: "dataset1",
+            source_element_ids: concept.elementIds,
+            color: "#60a5fa",
+            size: 20,
+            metadata: { source: "d1", premerge: true },
+          };
+          createdNodes.push(newConceptNode);
+          onNodesAdded?.([newConceptNode]);
+          
           // Create edges from D1 elements to this concept
           for (const elId of concept.elementIds) {
-            const elementNode = nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
+            // Use createdNodes first, fall back to DB nodes
+            const elementNode = createdNodes.find(n => n.source_element_ids?.includes(elId)) 
+              || nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
             if (elementNode) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
+              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_source_node_id: elementNode.id,
@@ -485,6 +559,19 @@ export function useAuditPipeline() {
                 p_created_by_agent: "pipeline",
                 p_metadata: { premerge: true },
               });
+              if (edgeData?.id) {
+                const newEdge: GraphEdge = {
+                  id: edgeData.id,
+                  source_node_id: elementNode.id,
+                  target_node_id: d1ConceptNode.id,
+                  edge_type: "defines",
+                  label: "defines",
+                  weight: 1.0,
+                  metadata: { premerge: true },
+                };
+                createdEdges.push(newEdge);
+                onEdgesAdded?.([newEdge]);
+              }
             }
           }
           addStepDetail("d1", `Added concept to graph: ${concept.label} (${concept.elementIds.length} links)`);
@@ -510,11 +597,27 @@ export function useAuditPipeline() {
         });
         
         if (d2ConceptNode?.id) {
+          // Optimistic update for concept node
+          const newConceptNode: GraphNode = {
+            id: d2ConceptNode.id,
+            label: concept.label,
+            description: concept.description,
+            node_type: "concept",
+            source_dataset: "dataset2",
+            source_element_ids: concept.elementIds,
+            color: "#4ade80",
+            size: 20,
+            metadata: { source: "d2", premerge: true },
+          };
+          createdNodes.push(newConceptNode);
+          onNodesAdded?.([newConceptNode]);
+          
           // Create edges from D2 elements to this concept
           for (const elId of concept.elementIds) {
-            const elementNode = nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
+            const elementNode = createdNodes.find(n => n.source_element_ids?.includes(elId)) 
+              || nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
             if (elementNode) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
+              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_source_node_id: elementNode.id,
@@ -525,14 +628,24 @@ export function useAuditPipeline() {
                 p_created_by_agent: "pipeline",
                 p_metadata: { premerge: true },
               });
+              if (edgeData?.id) {
+                const newEdge: GraphEdge = {
+                  id: edgeData.id,
+                  source_node_id: elementNode.id,
+                  target_node_id: d2ConceptNode.id,
+                  edge_type: "implements",
+                  label: "implements",
+                  weight: 1.0,
+                  metadata: { premerge: true },
+                };
+                createdEdges.push(newEdge);
+                onEdgesAdded?.([newEdge]);
+              }
             }
           }
           addStepDetail("d2", `Added concept to graph: ${concept.label} (${concept.elementIds.length} links)`);
         }
       }
-      
-      // Refresh graph after adding all D1/D2 concept nodes and edges
-      onGraphUpdate?.();
 
       setProgress({ 
         phase: "merging_concepts", 
@@ -621,11 +734,23 @@ export function useAuditPipeline() {
       addStepDetail("graph", `Found ${premergeConcepts.length} pre-merge concepts to refactor`);
       
       // Delete pre-merge concept nodes (edges will be orphaned but new merged edges replace them)
+      const removedNodeIds: string[] = [];
       for (const node of premergeConcepts) {
         await supabase.rpc("delete_audit_graph_node_with_token", {
           p_node_id: node.id,
           p_token: shareToken,
         });
+        removedNodeIds.push(node.id);
+      }
+      // Optimistic removal
+      if (removedNodeIds.length > 0) {
+        onNodesRemoved?.(removedNodeIds);
+        // Also update local tracking
+        for (let i = createdNodes.length - 1; i >= 0; i--) {
+          if (removedNodeIds.includes(createdNodes[i].id)) {
+            createdNodes.splice(i, 1);
+          }
+        }
       }
       addStepDetail("graph", `Deleted ${premergeConcepts.length} pre-merge concept nodes`);
 
@@ -683,10 +808,26 @@ export function useAuditPipeline() {
         });
 
         if (conceptNode?.id) {
+          // Optimistic update for merged concept node
+          const newMergedNode: GraphNode = {
+            id: conceptNode.id,
+            label: concept.mergedLabel,
+            description: concept.mergedDescription,
+            node_type: "concept",
+            source_dataset: "both",
+            source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
+            color: "#a855f7",
+            size: 25,
+            metadata: { merged: true },
+          };
+          createdNodes.push(newMergedNode);
+          onNodesAdded?.([newMergedNode]);
+          
           for (const d1Id of concept.d1Ids) {
-            const d1Node = elementNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
+            const d1Node = createdNodes.find(n => n.source_element_ids?.includes(d1Id)) 
+              || elementNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
             if (d1Node) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
+              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_source_node_id: d1Node.id,
@@ -697,12 +838,25 @@ export function useAuditPipeline() {
                 p_created_by_agent: "pipeline",
                 p_metadata: { merged: true },
               });
+              if (edgeData?.id) {
+                const newEdge: GraphEdge = {
+                  id: edgeData.id,
+                  source_node_id: d1Node.id,
+                  target_node_id: conceptNode.id,
+                  edge_type: "defines",
+                  label: "defines",
+                  weight: 1.0,
+                  metadata: { merged: true },
+                };
+                onEdgesAdded?.([newEdge]);
+              }
             }
           }
           for (const d2Id of concept.d2Ids) {
-            const d2Node = elementNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
+            const d2Node = createdNodes.find(n => n.source_element_ids?.includes(d2Id)) 
+              || elementNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
             if (d2Node) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
+              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_source_node_id: d2Node.id,
@@ -713,6 +867,18 @@ export function useAuditPipeline() {
                 p_created_by_agent: "pipeline",
                 p_metadata: { merged: true },
               });
+              if (edgeData?.id) {
+                const newEdge: GraphEdge = {
+                  id: edgeData.id,
+                  source_node_id: d2Node.id,
+                  target_node_id: conceptNode.id,
+                  edge_type: "implements",
+                  label: "implements",
+                  weight: 1.0,
+                  metadata: { merged: true },
+                };
+                onEdgesAdded?.([newEdge]);
+              }
             }
           }
         }
@@ -792,7 +958,7 @@ export function useAuditPipeline() {
       }
 
       updateStep("graph", { status: "completed", message: "Graph built", progress: 100, completedAt: new Date() });
-      onGraphUpdate?.(); // Refresh graph after merge/rebuild
+      // Note: graph was already updated optimistically during creation
 
       setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
 

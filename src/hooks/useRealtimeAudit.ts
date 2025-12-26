@@ -71,6 +71,10 @@ export interface UseRealtimeAuditReturn {
   writeTesseractCell: (cell: WriteTesseractCellParams) => Promise<void>;
   refreshSession: (sessionId: string) => Promise<void>;
   pruneOrphanNodes: (sessionId: string) => Promise<number>;
+  // Optimistic update functions for pipeline
+  addGraphNodes: (nodes: Partial<AuditGraphNode>[]) => void;
+  addGraphEdges: (edges: Partial<AuditGraphEdge>[]) => void;
+  removeGraphNodes: (nodeIds: string[]) => void;
 }
 
 interface CreateSessionParams {
@@ -283,5 +287,60 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
     return deletedCount;
   }, [shareToken, graphNodes, graphEdges]);
 
-  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes };
+  // Optimistic update functions for pipeline
+  const addGraphNodes = useCallback((nodes: Partial<AuditGraphNode>[]) => {
+    setGraphNodes((prev) => {
+      const newNodes = nodes.map(n => ({
+        id: n.id || `temp-${Date.now()}-${Math.random()}`,
+        session_id: n.session_id || "",
+        label: n.label || "",
+        description: n.description || null,
+        node_type: n.node_type || "concept",
+        source_dataset: n.source_dataset || null,
+        source_element_ids: n.source_element_ids || [],
+        created_by_agent: n.created_by_agent || "pipeline",
+        x_position: n.x_position || 0,
+        y_position: n.y_position || 0,
+        color: n.color || null,
+        size: n.size || 15,
+        metadata: n.metadata || {},
+        created_at: n.created_at || new Date().toISOString(),
+        updated_at: n.updated_at || new Date().toISOString(),
+      } as AuditGraphNode));
+      // Avoid duplicates by id
+      const existingIds = new Set(prev.map(n => n.id));
+      const uniqueNew = newNodes.filter(n => !existingIds.has(n.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const addGraphEdges = useCallback((edges: Partial<AuditGraphEdge>[]) => {
+    setGraphEdges((prev) => {
+      const newEdges = edges.map(e => ({
+        id: e.id || `temp-${Date.now()}-${Math.random()}`,
+        session_id: e.session_id || "",
+        source_node_id: e.source_node_id || "",
+        target_node_id: e.target_node_id || "",
+        label: e.label || null,
+        edge_type: e.edge_type || "defines",
+        weight: e.weight || 1,
+        created_by_agent: e.created_by_agent || "pipeline",
+        metadata: e.metadata || {},
+        created_at: e.created_at || new Date().toISOString(),
+      } as AuditGraphEdge));
+      // Avoid duplicates by id
+      const existingIds = new Set(prev.map(e => e.id));
+      const uniqueNew = newEdges.filter(e => !existingIds.has(e.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const removeGraphNodes = useCallback((nodeIds: string[]) => {
+    const nodeIdSet = new Set(nodeIds);
+    setGraphNodes((prev) => prev.filter((n) => !nodeIdSet.has(n.id)));
+    // Also remove edges connected to these nodes
+    setGraphEdges((prev) => prev.filter((e) => !nodeIdSet.has(e.source_node_id) && !nodeIdSet.has(e.target_node_id)));
+  }, []);
+
+  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes };
 }
