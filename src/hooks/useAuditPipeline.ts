@@ -373,7 +373,7 @@ export function useAuditPipeline() {
       updateStep("d1", { status: "running", message: `${d1TotalChars.toLocaleString()} chars in ${d1Batches.length} batch(es)`, startedAt: new Date() });
       updateStep("d2", { status: "running", message: `${d2TotalChars.toLocaleString()} chars in ${d2Batches.length} batch(es)`, startedAt: new Date() });
 
-      // Helper to extract concepts from a batch
+      // Helper to extract concepts from a batch - returns JSON directly (no SSE)
       const extractBatch = async (
         dataset: "d1" | "d2",
         batchElements: Element[],
@@ -382,6 +382,10 @@ export function useAuditPipeline() {
         stepId: string
       ): Promise<Concept[]> => {
         addStepDetail(stepId, `Batch ${batchIndex + 1}/${totalBatches}: ${batchElements.length} elements`);
+        updateStep(stepId, { 
+          message: `Batch ${batchIndex + 1}/${totalBatches}: Calling LLM...`, 
+          progress: Math.round((batchIndex / totalBatches) * 100)
+        });
         
         const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
           method: "POST",
@@ -392,65 +396,62 @@ export function useAuditPipeline() {
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`[${stepId}] Batch ${batchIndex + 1} HTTP error:`, response.status, errorText);
-          addStepDetail(stepId, `Batch ${batchIndex + 1} ERROR: ${errorText.slice(0, 100)}`);
-          return [];
+          throw new Error(`HTTP ${response.status}: ${errorText.slice(0, 200)}`);
         }
         
-        const concepts: Concept[] = [];
-        await streamSSE(
-          response,
-          (data) => {
-            updateStep(stepId, { 
-              message: `Batch ${batchIndex + 1}/${totalBatches}: ${data.message}`, 
-              progress: Math.round((batchIndex / totalBatches) * 100 + (data.progress / totalBatches))
-            });
-          },
-          (data) => {
-            // IMMEDIATELY add concept node to local graph as it streams in
-            if (data.label && data.elementIds) {
-              const conceptNode: LocalGraphNode = {
+        const result = await response.json();
+        
+        // Check for error in response
+        if (!result.success) {
+          const errMsg = result.error || "Unknown error from edge function";
+          console.error(`[${stepId}] Batch ${batchIndex + 1} error:`, errMsg);
+          throw new Error(errMsg);
+        }
+        
+        const concepts: Concept[] = result.concepts || [];
+        
+        // Add concept nodes to local graph
+        for (const concept of concepts) {
+          const conceptNode: LocalGraphNode = {
+            id: localId(),
+            label: concept.label,
+            description: concept.description || "",
+            node_type: "concept",
+            source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
+            source_element_ids: concept.elementIds,
+            color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+            size: 20,
+            metadata: { source: dataset, premerge: true },
+          };
+          localNodes.push(conceptNode);
+
+          // Create edges from element nodes to concept node
+          for (const elId of concept.elementIds) {
+            const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
+            if (elementNode) {
+              const edge: LocalGraphEdge = {
                 id: localId(),
-                label: data.label,
-                description: data.description || "",
-                node_type: "concept",
-                source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
-                source_element_ids: data.elementIds,
-                color: dataset === "d1" ? "#60a5fa" : "#4ade80",
-                size: 20,
-                metadata: { source: dataset, premerge: true },
+                source_node_id: elementNode.id,
+                target_node_id: conceptNode.id,
+                edge_type: dataset === "d1" ? "defines" : "implements",
+                label: dataset === "d1" ? "defines" : "implements",
+                weight: 1.0,
+                metadata: { premerge: true },
               };
-              localNodes.push(conceptNode);
-
-              // Create edges from element nodes to concept node
-              for (const elId of data.elementIds) {
-                const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
-                if (elementNode) {
-                  const edge: LocalGraphEdge = {
-                    id: localId(),
-                    source_node_id: elementNode.id,
-                    target_node_id: conceptNode.id,
-                    edge_type: dataset === "d1" ? "defines" : "implements",
-                    label: dataset === "d1" ? "defines" : "implements",
-                    weight: 1.0,
-                    metadata: { premerge: true },
-                  };
-                  localEdges.push(edge);
-                }
-              }
-
-              updateResults(); // Update graph immediately
-              addStepDetail(stepId, `Concept: ${data.label} (${data.elementIds?.length || 0} elements)`);
+              localEdges.push(edge);
             }
-          },
-          (data) => {
-            concepts.push(...(data.concepts || []));
-            addStepDetail(stepId, `Batch ${batchIndex + 1} complete: ${data.concepts?.length || 0} concepts`);
-          },
-          (err) => {
-            console.error(`[${stepId}] Batch ${batchIndex + 1} stream error:`, err);
-            addStepDetail(stepId, `Batch ${batchIndex + 1} stream error: ${err}`);
           }
-        );
+
+          addStepDetail(stepId, `Concept: ${concept.label} (${concept.elementIds?.length || 0} elements)`);
+        }
+
+        updateResults(); // Update graph
+        addStepDetail(stepId, `Batch ${batchIndex + 1} complete: ${concepts.length} concepts`);
+        updateStep(stepId, { 
+          message: `Batch ${batchIndex + 1}/${totalBatches}: ${concepts.length} concepts`, 
+          progress: Math.round(((batchIndex + 1) / totalBatches) * 100)
+        });
+        
         return concepts;
       };
 
