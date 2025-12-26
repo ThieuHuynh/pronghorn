@@ -63,6 +63,16 @@ const READ_TOOLS = ['read_dataset_item', 'query_knowledge_graph', 'read_blackboa
 const CREATE_TOOLS = ['create_concept', 'link_concepts'];
 const WRITE_TOOLS = ['write_blackboard', 'record_tesseract_cell'];
 
+// Phase display name mapping (fallback for older activities without phaseDisplayName)
+const PHASE_DISPLAY_NAMES: Record<string, string> = {
+  initialization: "Initialization",
+  graph_building: "Building Graph",
+  gap_analysis: "Gap Analysis",
+  deep_analysis: "Deep Analysis",
+  synthesis: "Synthesis",
+  completed: "Audit Complete",
+};
+
 const AGENT_COLORS: Record<string, string> = {
   security_analyst: "text-red-500",
   business_analyst: "text-blue-500",
@@ -125,11 +135,16 @@ function extractPhase(activity: ActivityEntry): string | null {
   }
   // Then check for phase_change activity titles (they now have nice names)
   if (activity.activity_type === 'phase_change') {
-    return activity.title;
+    // Don't return generic titles like "Audit Started"
+    const title = activity.title;
+    if (title !== 'Audit Started' && title !== 'Audit Complete') {
+      return title;
+    }
   }
-  // Fallback to raw phase from metadata
+  // Fallback to raw phase from metadata and convert to display name
   if (activity.metadata?.phase) {
-    return String(activity.metadata.phase);
+    const rawPhase = String(activity.metadata.phase);
+    return PHASE_DISPLAY_NAMES[rawPhase] || rawPhase;
   }
   return null;
 }
