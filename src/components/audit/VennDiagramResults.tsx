@@ -312,29 +312,27 @@ export function VennDiagramResults({
         </div>
       </CardHeader>
 
-      <CardContent className="p-0 flex-1 overflow-hidden">
-        <ScrollArea className="h-full max-h-[600px]">
-          <div className="divide-y">
-            {renderSection(
-              `Unique to ${dataset1Label}`,
-              result.unique_to_d1,
-              "unique_d1",
-              "bg-red-500/5"
-            )}
-            {renderSection(
-              "Aligned (Present in Both)",
-              result.aligned,
-              "aligned",
-              "bg-green-500/5"
-            )}
-            {renderSection(
-              `Unique to ${dataset2Label}`,
-              result.unique_to_d2,
-              "unique_d2",
-              "bg-blue-500/5"
-            )}
-          </div>
-        </ScrollArea>
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {renderSection(
+            `Unique to ${dataset1Label}`,
+            result.unique_to_d1,
+            "unique_d1",
+            "bg-red-500/5"
+          )}
+          {renderSection(
+            "Aligned (Present in Both)",
+            result.aligned,
+            "aligned",
+            "bg-green-500/5"
+          )}
+          {renderSection(
+            `Unique to ${dataset2Label}`,
+            result.unique_to_d2,
+            "unique_d2",
+            "bg-blue-500/5"
+          )}
+        </div>
       </CardContent>
     </Card>
   );
