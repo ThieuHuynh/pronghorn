@@ -942,22 +942,72 @@ serve(async (req) => {
             p_session_id: sessionId,
             p_token: shareToken,
           });
-          const labelToId = new Map((refreshedNodes || []).map((n: any) => [n.label.toLowerCase(), n.id]));
+          
+          // Build label-to-ID map with normalized labels
+          const labelToId = new Map<string, string>();
+          const allLabels: string[] = [];
+          for (const n of (refreshedNodes || [])) {
+            const normalizedLabel = n.label.toLowerCase().trim();
+            labelToId.set(normalizedLabel, n.id);
+            allLabels.push(normalizedLabel);
+          }
+          console.log(`Edge resolution: ${allLabels.length} nodes available for matching`);
 
-          for (const edge of response.proposedEdges || []) {
-            const sourceId = labelToId.get(edge.sourceNodeLabel?.toLowerCase());
-            const targetId = labelToId.get(edge.targetNodeLabel?.toLowerCase());
-            if (sourceId && targetId) {
-              await rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: sourceId,
-                p_target_node_id: targetId,
-                p_edge_type: edge.edgeType || "relates_to",
-                p_label: edge.label || null,
-                p_created_by_agent: agent.role,
-              });
+          // Helper for fuzzy label matching
+          const findNodeId = (label: string): string | undefined => {
+            if (!label) return undefined;
+            const normalized = label.toLowerCase().trim();
+            
+            // Exact match first
+            if (labelToId.has(normalized)) return labelToId.get(normalized);
+            
+            // Try partial match (label contains or is contained)
+            for (const [nodeLabel, nodeId] of labelToId.entries()) {
+              if (nodeLabel.includes(normalized) || normalized.includes(nodeLabel)) {
+                console.log(`Fuzzy match: "${label}" -> "${nodeLabel}"`);
+                return nodeId;
+              }
             }
+            
+            return undefined;
+          };
+
+          let edgesInserted = 0;
+          let edgesFailed = 0;
+          for (const edge of response.proposedEdges || []) {
+            // Support both camelCase and snake_case field names
+            const sourceLabel = edge.sourceNodeLabel || edge.source_node_label || edge.source;
+            const targetLabel = edge.targetNodeLabel || edge.target_node_label || edge.target;
+            
+            const sourceId = findNodeId(sourceLabel);
+            const targetId = findNodeId(targetLabel);
+            
+            if (sourceId && targetId) {
+              try {
+                await rpc("insert_audit_graph_edge_with_token", {
+                  p_session_id: sessionId,
+                  p_token: shareToken,
+                  p_source_node_id: sourceId,
+                  p_target_node_id: targetId,
+                  p_edge_type: edge.edgeType || edge.edge_type || "relates_to",
+                  p_label: edge.label || null,
+                  p_created_by_agent: agent.role,
+                });
+                edgesInserted++;
+                console.log(`Edge inserted: "${sourceLabel}" -> "${targetLabel}"`);
+              } catch (err) {
+                console.error(`Edge insertion failed: ${err}`);
+                edgesFailed++;
+              }
+            } else {
+              console.warn(`Edge skipped - labels not found: source="${sourceLabel}" (${sourceId ? 'found' : 'NOT FOUND'}), target="${targetLabel}" (${targetId ? 'found' : 'NOT FOUND'})`);
+              edgesFailed++;
+            }
+          }
+          
+          if (response.proposedEdges?.length > 0) {
+            await logActivity(agent.role, "edge_insert", `${agent.name} added ${edgesInserted} edges`, 
+              `Inserted: ${edgesInserted}, Failed: ${edgesFailed} (label mismatches or errors)`);
           }
 
           // Blackboard
