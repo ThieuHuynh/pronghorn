@@ -9,6 +9,7 @@ import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage"
 import { useRealtimeDatabases } from "@/hooks/useRealtimeDatabases";
 import { useRealtimeExternalDatabases } from "@/hooks/useRealtimeExternalDatabases";
 import { supabase } from "@/integrations/supabase/client";
+import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { DatabaseCard } from "@/components/deploy/DatabaseCard";
@@ -101,8 +102,11 @@ const Database = () => {
 
   if (tokenMissing) {
     return (
-      <div className="flex h-screen bg-background">
-        <TokenRecoveryMessage />
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex">
+          <TokenRecoveryMessage />
+        </div>
       </div>
     );
   }
@@ -110,32 +114,35 @@ const Database = () => {
   // If a database or external connection is selected for exploration, show the full explorer
   if (selectedDatabase || selectedExternalConnection) {
     return (
-      <div className="flex h-screen bg-background">
-        <ProjectSidebar 
-          projectId={projectId || ""} 
-          isOpen={isSidebarOpen} 
-          onOpenChange={setIsSidebarOpen} 
-        />
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {isMobile && (
-            <div className="border-b bg-background px-3 py-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSidebarOpen(true)}
-                className="h-8 w-8"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex h-[calc(100vh-4rem)]">
+          <ProjectSidebar 
+            projectId={projectId || ""} 
+            isOpen={isSidebarOpen} 
+            onOpenChange={setIsSidebarOpen} 
+          />
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
+            {isMobile && (
+              <div className="border-b bg-background px-3 py-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="h-8 w-8"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <div className="flex-1 min-h-0">
+              <DatabaseExplorer
+                database={selectedDatabase}
+                externalConnection={selectedExternalConnection}
+                shareToken={shareToken}
+                onBack={handleBackFromExplorer}
+              />
             </div>
-          )}
-          <div className="flex-1 min-h-0">
-            <DatabaseExplorer
-              database={selectedDatabase}
-              externalConnection={selectedExternalConnection}
-              shareToken={shareToken}
-              onBack={handleBackFromExplorer}
-            />
           </div>
         </div>
       </div>
@@ -143,8 +150,10 @@ const Database = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <ProjectSidebar 
+    <div className="min-h-screen bg-background">
+      <PrimaryNav />
+      <div className="flex h-[calc(100vh-4rem)]">
+        <ProjectSidebar
         projectId={projectId || ""} 
         isOpen={isSidebarOpen} 
         onOpenChange={setIsSidebarOpen} 
@@ -383,6 +392,7 @@ const Database = () => {
           shareToken={shareToken}
           onSuccess={handleExternalUpdate}
         />
+        </div>
       </div>
     </div>
   );

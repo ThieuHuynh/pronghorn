@@ -8,6 +8,7 @@ import { Cloud, Laptop, Server, Plus, RefreshCw, Settings } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDeployments } from "@/hooks/useRealtimeDeployments";
+import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import DeploymentCard from "@/components/deploy/DeploymentCard";
@@ -47,20 +48,25 @@ const Deploy = () => {
 
   if (tokenMissing) {
     return (
-      <div className="flex h-screen bg-background">
-        <TokenRecoveryMessage />
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex">
+          <TokenRecoveryMessage />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <ProjectSidebar 
-        projectId={projectId || ""} 
-        isOpen={isSidebarOpen} 
-        onOpenChange={setIsSidebarOpen} 
-      />
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="min-h-screen bg-background">
+      <PrimaryNav />
+      <div className="flex h-[calc(100vh-4rem)]">
+        <ProjectSidebar 
+          projectId={projectId || ""} 
+          isOpen={isSidebarOpen} 
+          onOpenChange={setIsSidebarOpen} 
+        />
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex-1 overflow-auto p-4 md:p-6">
           <ProjectPageHeader
             title="Deploy"
@@ -243,6 +249,7 @@ const Deploy = () => {
           defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
           onSuccess={handleUpdate}
         />
+        </div>
       </div>
     </div>
   );
