@@ -266,8 +266,8 @@ export function TesseractVisualizer({
               </div>
             </div>
           ) : (
-            <ScrollArea className="w-full">
-              <div className="flex gap-4 pb-4 pr-4 min-w-max">
+            <div className="w-full overflow-x-auto">
+              <div className="flex gap-4 pb-4 pr-4" style={{ minWidth: 'max-content' }}>
                 {columns.map((column) => {
                   const polarityInfo = getPolarityInfo(column.polarity);
                   const d1Items = getD1Items(column.d1ElementIds);
@@ -423,8 +423,7 @@ export function TesseractVisualizer({
                   );
                 })}
               </div>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
           )}
 
           {/* Legend */}
