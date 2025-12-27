@@ -285,16 +285,14 @@ Return a JSON object with this exact structure (use labels to identify concepts,
       "d1ConceptLabels": ["D1 Concept Label 1", "D1 Concept Label 2"],
       "d2ConceptLabels": ["D2 Concept Label 1"]
     }
-  ],
-  "unmergedD1Labels": ["D1 Concept with no matches"],
-  "unmergedD2Labels": ["D2 Concept with no matches"]
+  ]
 }
 
 Notes:
-- mergedConcepts: concepts that were merged (can be D1+D1, D2+D2, or D1+D2 combinations)
+- ONLY include concepts that should be MERGED together (2+ concepts combined)
+- A merge can be D1+D1, D2+D2, or D1+D2 combinations
 - Use the EXACT labels from the input concepts so we can match them back
-- unmergedD1Labels: labels of D1 concepts with NO matches anywhere (should be RARE)
-- unmergedD2Labels: labels of D2 concepts with NO matches anywhere (should be RARE)
+- Concepts with no matches will be handled automatically - do NOT list them
 
 Return ONLY the JSON object, no other text.`;
 
@@ -309,7 +307,7 @@ Return ONLY the JSON object, no other text.`;
       
       await sendSSE("progress", { phase: "concept_merge", message: "Parsing merge instructions...", progress: 60 });
 
-      // Parse JSON - now expects labels only, we'll reconstruct IDs
+      // Parse JSON - now expects only mergedConcepts (positive merges only)
       let parsed: { 
         mergedConcepts: Array<{
           mergedLabel: string;
@@ -317,12 +315,6 @@ Return ONLY the JSON object, no other text.`;
           d1ConceptLabels: string[];
           d2ConceptLabels: string[];
         }>; 
-        unmergedD1Labels?: string[];
-        unmergedD2Labels?: string[];
-        // Legacy fallbacks
-        unmergedD1Concepts?: D1Concept[];
-        unmergeedD1Concepts?: D1Concept[];
-        unmergedD2Concepts?: D2Concept[];
       };
       try {
         parsed = JSON.parse(rawText);
@@ -369,27 +361,20 @@ Return ONLY the JSON object, no other text.`;
         };
       });
 
-      // Reconstruct unmerged D1 concepts from labels
-      let unmergedD1Concepts: D1Concept[] = [];
-      if (parsed.unmergedD1Labels) {
-        unmergedD1Concepts = parsed.unmergedD1Labels
-          .map(label => d1ByLabel.get(label.toLowerCase()))
-          .filter((c): c is D1Concept => c !== undefined);
-      } else if (parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts) {
-        // Legacy fallback
-        unmergedD1Concepts = parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts || [];
-      }
+      // Programmatically derive unmerged concepts (cannot have orphans!)
+      // Any concept NOT mentioned in a merge is automatically unmerged
+      const mergedD1Labels = new Set<string>();
+      const mergedD2Labels = new Set<string>();
 
-      // Reconstruct unmerged D2 concepts from labels
-      let unmergedD2Concepts: D2Concept[] = [];
-      if (parsed.unmergedD2Labels) {
-        unmergedD2Concepts = parsed.unmergedD2Labels
-          .map(label => d2ByLabel.get(label.toLowerCase()))
-          .filter((c): c is D2Concept => c !== undefined);
-      } else if (parsed.unmergedD2Concepts) {
-        // Legacy fallback
-        unmergedD2Concepts = parsed.unmergedD2Concepts || [];
-      }
+      mergedConcepts.forEach(m => {
+        (m.d1ConceptLabels || []).forEach(label => mergedD1Labels.add(label.toLowerCase()));
+        (m.d2ConceptLabels || []).forEach(label => mergedD2Labels.add(label.toLowerCase()));
+      });
+
+      const unmergedD1Concepts = d1Concepts.filter(c => !mergedD1Labels.has(c.label.toLowerCase()));
+      const unmergedD2Concepts = d2Concepts.filter(c => !mergedD2Labels.has(c.label.toLowerCase()));
+
+      console.log(`[merge] Derived unmerged: ${unmergedD1Concepts.length} D1, ${unmergedD2Concepts.length} D2 (programmatic, no orphans possible)`);
 
       // Count different merge types
       const d1OnlyMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 1 && c.d2ConceptLabels.length === 0).length;
