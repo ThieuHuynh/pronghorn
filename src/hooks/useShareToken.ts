@@ -32,7 +32,8 @@ export function useShareToken(projectId?: string) {
   };
   
   // Initialize state synchronously with best available token
-  const [token, setToken] = useState<string | null>(getTokenSync);
+  // Call getTokenSync() directly instead of passing as lazy initializer to avoid React queue issues
+  const [token, setToken] = useState<string | null>(() => getTokenSync());
   const [isTokenSet, setIsTokenSet] = useState(() => {
     // If we have a cached token or no projectId, we're ready immediately
     const cachedToken = projectId ? getProjectToken(projectId) : null;
