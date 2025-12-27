@@ -127,6 +127,38 @@ export default function Audit() {
     }
   }, [activityStream, isPipelineRunning, pipelineSteps.length, reconstructStepsFromActivity]);
 
+  // Reconstruct D1/D2 elements from graph nodes when loading an existing session
+  useEffect(() => {
+    if (session && graphNodes.length > 0 && d1Elements.length === 0 && d2Elements.length === 0) {
+      // Extract D1 elements from graph nodes (node_type = 'd1_element')
+      const d1FromGraph = graphNodes
+        .filter(node => node.node_type === 'd1_element')
+        .map(node => ({
+          id: node.source_element_ids?.[0] || node.id,
+          label: node.label,
+          content: node.description || '',
+          category: 'd1',
+        }));
+      
+      // Extract D2 elements from graph nodes (node_type = 'd2_element')
+      const d2FromGraph = graphNodes
+        .filter(node => node.node_type === 'd2_element')
+        .map(node => ({
+          id: node.source_element_ids?.[0] || node.id,
+          label: node.label,
+          content: node.description || '',
+          category: 'd2',
+        }));
+      
+      if (d1FromGraph.length > 0) setD1Elements(d1FromGraph);
+      if (d2FromGraph.length > 0) setD2Elements(d2FromGraph);
+      
+      // Set labels from session dataset types
+      if (session.dataset_1_type) setD1Label(session.dataset_1_type);
+      if (session.dataset_2_type) setD2Label(session.dataset_2_type);
+    }
+  }, [session, graphNodes, d1Elements.length, d2Elements.length]);
+
   const resumeOrchestrator = useCallback(async (sessionToResume: AuditSession) => {
     if (isResuming) return;
     
