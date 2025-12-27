@@ -14,19 +14,20 @@ interface D1Concept {
   label: string;
   description: string;
   d1Ids: string[];
+  elementLabels?: string[]; // Labels of the D1 elements for context
 }
 
 interface D2Concept {
   label: string;
   description: string;
   d2Ids: string[];
+  elementLabels?: string[]; // Labels of the D2 elements for context
 }
 
 interface MergeInstruction {
   mergedLabel: string;
   mergedDescription: string;
-  d1ConceptLabels: string[];
-  d2ConceptLabels: string[];
+  sourceConcepts: string[]; // Unified list of concept labels that were merged
   d1Ids: string[];
   d2Ids: string[];
 }
@@ -194,52 +195,47 @@ serve(async (req) => {
         progress: 0 
       });
 
-      // Build the prompt - include element counts and source groupings for context
-      const d1ConceptsText = d1Concepts.map((c, i) => 
-        `D1-${i + 1}: "${c.label}" (${c.d1Ids.length} elements)\nDescription: ${c.description}`
-      ).join("\n\n");
+      // Build a UNIFIED concept list for the LLM (all concepts together)
+      // Each concept shows its source (D1/D2) and element labels for context
+      const allConcepts: Array<{
+        label: string;
+        description: string;
+        source: "D1" | "D2";
+        elementCount: number;
+        elementLabels: string[];
+        d1Ids: string[];
+        d2Ids: string[];
+      }> = [
+        ...d1Concepts.map(c => ({
+          label: c.label,
+          description: c.description,
+          source: "D1" as const,
+          elementCount: c.d1Ids.length,
+          elementLabels: c.elementLabels || [],
+          d1Ids: c.d1Ids,
+          d2Ids: [] as string[],
+        })),
+        ...d2Concepts.map(c => ({
+          label: c.label,
+          description: c.description,
+          source: "D2" as const,
+          elementCount: c.d2Ids.length,
+          elementLabels: c.elementLabels || [],
+          d1Ids: [] as string[],
+          d2Ids: c.d2Ids,
+        })),
+      ];
 
-      const d2ConceptsText = d2Concepts.map((c, i) => 
-        `D2-${i + 1}: "${c.label}" (${c.d2Ids.length} elements)\nDescription: ${c.description}`
-      ).join("\n\n");
-
-      // Build source element groupings to help identify concepts that should be merged
-      const d1SourceGroups = new Map<string, string[]>();
-      d1Concepts.forEach(c => {
-        c.d1Ids.forEach(id => {
-          if (!d1SourceGroups.has(id)) d1SourceGroups.set(id, []);
-          d1SourceGroups.get(id)!.push(c.label);
-        });
-      });
-      
-      const d2SourceGroups = new Map<string, string[]>();
-      d2Concepts.forEach(c => {
-        c.d2Ids.forEach(id => {
-          if (!d2SourceGroups.has(id)) d2SourceGroups.set(id, []);
-          d2SourceGroups.get(id)!.push(c.label);
-        });
-      });
-
-      // Find source elements with multiple concepts (strong merge candidates)
-      const sharedD1Sources = Array.from(d1SourceGroups.entries())
-        .filter(([_, labels]) => labels.length > 1)
-        .map(([id, labels]) => `  • Source "${id.slice(0, 50)}..." → [${labels.map(l => `"${l}"`).join(", ")}]`);
-      
-      const sharedD2Sources = Array.from(d2SourceGroups.entries())
-        .filter(([_, labels]) => labels.length > 1)
-        .map(([id, labels]) => `  • Source "${id.slice(0, 50)}..." → [${labels.map(l => `"${l}"`).join(", ")}]`);
-
-      const sourceGroupingSection = (sharedD1Sources.length > 0 || sharedD2Sources.length > 0) 
-        ? `## Shared Source Elements (STRONG MERGE CANDIDATES)
-These concepts were extracted from the SAME source element and should typically be merged into ONE concept:
-
-${sharedD1Sources.length > 0 ? `### D1 sources with multiple concepts:\n${sharedD1Sources.join("\n")}` : ""}
-${sharedD2Sources.length > 0 ? `### D2 sources with multiple concepts:\n${sharedD2Sources.join("\n")}` : ""}
-
-` : "";
+      // Build concept text with element labels for context
+      const conceptsText = allConcepts.map((c, i) => {
+        const elementsPreview = c.elementLabels.length > 0 
+          ? `\n  Elements:\n${c.elementLabels.slice(0, 5).map(el => `    - ${el.slice(0, 100)}`).join("\n")}${c.elementLabels.length > 5 ? `\n    ... and ${c.elementLabels.length - 5} more` : ""}`
+          : "";
+        return `${i + 1}. "${c.label}" [${c.source}, ${c.elementCount} elements]\n  Description: ${c.description}${elementsPreview}`;
+      }).join("\n\n");
 
       // Calculate target concept count for guidance
-      const totalInputConcepts = d1Concepts.length + d2Concepts.length;
+      const totalInputConcepts = allConcepts.length;
       const totalSourceElements = new Set([...d1Concepts.flatMap(c => c.d1Ids), ...d2Concepts.flatMap(c => c.d2Ids)]).size;
       const targetConceptRatio = Math.max(Math.ceil(totalSourceElements / 4), Math.ceil(totalInputConcepts / 3));
 
@@ -280,49 +276,42 @@ ${roundConfig.criteria}
 
 ${round === 3 ? "**AGGRESSIVE MODE**: Merge liberally. Target 5-15 final broad concepts." : ""}
 
-MERGE PRIORITY (highest to lowest):
-1. Concepts from the SAME source element → ALWAYS merge (they're different aspects of one thing)
-2. Concepts with similar names → merge (e.g., "Agent Data", "Agent Management", "Agent Config" → "Agent System")
-3. Concepts covering the same functional domain → merge (e.g., "Auth", "Login", "Session" → "Authentication")
-4. Concepts with overlapping descriptions → merge
+## All Concepts (D1 = requirements/source of truth, D2 = implementation)
 
-${sourceGroupingSection}## D1 Concepts (from requirements/source of truth)
-
-${d1ConceptsText || "(none)"}
-
-## D2 Concepts (from implementation)
-
-${d2ConceptsText || "(none)"}
+${conceptsText}
 
 ## Your Task
 
-${round === 1 ? "Be CONSERVATIVE - only merge obvious duplicates and near-exact matches." : ""}
-${round === 2 ? "Be MODERATE - merge thematically related concepts into functional groups." : ""}
-${round === 3 ? "Be AGGRESSIVE - combine into broad categories, fewer is better." : ""}
+Identify which concepts should be MERGED together based on:
+${round === 1 ? "- ONLY obvious duplicates and near-exact name matches" : ""}
+${round === 2 ? "- Thematic similarity and functional domains" : ""}
+${round === 3 ? "- Broad categories - be aggressive, fewer is better" : ""}
 
-Concepts should be merged if they meet the criteria for this round.
+Look at the element labels within each concept to help determine if they're truly related.
 
-Only keep concepts separate if they are genuinely UNRELATED functional areas.
+**CRITICAL RULES:**
+1. Each concept can ONLY appear in ONE merge group
+2. Only output merges for concepts that should be combined (2+ concepts)
+3. Use the EXACT concept labels from the input
+4. Do NOT list individual elements - only identify which CONCEPTS to merge
 
 ## Output Format
 
-Return a JSON object with this exact structure (use labels to identify concepts, NOT IDs):
+Return a JSON object with this structure:
 {
-  "mergedConcepts": [
+  "merges": [
     {
-      "mergedLabel": "Final Concept Name",
-      "mergedDescription": "Combined description capturing all merged concepts",
-      "d1ConceptLabels": ["D1 Concept Label 1", "D1 Concept Label 2"],
-      "d2ConceptLabels": ["D2 Concept Label 1"]
+      "sourceConcepts": ["Concept Label A", "Concept Label B", "Concept Label C"],
+      "mergedLabel": "New Combined Concept Name",
+      "mergedDescription": "Description capturing the merged concept"
     }
   ]
 }
 
 Notes:
-- ONLY include concepts that should be MERGED together (2+ concepts combined)
-- A merge can be D1+D1, D2+D2, or D1+D2 combinations
-- Use the EXACT labels from the input concepts so we can match them back
-- Concepts with no matches will be handled automatically - do NOT list them
+- "sourceConcepts" is the list of concept labels to merge (can include any mix of D1 and D2 concepts)
+- Concepts not listed in any merge will remain unchanged
+- Each concept label can only appear in ONE merge
 
 Return ONLY the JSON object, no other text.`;
 
@@ -337,13 +326,12 @@ Return ONLY the JSON object, no other text.`;
       
       await sendSSE("progress", { phase: "concept_merge", message: "Parsing merge instructions...", progress: 60 });
 
-      // Parse JSON - now expects only mergedConcepts (positive merges only)
+      // Parse JSON - now expects simplified merges format
       let parsed: { 
-        mergedConcepts: Array<{
+        merges: Array<{
+          sourceConcepts: string[];
           mergedLabel: string;
           mergedDescription: string;
-          d1ConceptLabels: string[];
-          d2ConceptLabels: string[];
         }>; 
       };
       try {
@@ -359,59 +347,81 @@ Return ONLY the JSON object, no other text.`;
         }
       }
 
-      // Build lookup maps for reconstructing IDs from labels
-      const d1ByLabel = new Map<string, D1Concept>();
-      d1Concepts.forEach(c => d1ByLabel.set(c.label.toLowerCase(), c));
+      // Build a UNIFIED concept lookup map (label -> { d1Ids, d2Ids })
+      const conceptByLabel = new Map<string, { d1Ids: string[], d2Ids: string[] }>();
       
-      const d2ByLabel = new Map<string, D2Concept>();
-      d2Concepts.forEach(c => d2ByLabel.set(c.label.toLowerCase(), c));
+      // Add D1 concepts to the map
+      d1Concepts.forEach(c => {
+        const key = c.label.toLowerCase();
+        if (!conceptByLabel.has(key)) {
+          conceptByLabel.set(key, { d1Ids: [], d2Ids: [] });
+        }
+        conceptByLabel.get(key)!.d1Ids.push(...c.d1Ids);
+      });
+      
+      // Add D2 concepts to the map
+      d2Concepts.forEach(c => {
+        const key = c.label.toLowerCase();
+        if (!conceptByLabel.has(key)) {
+          conceptByLabel.set(key, { d1Ids: [], d2Ids: [] });
+        }
+        conceptByLabel.get(key)!.d2Ids.push(...c.d2Ids);
+      });
+
+      // Track which concepts have been used to prevent duplication
+      const usedConcepts = new Set<string>();
 
       // Reconstruct full merged concepts with IDs
-      const mergedConcepts: MergeInstruction[] = (parsed.mergedConcepts || []).map(m => {
+      const mergedConcepts: MergeInstruction[] = (parsed.merges || []).map(m => {
         const d1Ids: string[] = [];
         const d2Ids: string[] = [];
+        const actualSourceConcepts: string[] = [];
         
-        (m.d1ConceptLabels || []).forEach(label => {
-          const found = d1ByLabel.get(label.toLowerCase());
-          if (found) d1Ids.push(...found.d1Ids);
-        });
-        
-        (m.d2ConceptLabels || []).forEach(label => {
-          const found = d2ByLabel.get(label.toLowerCase());
-          if (found) d2Ids.push(...found.d2Ids);
-        });
+        for (const label of (m.sourceConcepts || [])) {
+          const key = label.toLowerCase();
+          
+          // Check if this concept was already used in a previous merge
+          if (usedConcepts.has(key)) {
+            console.log(`[merge] WARNING: Concept "${label}" already used in a previous merge, skipping duplicate reference`);
+            continue;
+          }
+          
+          // Mark as used
+          usedConcepts.add(key);
+          
+          // Find the concept and aggregate its IDs
+          const found = conceptByLabel.get(key);
+          if (found) {
+            d1Ids.push(...found.d1Ids);
+            d2Ids.push(...found.d2Ids);
+            actualSourceConcepts.push(label);
+          } else {
+            console.log(`[merge] WARNING: Concept label "${label}" not found in input concepts`);
+          }
+        }
         
         return {
           mergedLabel: m.mergedLabel,
           mergedDescription: m.mergedDescription,
-          d1ConceptLabels: m.d1ConceptLabels || [],
-          d2ConceptLabels: m.d2ConceptLabels || [],
+          sourceConcepts: actualSourceConcepts,
           d1Ids,
           d2Ids
         };
-      });
+      }).filter(m => m.sourceConcepts.length >= 2); // Only keep actual merges (2+ concepts)
 
-      // Programmatically derive unmerged concepts (cannot have orphans!)
-      // Any concept NOT mentioned in a merge is automatically unmerged
-      const mergedD1Labels = new Set<string>();
-      const mergedD2Labels = new Set<string>();
+      // Programmatically derive unmerged concepts
+      // Any concept NOT in usedConcepts is unmerged
+      const unmergedD1Concepts = d1Concepts.filter(c => !usedConcepts.has(c.label.toLowerCase()));
+      const unmergedD2Concepts = d2Concepts.filter(c => !usedConcepts.has(c.label.toLowerCase()));
 
-      mergedConcepts.forEach(m => {
-        (m.d1ConceptLabels || []).forEach(label => mergedD1Labels.add(label.toLowerCase()));
-        (m.d2ConceptLabels || []).forEach(label => mergedD2Labels.add(label.toLowerCase()));
-      });
-
-      const unmergedD1Concepts = d1Concepts.filter(c => !mergedD1Labels.has(c.label.toLowerCase()));
-      const unmergedD2Concepts = d2Concepts.filter(c => !mergedD2Labels.has(c.label.toLowerCase()));
-
-      console.log(`[merge] Derived unmerged: ${unmergedD1Concepts.length} D1, ${unmergedD2Concepts.length} D2 (programmatic, no orphans possible)`);
+      console.log(`[merge] Used concepts: ${usedConcepts.size}, Unmerged: ${unmergedD1Concepts.length} D1, ${unmergedD2Concepts.length} D2`);
 
       // Count different merge types
-      const d1OnlyMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 1 && c.d2ConceptLabels.length === 0).length;
-      const d2OnlyMerges = mergedConcepts.filter(c => c.d2ConceptLabels.length > 1 && c.d1ConceptLabels.length === 0).length;
-      const crossMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 0 && c.d2ConceptLabels.length > 0).length;
+      const d1OnlyMerges = mergedConcepts.filter(c => c.d1Ids.length > 0 && c.d2Ids.length === 0).length;
+      const d2OnlyMerges = mergedConcepts.filter(c => c.d2Ids.length > 0 && c.d1Ids.length === 0).length;
+      const crossMerges = mergedConcepts.filter(c => c.d1Ids.length > 0 && c.d2Ids.length > 0).length;
 
-      console.log(`[merge] Results: ${mergedConcepts.length} merged (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`);
+      console.log(`[merge] Results: ${mergedConcepts.length} merged (${d1OnlyMerges} D1-only, ${d2OnlyMerges} D2-only, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`);
 
       await sendSSE("progress", { 
         phase: "concept_merge", 
@@ -425,7 +435,7 @@ Return ONLY the JSON object, no other text.`;
         p_token: shareToken,
         p_agent_role: "concept_merger",
         p_entry_type: "merge_results",
-        p_content: `Concept Merge Results (using ${selectedModel}):\n- Total merged concepts: ${mergedConcepts.length}\n  - D1↔D1 merges: ${d1OnlyMerges}\n  - D2↔D2 merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2)`).join("\n")}`,
+        p_content: `Concept Merge Results (using ${selectedModel}):\n- Total merged concepts: ${mergedConcepts.length}\n  - D1-only merges: ${d1OnlyMerges}\n  - D2-only merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2) ← [${c.sourceConcepts.join(", ")}]`).join("\n")}`,
         p_iteration: 2,
         p_confidence: 0.85,
         p_evidence: null,
@@ -439,7 +449,7 @@ Return ONLY the JSON object, no other text.`;
         p_agent_role: "concept_merger",
         p_activity_type: "concept_merge",
         p_title: `Concept Merge Complete`,
-        p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans using ${selectedModel}`,
+        p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1-only, ${d2OnlyMerges} D2-only, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans using ${selectedModel}`,
         p_metadata: { 
           mergedCount: mergedConcepts.length,
           d1OnlyMerges,

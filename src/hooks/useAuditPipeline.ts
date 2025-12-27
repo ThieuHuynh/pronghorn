@@ -953,8 +953,25 @@ export function useAuditPipeline() {
       };
       const mergeRounds = CONSOLIDATION_ROUNDS[consolidationLevel];
       
-      let currentD1Concepts = d1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds }));
-      let currentD2Concepts = d2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds }));
+      // Build element label lookup maps for providing context to the merge LLM
+      const d1ElementLabelMap = new Map<string, string>();
+      const d2ElementLabelMap = new Map<string, string>();
+      d1Elements.forEach(el => d1ElementLabelMap.set(el.id, el.label || el.id));
+      d2Elements.forEach(el => d2ElementLabelMap.set(el.id, el.label || el.id));
+      
+      // Enhance concepts with element labels for merge context
+      let currentD1Concepts = d1Concepts.map(c => ({ 
+        label: c.label, 
+        description: c.description, 
+        d1Ids: c.elementIds,
+        elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
+      }));
+      let currentD2Concepts = d2Concepts.map(c => ({ 
+        label: c.label, 
+        description: c.description, 
+        d2Ids: c.elementIds,
+        elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
+      }));
 
       // Run multiple merge rounds if consolidation > low
       for (let round = 1; round <= mergeRounds; round++) {
@@ -1018,13 +1035,39 @@ export function useAuditPipeline() {
           // Merged concepts become "super-concepts" that can be merged again
           const mergedAsD1 = mergedConcepts
             .filter(m => m.d1Ids && m.d1Ids.length > 0)
-            .map(m => ({ label: m.mergedLabel, description: m.mergedDescription, d1Ids: m.d1Ids }));
+            .map(m => ({ 
+              label: m.mergedLabel, 
+              description: m.mergedDescription, 
+              d1Ids: m.d1Ids,
+              elementLabels: m.d1Ids.map(id => d1ElementLabelMap.get(id) || id),
+            }));
           const mergedAsD2 = mergedConcepts
             .filter(m => m.d2Ids && m.d2Ids.length > 0)
-            .map(m => ({ label: m.mergedLabel, description: m.mergedDescription, d2Ids: m.d2Ids }));
+            .map(m => ({ 
+              label: m.mergedLabel, 
+              description: m.mergedDescription, 
+              d2Ids: m.d2Ids,
+              elementLabels: m.d2Ids.map(id => d2ElementLabelMap.get(id) || id),
+            }));
           
-          currentD1Concepts = [...unmergedD1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds })), ...mergedAsD1];
-          currentD2Concepts = [...unmergedD2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds })), ...mergedAsD2];
+          currentD1Concepts = [
+            ...unmergedD1Concepts.map(c => ({ 
+              label: c.label, 
+              description: c.description, 
+              d1Ids: c.elementIds,
+              elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
+            })), 
+            ...mergedAsD1
+          ];
+          currentD2Concepts = [
+            ...unmergedD2Concepts.map(c => ({ 
+              label: c.label, 
+              description: c.description, 
+              d2Ids: c.elementIds,
+              elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
+            })), 
+            ...mergedAsD2
+          ];
         }
       }
 
