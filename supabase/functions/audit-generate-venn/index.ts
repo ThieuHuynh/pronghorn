@@ -128,12 +128,15 @@ serve(async (req) => {
         });
       }
 
-      await sendSSE("progress", { phase: "venn", message: "Processing merged concepts (aligned)...", progress: 50 });
+      await sendSSE("progress", { phase: "venn", message: "Processing merged concepts...", progress: 50 });
 
-      // Merged concepts = aligned (but quality varies by tesseract polarity)
+      // Merged concepts - categorize based on whether they have D1, D2, or both
       for (const concept of mergedConcepts) {
         const tesseractData = tesseractMap.get(concept.mergedLabel);
         const polarity = tesseractData?.polarity ?? 0.5;
+        
+        const hasD1 = (concept.d1Ids?.length || 0) > 0;
+        const hasD2 = (concept.d2Ids?.length || 0) > 0;
         
         // Determine criticality based on polarity
         let criticality = "info";
@@ -141,16 +144,44 @@ serve(async (req) => {
         else if (polarity < 0.3) criticality = "major";
         else if (polarity < 0.7) criticality = "minor";
 
-        aligned.push({
-          id: crypto.randomUUID(),
-          label: concept.mergedLabel,
-          category: "aligned",
-          criticality,
-          evidence: tesseractData?.rationale || concept.mergedDescription,
-          sourceElement: concept.d1Ids[0] || concept.d2Ids[0] || "",
-          polarity,
-          description: `${concept.d1Ids.length} D1 requirements matched with ${concept.d2Ids.length} D2 implementations. ${tesseractData?.gaps?.length ? `Gaps: ${tesseractData.gaps.join(", ")}` : ""}`,
-        });
+        if (hasD1 && hasD2) {
+          // Truly aligned - has both D1 requirements and D2 implementations
+          aligned.push({
+            id: crypto.randomUUID(),
+            label: concept.mergedLabel,
+            category: "aligned",
+            criticality,
+            evidence: tesseractData?.rationale || concept.mergedDescription,
+            sourceElement: concept.d1Ids[0] || concept.d2Ids[0] || "",
+            polarity,
+            description: `${concept.d1Ids.length} D1 requirements matched with ${concept.d2Ids.length} D2 implementations. ${tesseractData?.gaps?.length ? `Gaps: ${tesseractData.gaps.join(", ")}` : ""}`,
+          });
+        } else if (hasD1 && !hasD2) {
+          // D1-only merged concept - it's a gap (merged D1 concepts with no D2)
+          uniqueToD1.push({
+            id: crypto.randomUUID(),
+            label: concept.mergedLabel,
+            category: "unique_d1",
+            criticality: "major",
+            evidence: tesseractData?.rationale || concept.mergedDescription,
+            sourceElement: concept.d1Ids[0] || "",
+            polarity: -1,
+            description: `D1 requirement(s) not implemented: ${concept.d1Ids.length} source elements merged`,
+          });
+        } else if (!hasD1 && hasD2) {
+          // D2-only merged concept - it's an orphan (merged D2 concepts with no D1)
+          uniqueToD2.push({
+            id: crypto.randomUUID(),
+            label: concept.mergedLabel,
+            category: "unique_d2",
+            criticality: "info",
+            evidence: tesseractData?.rationale || concept.mergedDescription,
+            sourceElement: concept.d2Ids[0] || "",
+            polarity: 0,
+            description: `D2 implementation without D1 requirements: ${concept.d2Ids.length} source elements merged`,
+          });
+        }
+        // If neither D1 nor D2, skip it (shouldn't happen, but defensive)
       }
 
       await sendSSE("progress", { phase: "venn", message: "Processing unmerged D2 concepts (orphans)...", progress: 70 });
@@ -197,12 +228,12 @@ serve(async (req) => {
 
       await sendSSE("progress", { phase: "venn", message: "Calculating coverage statistics...", progress: 85 });
 
-      // Calculate summary statistics
-      const totalD1Concepts = mergedConcepts.length + (unmergedD1Concepts?.length || 0);
-      const totalD2Concepts = mergedConcepts.length + uniqueToD2.length; // Use uniqueToD2 which includes tesseract-identified orphans
+      // Calculate summary statistics based on actual categorization
+      const totalD1Concepts = uniqueToD1.length + aligned.length; // Gaps + truly aligned
+      const totalD2Concepts = uniqueToD2.length + aligned.length; // Orphans + truly aligned
       
-      const d1Coverage = totalD1Concepts > 0 ? (mergedConcepts.length / totalD1Concepts) * 100 : 0;
-      const d2Coverage = totalD2Concepts > 0 ? (mergedConcepts.length / totalD2Concepts) * 100 : 0;
+      const d1Coverage = totalD1Concepts > 0 ? (aligned.length / totalD1Concepts) * 100 : 0;
+      const d2Coverage = totalD2Concepts > 0 ? (aligned.length / totalD2Concepts) * 100 : 0;
       
       const avgPolarity = aligned.length > 0 
         ? aligned.reduce((sum, a) => sum + a.polarity, 0) / aligned.length 
