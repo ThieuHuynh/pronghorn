@@ -77,9 +77,10 @@ export function TesseractVisualizer({
         let d2Ids: string[] = [];
         
         if (cell.evidence_refs) {
-          const refs = cell.evidence_refs as { d1ElementIds?: string[]; d2ElementIds?: string[] };
-          d1Ids = refs.d1ElementIds || [];
-          d2Ids = refs.d2ElementIds || [];
+          // Support both field naming conventions: d1Ids/d2Ids (DB format) and d1ElementIds/d2ElementIds
+          const refs = cell.evidence_refs as { d1Ids?: string[]; d2Ids?: string[]; d1ElementIds?: string[]; d2ElementIds?: string[] };
+          d1Ids = refs.d1Ids || refs.d1ElementIds || [];
+          d2Ids = refs.d2Ids || refs.d2ElementIds || [];
         }
 
         columnMap.set(conceptId, {
