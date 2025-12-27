@@ -248,11 +248,6 @@ export default function Audit() {
     setIsStarting(true);
     manualStopRef.current = false;
     try {
-      const agentDefs = config.agentPersonas.reduce((acc, p) => ({
-        ...acc,
-        [p.id]: { enabled: p.enabled, customPrompt: p.customPrompt },
-      }), {});
-      
       const newSession = await createSession({
         name: config.name,
         description: config.description,
@@ -260,8 +255,8 @@ export default function Audit() {
         dataset1Ids: config.dataset1Ids,
         dataset2Type: config.dataset2Type,
         dataset2Ids: config.dataset2Ids,
-        maxIterations: config.maxIterations,
-        agentDefinitions: agentDefs,
+        maxIterations: 100, // Fixed default
+        agentDefinitions: {},
         dataset1Content: config.dataset1Content,
         dataset2Content: config.dataset2Content,
       });

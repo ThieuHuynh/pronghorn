@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,18 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  Shield,
-  Briefcase,
-  Code,
-  User,
-  Building,
   PlayCircle,
   Settings2,
   Package,
@@ -37,13 +28,6 @@ import {
 } from "lucide-react";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
-interface AgentPersona {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  enabled: boolean;
-  customPrompt?: string;
-}
 
 interface AuditConfigurationDialogProps {
   open: boolean;
@@ -65,19 +49,8 @@ export interface AuditConfiguration {
   // New fields for mixed-category selection
   dataset1Content?: ProjectSelectionResult;
   dataset2Content?: ProjectSelectionResult;
-  maxIterations: number;
-  agentPersonas: AgentPersona[];
-  confidenceThreshold: number;
-  consensusRequired: boolean;
 }
 
-const defaultPersonas: AgentPersona[] = [
-  { id: "security_analyst", label: "Security Analyst", icon: Shield, enabled: true },
-  { id: "business_analyst", label: "Business Analyst", icon: Briefcase, enabled: true },
-  { id: "developer", label: "Developer", icon: Code, enabled: true },
-  { id: "end_user", label: "End User", icon: User, enabled: true },
-  { id: "architect", label: "Architect", icon: Building, enabled: true },
-];
 
 // Helper to count items in a ProjectSelectionResult
 function countSelectionItems(selection: ProjectSelectionResult | null): number {
@@ -146,28 +119,12 @@ export function AuditConfigurationDialog({
 }: AuditConfigurationDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [maxIterations, setMaxIterations] = useState(100);
-  const [personas, setPersonas] = useState<AgentPersona[]>(defaultPersonas);
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
-  const [consensusRequired, setConsensusRequired] = useState(true);
   
   // ProjectSelector state
   const [dataset1Selection, setDataset1Selection] = useState<ProjectSelectionResult | null>(null);
   const [dataset2Selection, setDataset2Selection] = useState<ProjectSelectionResult | null>(null);
   const [showSelector1, setShowSelector1] = useState(false);
   const [showSelector2, setShowSelector2] = useState(false);
-
-  const handleTogglePersona = (id: string) => {
-    setPersonas((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p))
-    );
-  };
-
-  const handleUpdatePersonaPrompt = (id: string, prompt: string) => {
-    setPersonas((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, customPrompt: prompt } : p))
-    );
-  };
 
   const handleSubmit = () => {
     // Extract IDs from selections for legacy compatibility
@@ -200,15 +157,10 @@ export function AuditConfigurationDialog({
       // New content fields
       dataset1Content: dataset1Selection || undefined,
       dataset2Content: dataset2Selection || undefined,
-      maxIterations,
-      agentPersonas: personas.filter((p) => p.enabled),
-      confidenceThreshold,
-      consensusRequired,
     };
     onStartAudit(config);
   };
 
-  const enabledCount = personas.filter((p) => p.enabled).length;
   const d1Count = countSelectionItems(dataset1Selection);
   const d2Count = countSelectionItems(dataset2Selection);
   const d1Badges = getSelectionBadges(dataset1Selection);
@@ -224,24 +176,12 @@ export function AuditConfigurationDialog({
               Configure Audit Session
             </DialogTitle>
             <DialogDescription>
-              Set up the datasets, agent personas, and parameters for the audit.
+              Set up the datasets for the audit.
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="datasets" className="mt-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="datasets">Datasets</TabsTrigger>
-              <TabsTrigger value="agents">
-                Agents
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  {enabledCount}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
-
-            <ScrollArea className="h-[450px] mt-4">
-              <TabsContent value="datasets" className="space-y-4 px-1">
+          <ScrollArea className="h-[450px] mt-4">
+            <div className="space-y-4 px-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Audit Name</Label>
@@ -345,117 +285,8 @@ export function AuditConfigurationDialog({
                     </div>
                   </div>
                 )}
-              </TabsContent>
-
-              <TabsContent value="agents" className="space-y-4 px-1">
-                <p className="text-sm text-muted-foreground">
-                  Enable or disable agent personas and optionally customize their analysis prompts.
-                </p>
-
-                <div className="space-y-3">
-                  {personas.map((persona) => {
-                    const Icon = persona.icon;
-                    return (
-                      <div
-                        key={persona.id}
-                        className={`border rounded-lg p-4 transition-colors ${
-                          persona.enabled ? "bg-card" : "bg-muted/30"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`p-2 rounded-md ${
-                                persona.enabled
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="font-medium">{persona.label}</p>
-                              <p className="text-xs text-muted-foreground">{persona.id}</p>
-                            </div>
-                          </div>
-                          <Switch
-                            checked={persona.enabled}
-                            onCheckedChange={() => handleTogglePersona(persona.id)}
-                          />
-                        </div>
-
-                        {persona.enabled && (
-                          <div className="mt-3">
-                            <Label className="text-xs">Custom Prompt (optional)</Label>
-                            <Textarea
-                              value={persona.customPrompt || ""}
-                              onChange={(e) => handleUpdatePersonaPrompt(persona.id, e.target.value)}
-                              placeholder="Override the default system prompt..."
-                              className="mt-1 text-sm"
-                              rows={2}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="settings" className="space-y-6 px-1">
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label>Max Iterations</Label>
-                      <span className="text-sm text-muted-foreground">{maxIterations}</span>
-                    </div>
-                    <Slider
-                      value={[maxIterations]}
-                      onValueChange={([v]) => setMaxIterations(v)}
-                      min={10}
-                      max={500}
-                      step={10}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Maximum discussion rounds before forcing consensus
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label>Confidence Threshold</Label>
-                      <span className="text-sm text-muted-foreground">
-                        {(confidenceThreshold * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={[confidenceThreshold]}
-                      onValueChange={([v]) => setConfidenceThreshold(v)}
-                      min={0.5}
-                      max={1}
-                      step={0.05}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Minimum confidence for an agent to assert a finding
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between py-3 px-1">
-                    <div>
-                      <Label>Require Consensus</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        All agents must agree before finalizing
-                      </p>
-                    </div>
-                    <Switch
-                      checked={consensusRequired}
-                      onCheckedChange={setConsensusRequired}
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-            </ScrollArea>
-          </Tabs>
+            </div>
+          </ScrollArea>
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
