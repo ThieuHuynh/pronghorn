@@ -714,6 +714,8 @@ export function useAuditPipeline() {
       };
 
       // Process all batches for a dataset - marks itself complete when done
+      const PARALLEL_BATCH = 5; // Process 5 batches in parallel (same as Enhanced Sort)
+      
       const processAllBatches = async (
         dataset: "d1" | "d2",
         batches: Element[][],
@@ -722,22 +724,47 @@ export function useAuditPipeline() {
         const allConcepts: Concept[] = [];
         const batchErrors: string[] = [];
         
-        for (let i = 0; i < batches.length; i++) {
+        // Process batches in parallel chunks of PARALLEL_BATCH
+        for (let i = 0; i < batches.length; i += PARALLEL_BATCH) {
           if (abortRef.current) {
             updateStep(stepId, { status: "error", message: "Aborted", errorMessage: "User aborted pipeline" });
             throw new Error("Aborted");
           }
           
-          try {
-            const batchConcepts = await extractBatch(dataset, batches[i], i, batches.length, stepId);
-            allConcepts.push(...batchConcepts);
-          } catch (batchErr: any) {
-            const errMsg = batchErr.message || String(batchErr);
-            console.error(`[${stepId}] Batch ${i + 1} error:`, errMsg);
-            batchErrors.push(`Batch ${i + 1}: ${errMsg}`);
-            addStepDetail(stepId, `ERROR Batch ${i + 1}: ${errMsg}`);
-            // Continue with other batches
+          // Get the next chunk of up to PARALLEL_BATCH batches
+          const parallelBatches = batches.slice(i, i + PARALLEL_BATCH);
+          
+          // Process all batches in this chunk in parallel
+          const results = await Promise.all(
+            parallelBatches.map(async (batch, localIdx) => {
+              const batchIndex = i + localIdx;
+              try {
+                const batchConcepts = await extractBatch(dataset, batch, batchIndex, batches.length, stepId);
+                return { success: true as const, concepts: batchConcepts };
+              } catch (batchErr: any) {
+                const errMsg = batchErr.message || String(batchErr);
+                console.error(`[${stepId}] Batch ${batchIndex + 1} error:`, errMsg);
+                addStepDetail(stepId, `ERROR Batch ${batchIndex + 1}: ${errMsg}`);
+                return { success: false as const, error: `Batch ${batchIndex + 1}: ${errMsg}` };
+              }
+            })
+          );
+          
+          // Collect results from parallel execution
+          for (const result of results) {
+            if (result.success && result.concepts) {
+              allConcepts.push(...result.concepts);
+            } else if (!result.success && result.error) {
+              batchErrors.push(result.error);
+            }
           }
+          
+          // Update progress after each parallel chunk
+          const processed = Math.min(i + PARALLEL_BATCH, batches.length);
+          updateStep(stepId, { 
+            message: `${processed}/${batches.length} batches`, 
+            progress: Math.round((processed / batches.length) * 100)
+          });
         }
         
         // Mark step complete/error IMMEDIATELY (don't wait for other dataset)
