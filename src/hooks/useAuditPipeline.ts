@@ -1003,9 +1003,9 @@ export function useAuditPipeline() {
       await pauseIfStepMode("d2");
 
       // ========================================
-      // PHASE 2: Merge concepts V2 - ID-BASED ADDITIVE REMAPPING
-      // LLM only maps concept IDs. Code handles all element remapping.
-      // Old concepts marked remappedTo, NOT deleted until end.
+      // PHASE 2: Merge concepts - LOCAL GRAPH AS SOURCE OF TRUTH
+      // Edge function only returns merge instructions.
+      // Client handles all graph state: retargets edges, deletes orphan concepts.
       // ========================================
       updateStep("merge", { status: "running", message: "Initializing merge...", startedAt: new Date() });
 
@@ -1016,73 +1016,36 @@ export function useAuditPipeline() {
         high: 3,   // Three rounds - aggressive consolidation
       };
       const mergeRounds = CONSOLIDATION_ROUNDS[consolidationLevel];
-      
-      // Build element label lookup maps for providing context to the merge LLM
-      const d1ElementLabelMap = new Map<string, string>();
-      const d2ElementLabelMap = new Map<string, string>();
-      d1Elements.forEach(el => d1ElementLabelMap.set(el.id, el.label || el.id));
-      d2Elements.forEach(el => d2ElementLabelMap.set(el.id, el.label || el.id));
-      
-      // V2 Unified concept type with ID for tracking
-      interface UnifiedConceptV2 {
-        id: string;           // Unique ID like "C1", "C2"
-        label: string;
-        description: string;
-        d1Ids: string[];
-        d2Ids: string[];
-        elementLabels: string[];
-        remappedTo?: string;  // If merged, points to new concept ID
-      }
-      
-      // Initialize unified concepts from extraction results WITH IDs
-      let nextConceptId = 1;
-      let currentConcepts: UnifiedConceptV2[] = [
-        ...d1Concepts.map(c => ({ 
-          id: `C${nextConceptId++}`,
-          label: c.label, 
-          description: c.description, 
-          d1Ids: c.elementIds,
-          d2Ids: [] as string[],
-          elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
-        })),
-        ...d2Concepts.map(c => ({ 
-          id: `C${nextConceptId++}`,
-          label: c.label, 
-          description: c.description, 
-          d1Ids: [] as string[],
-          d2Ids: c.elementIds,
-          elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
-        })),
-      ];
 
       // Track element counts for verification
       const initialD1ElementCount = d1Elements.length;
       const initialD2ElementCount = d2Elements.length;
       
-      // Build concept node lookup by concept ID
-      const conceptNodeByConceptId = new Map<string, string>(); // concept.id -> node.id
+      // Build concept node lookup by concept ID (conceptId -> nodeId)
+      const conceptNodeByConceptId = new Map<string, string>();
       
-      // Create initial concept nodes in the graph
-      for (const concept of currentConcepts) {
-        const hasD1 = concept.d1Ids.length > 0;
-        const hasD2 = concept.d2Ids.length > 0;
-        
+      // Initialize concept ID counter
+      let nextConceptId = 1;
+      
+      // Create initial concept nodes in the graph from extracted concepts
+      for (const concept of d1Concepts) {
+        const conceptId = `C${nextConceptId++}`;
         const conceptNode: LocalGraphNode = {
           id: localId(),
           label: concept.label,
           description: concept.description,
           node_type: "concept",
-          source_dataset: hasD1 && hasD2 ? "both" : (hasD1 ? "dataset1" : "dataset2"),
-          source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
-          color: hasD1 && hasD2 ? "#a855f7" : (hasD1 ? "#60a5fa" : "#4ade80"),
-          size: hasD1 && hasD2 ? 25 : 20,
-          metadata: { conceptId: concept.id, merged: hasD1 && hasD2 },
+          source_dataset: "dataset1",
+          source_element_ids: concept.elementIds,
+          color: "#60a5fa",
+          size: 20,
+          metadata: { conceptId },
         };
         localNodes.push(conceptNode);
-        conceptNodeByConceptId.set(concept.id, conceptNode.id);
+        conceptNodeByConceptId.set(conceptId, conceptNode.id);
         
         // Create edges from D1 element nodes to this concept
-        for (const elId of concept.d1Ids) {
+        for (const elId of concept.elementIds) {
           const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
           if (elementNode) {
             localEdges.push({
@@ -1092,13 +1055,30 @@ export function useAuditPipeline() {
               edge_type: "defines",
               label: "defines",
               weight: 1.0,
-              metadata: { conceptId: concept.id },
+              metadata: { conceptId },
             });
           }
         }
+      }
+      
+      for (const concept of d2Concepts) {
+        const conceptId = `C${nextConceptId++}`;
+        const conceptNode: LocalGraphNode = {
+          id: localId(),
+          label: concept.label,
+          description: concept.description,
+          node_type: "concept",
+          source_dataset: "dataset2",
+          source_element_ids: concept.elementIds,
+          color: "#4ade80",
+          size: 20,
+          metadata: { conceptId },
+        };
+        localNodes.push(conceptNode);
+        conceptNodeByConceptId.set(conceptId, conceptNode.id);
         
         // Create edges from D2 element nodes to this concept
-        for (const elId of concept.d2Ids) {
+        for (const elId of concept.elementIds) {
           const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
           if (elementNode) {
             localEdges.push({
@@ -1108,13 +1088,14 @@ export function useAuditPipeline() {
               edge_type: "implements",
               label: "implements",
               weight: 1.0,
-              metadata: { conceptId: concept.id },
+              metadata: { conceptId },
             });
           }
         }
       }
       
-      addStepDetail("merge", `Starting: ${currentConcepts.length} concepts (${initialD1ElementCount} D1, ${initialD2ElementCount} D2 elements)`);
+      const initialConceptCount = d1Concepts.length + d2Concepts.length;
+      addStepDetail("merge", `Starting: ${initialConceptCount} concepts (${initialD1ElementCount} D1, ${initialD2ElementCount} D2 elements)`);
       updateResults();
 
       // Run multiple merge rounds
@@ -1129,7 +1110,21 @@ export function useAuditPipeline() {
         });
         addStepDetail("merge", `Round ${round}/${mergeRounds}: ${roundLabel} matching`);
         
-        // Call V2 edge function with ID-based concepts
+        // Build list of ACTIVE concepts from local graph (no remappedTo)
+        const activeConceptNodes = localNodes.filter(n => 
+          n.node_type === "concept" && !n.metadata?.remappedTo
+        );
+        
+        // Build lightweight concept list for edge function
+        const conceptsForLLM = activeConceptNodes.map(n => ({
+          id: n.metadata?.conceptId as string,
+          label: n.label,
+          description: n.description || "",
+        }));
+        
+        console.log(`[merge] Round ${round}: Sending ${conceptsForLLM.length} active concepts to edge function`);
+        
+        // Call edge function - it only returns merge instructions
         const mergeResponse = await fetch(`${BASE_URL}/audit-merge-concepts-v2`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1137,7 +1132,7 @@ export function useAuditPipeline() {
             sessionId, 
             projectId, 
             shareToken, 
-            concepts: currentConcepts,
+            concepts: conceptsForLLM,
             round,
             totalRounds: mergeRounds,
           }),
@@ -1148,23 +1143,14 @@ export function useAuditPipeline() {
           throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
         }
 
-        // Parse SSE response
-        interface MergeLogEntry {
-          fromIds: string[];
-          fromLabels: string[];
-          toId: string;
-          toLabel: string;
+        // Parse SSE response - only expect merge instructions now
+        interface MergeInstruction {
+          sourceIds: string[];
+          mergedLabel: string;
+          mergedDescription: string;
         }
         
-        let mergeResult: {
-          concepts: UnifiedConceptV2[];
-          mergeLog: MergeLogEntry[];
-          inputCount: number;
-          outputCount: number;
-          d1ElementCount: number;
-          d2ElementCount: number;
-          nextConceptId: number;
-        } | null = null;
+        let mergeInstructions: MergeInstruction[] = [];
 
         await streamSSE(
           mergeResponse,
@@ -1173,148 +1159,141 @@ export function useAuditPipeline() {
           },
           () => {},
           (data) => {
-            mergeResult = {
-              concepts: (data.concepts || []).map((c: any) => ({
-                id: c.id,
-                label: c.label,
-                description: c.description,
-                d1Ids: c.d1Ids || [],
-                d2Ids: c.d2Ids || [],
-                elementLabels: [
-                  ...(c.d1Ids || []).map((id: string) => d1ElementLabelMap.get(id) || id),
-                  ...(c.d2Ids || []).map((id: string) => d2ElementLabelMap.get(id) || id),
-                ],
-                remappedTo: c.remappedTo,
-              })),
-              mergeLog: data.mergeLog || [],
-              inputCount: data.inputCount || 0,
-              outputCount: data.outputCount || 0,
-              d1ElementCount: data.d1ElementCount || 0,
-              d2ElementCount: data.d2ElementCount || 0,
-              nextConceptId: data.nextConceptId || nextConceptId,
-            };
+            mergeInstructions = data.merges || [];
           },
           (err) => { throw new Error(`Merge stream error: ${err}`); }
         );
 
-        if (!mergeResult) {
-          throw new Error(`Round ${round}: No result from merge edge function`);
-        }
-
-        // Update nextConceptId from response
-        nextConceptId = mergeResult.nextConceptId;
-
-        // Log merge results
-        addStepDetail("merge", `Round ${round}: ${mergeResult.inputCount} → ${mergeResult.outputCount} concepts`);
-        
-        for (const m of mergeResult.mergeLog) {
-          addStepDetail("merge", `  • ${m.toLabel} ← [${m.fromLabels.join(", ")}]`);
-        }
+        const beforeCount = activeConceptNodes.length;
+        let mergeCount = 0;
 
         // ========================================
-        // ADDITIVE REMAPPING: Create new concept nodes, remap edges
-        // DON'T delete old concepts yet - just remap edges to new ones
+        // APPLY MERGES LOCALLY: Local graph is source of truth
         // ========================================
-        
-        // Process each merge: create new concept node, remap edges
-        for (const m of mergeResult.mergeLog) {
-          // Find the new concept in the response
-          const newConcept = mergeResult.concepts.find(c => c.id === m.toId && !c.remappedTo);
-          if (!newConcept) {
-            console.error(`[merge-v2] Cannot find new concept ${m.toId}`);
+        for (const merge of mergeInstructions) {
+          const { sourceIds, mergedLabel, mergedDescription } = merge;
+          
+          // Find the node IDs for source concepts
+          const sourceNodeIds: string[] = [];
+          for (const conceptId of sourceIds) {
+            const nodeId = conceptNodeByConceptId.get(conceptId);
+            if (nodeId) {
+              sourceNodeIds.push(nodeId);
+            } else {
+              console.warn(`[merge] Source concept ${conceptId} not found in map`);
+            }
+          }
+          
+          if (sourceNodeIds.length < 2) {
+            console.warn(`[merge] Skipping merge - only ${sourceNodeIds.length} valid sources for "${mergedLabel}"`);
             continue;
           }
           
-          // Create the new concept node
-          const hasD1 = newConcept.d1Ids.length > 0;
-          const hasD2 = newConcept.d2Ids.length > 0;
+          // Create new concept node
+          const newConceptId = `C${nextConceptId++}`;
+          
+          // Combine source_element_ids from all source nodes
+          const combinedElementIds: string[] = [];
+          let hasD1 = false;
+          let hasD2 = false;
+          
+          for (const nodeId of sourceNodeIds) {
+            const sourceNode = localNodes.find(n => n.id === nodeId);
+            if (sourceNode) {
+              combinedElementIds.push(...(sourceNode.source_element_ids || []));
+              if (sourceNode.source_dataset === "dataset1" || sourceNode.source_dataset === "both") hasD1 = true;
+              if (sourceNode.source_dataset === "dataset2" || sourceNode.source_dataset === "both") hasD2 = true;
+            }
+          }
           
           const newConceptNode: LocalGraphNode = {
             id: localId(),
-            label: newConcept.label,
-            description: newConcept.description,
+            label: mergedLabel,
+            description: mergedDescription,
             node_type: "concept",
             source_dataset: hasD1 && hasD2 ? "both" : (hasD1 ? "dataset1" : "dataset2"),
-            source_element_ids: [...newConcept.d1Ids, ...newConcept.d2Ids],
+            source_element_ids: combinedElementIds,
             color: hasD1 && hasD2 ? "#a855f7" : (hasD1 ? "#60a5fa" : "#4ade80"),
             size: hasD1 && hasD2 ? 25 : 20,
-            metadata: { conceptId: newConcept.id, merged: hasD1 && hasD2, round },
+            metadata: { conceptId: newConceptId, merged: hasD1 && hasD2, round },
           };
           localNodes.push(newConceptNode);
-          conceptNodeByConceptId.set(newConcept.id, newConceptNode.id);
+          conceptNodeByConceptId.set(newConceptId, newConceptNode.id);
           
-          // Remap edges from OLD concept nodes to NEW concept node
-          for (const oldConceptId of m.fromIds) {
-            const oldNodeId = conceptNodeByConceptId.get(oldConceptId);
-            if (!oldNodeId) {
-              console.error(`[merge-v2] No node found for old concept ${oldConceptId}`);
-              continue;
+          // RETARGET all edges pointing to source nodes → point to new node
+          for (const edge of localEdges) {
+            if (sourceNodeIds.includes(edge.target_node_id)) {
+              edge.target_node_id = newConceptNode.id;
+              edge.metadata = { ...edge.metadata, remappedTo: newConceptId, round };
             }
-            
-            // Find all edges pointing TO the old concept node
-            for (const edge of localEdges) {
-              if (edge.target_node_id === oldNodeId) {
-                // Remap this edge to point to the new concept node
-                edge.target_node_id = newConceptNode.id;
-                edge.metadata = { ...edge.metadata, remappedFrom: oldConceptId, remappedTo: newConcept.id, round };
-              }
+          }
+          
+          // Mark source nodes as remapped
+          for (const nodeId of sourceNodeIds) {
+            const sourceNode = localNodes.find(n => n.id === nodeId);
+            if (sourceNode) {
+              sourceNode.metadata = { ...sourceNode.metadata, remappedTo: newConceptId };
             }
-            
-            // Mark the old node as remapped (but don't delete yet)
-            const oldNode = localNodes.find(n => n.id === oldNodeId);
-            if (oldNode) {
-              oldNode.metadata = { ...oldNode.metadata, remappedTo: newConcept.id };
+          }
+          
+          mergeCount++;
+          addStepDetail("merge", `• ${mergedLabel} ← [${sourceIds.join(", ")}]`);
+        }
+        
+        // ========================================
+        // DELETE orphan concept nodes (remappedTo set AND zero edges)
+        // ========================================
+        const nodesToDelete: string[] = [];
+        
+        for (const node of localNodes) {
+          if (node.node_type === "concept" && node.metadata?.remappedTo) {
+            const hasIncomingEdges = localEdges.some(e => e.target_node_id === node.id);
+            if (!hasIncomingEdges) {
+              nodesToDelete.push(node.id);
+            } else {
+              // Safety net: keep if edges still point here, clear remappedTo
+              console.warn(`[merge] KEEPING "${node.label}" - still has edges`);
+              delete node.metadata.remappedTo;
             }
           }
         }
         
-        // Update current concepts for next round
-        currentConcepts = mergeResult.concepts;
+        // Delete orphan nodes
+        for (let i = localNodes.length - 1; i >= 0; i--) {
+          if (nodesToDelete.includes(localNodes[i].id)) {
+            localNodes.splice(i, 1);
+          }
+        }
         
-        // Update UI with rebuilt graph
+        const afterCount = localNodes.filter(n => n.node_type === "concept" && !n.metadata?.remappedTo).length;
+        addStepDetail("merge", `Round ${round}: ${beforeCount} → ${afterCount} concepts (${nodesToDelete.length} deleted)`);
+        
         updateResults();
-        
-        // Verify element counts
-        if (mergeResult.d1ElementCount !== initialD1ElementCount) {
-          console.error(`[merge-v2] ❌ D1 LOSS: ${initialD1ElementCount} → ${mergeResult.d1ElementCount}`);
-          addStepDetail("merge", `⚠️ D1 element count mismatch: expected ${initialD1ElementCount}, got ${mergeResult.d1ElementCount}`);
-        }
-        if (mergeResult.d2ElementCount !== initialD2ElementCount) {
-          console.error(`[merge-v2] ❌ D2 LOSS: ${initialD2ElementCount} → ${mergeResult.d2ElementCount}`);
-          addStepDetail("merge", `⚠️ D2 element count mismatch: expected ${initialD2ElementCount}, got ${mergeResult.d2ElementCount}`);
-        }
       }
 
       // ========================================
-      // END OF MERGE ROUNDS: Clean up old concept nodes with ZERO edges
-      // Only delete concepts that have been FULLY remapped
+      // FINAL: Delete any remaining remapped concepts with zero edges
       // ========================================
-      const conceptNodesToDelete: string[] = [];
+      const finalNodesToDelete: string[] = [];
       
       for (const node of localNodes) {
         if (node.node_type === "concept" && node.metadata?.remappedTo) {
-          // Check if this old concept node has any edges pointing to it
           const hasEdges = localEdges.some(e => e.target_node_id === node.id);
           if (!hasEdges) {
-            // Safe to delete - fully remapped
-            conceptNodesToDelete.push(node.id);
+            finalNodesToDelete.push(node.id);
           } else {
-            // KEEP IT - some edges still point here (safety net)
-            console.warn(`[merge-v2] KEEPING old concept node "${node.label}" - still has edges`);
-            // Clear the remappedTo flag since we're keeping it
             delete node.metadata.remappedTo;
           }
         }
       }
       
-      // Delete the old concept nodes that have no edges
       for (let i = localNodes.length - 1; i >= 0; i--) {
-        if (conceptNodesToDelete.includes(localNodes[i].id)) {
+        if (finalNodesToDelete.includes(localNodes[i].id)) {
           localNodes.splice(i, 1);
         }
       }
       
-      addStepDetail("merge", `Cleaned up ${conceptNodesToDelete.length} remapped concept nodes`);
+      addStepDetail("merge", `Cleaned up ${finalNodesToDelete.length} remapped concept nodes`);
 
       // ========================================
       // FINAL VERIFICATION: Zero orphan elements
@@ -1325,7 +1304,7 @@ export function useAuditPipeline() {
 
       if (orphanElements.length > 0) {
         // Log detailed orphan info for debugging
-        console.error(`[merge-v2] CRITICAL: ${orphanElements.length} orphan elements after merge!`);
+        console.error(`[merge] CRITICAL: ${orphanElements.length} orphan elements after merge!`);
         for (const orphan of orphanElements.slice(0, 10)) {
           console.error(`  Orphan: ${orphan.id.slice(0, 8)} "${orphan.label?.slice(0, 40)}" originalElementId=${orphan.metadata?.originalElementId}`);
         }
@@ -1349,28 +1328,29 @@ export function useAuditPipeline() {
       
       addStepDetail("merge", `Graph: ${localNodes.length} nodes, ${localEdges.length} edges`);
 
-      // Save final concept state for downstream (tesseract, etc)
-      // Only include non-remapped concepts
-      const activeConcepts = currentConcepts.filter(c => !c.remappedTo);
+      // Derive concept state from local graph (source of truth!)
+      mergedConcepts = finalConceptNodes
+        .filter(n => n.source_dataset === "both")
+        .map(n => {
+          const d1Ids = n.source_element_ids.filter(id => d1Elements.some(e => e.id === id));
+          const d2Ids = n.source_element_ids.filter(id => d2Elements.some(e => e.id === id));
+          return {
+            mergedLabel: n.label,
+            mergedDescription: n.description,
+            d1ConceptLabels: [n.label],
+            d2ConceptLabels: [n.label],
+            d1Ids,
+            d2Ids,
+          };
+        });
       
-      mergedConcepts = activeConcepts
-        .filter(c => c.d1Ids.length > 0 && c.d2Ids.length > 0)
-        .map(c => ({
-          mergedLabel: c.label,
-          mergedDescription: c.description,
-          d1ConceptLabels: [c.label],
-          d2ConceptLabels: [c.label],
-          d1Ids: c.d1Ids,
-          d2Ids: c.d2Ids,
-        }));
+      unmergedD1Concepts = finalConceptNodes
+        .filter(n => n.source_dataset === "dataset1")
+        .map(n => ({ label: n.label, description: n.description, elementIds: n.source_element_ids }));
       
-      unmergedD1Concepts = activeConcepts
-        .filter(c => c.d1Ids.length > 0 && c.d2Ids.length === 0)
-        .map(c => ({ label: c.label, description: c.description, elementIds: c.d1Ids }));
-      
-      unmergedD2Concepts = activeConcepts
-        .filter(c => c.d2Ids.length > 0 && c.d1Ids.length === 0)
-        .map(c => ({ label: c.label, description: c.description, elementIds: c.d2Ids }));
+      unmergedD2Concepts = finalConceptNodes
+        .filter(n => n.source_dataset === "dataset2")
+        .map(n => ({ label: n.label, description: n.description, elementIds: n.source_element_ids }));
 
       // Save intermediate state for restart functionality
       intermediateStateRef.current = {
@@ -1386,6 +1366,9 @@ export function useAuditPipeline() {
       // ========================================
       // PHASE 2.75: Generate SKELETON Tesseract cells (pre-analysis preview)
       // ========================================
+      // Clear any existing tesseract cells before generating new ones
+      localTesseractCells.length = 0;
+      
       for (const node of finalConceptNodes) {
         const d1IdsInConcept = node.source_element_ids.filter(id => d1Elements.some(e => e.id === id));
         const d2IdsInConcept = node.source_element_ids.filter(id => d2Elements.some(e => e.id === id));
