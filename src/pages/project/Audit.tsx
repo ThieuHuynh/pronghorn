@@ -4,7 +4,6 @@ import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { TesseractVisualizer } from "@/components/audit/TesseractVisualizer";
-import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { FitGapResults } from "@/components/audit/FitGapResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
@@ -84,7 +83,6 @@ export default function Audit() {
   
   const {
     session,
-    blackboardEntries,
     tesseractCells,
     graphNodes,
     graphEdges,
@@ -562,7 +560,6 @@ export default function Audit() {
       tesseractCells: cells,
       vennResult: venn,
       activityLog: pipelineSteps.length > 0 ? pipelineSteps : activityStream,
-      blackboard: blackboardEntries,
       exportedAt: new Date().toISOString(),
     };
     
@@ -964,16 +961,6 @@ export default function Audit() {
                         </Badge>
                       )}
                     </TabsTrigger>
-                    <TabsTrigger value="blackboard" className="gap-1 sm:gap-2 text-xs sm:text-sm">
-                      <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Blackboard</span>
-                      <span className="sm:hidden">BB</span>
-                      {blackboardEntries.length > 0 && (
-                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
-                          {blackboardEntries.length}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
                     <TabsTrigger value="results" className="gap-1 sm:gap-2 text-xs sm:text-sm">
                       <CircleDot className="h-3 w-3 sm:h-4 sm:w-4" />
                       <span className="hidden sm:inline">Results</span>
@@ -1072,12 +1059,6 @@ export default function Audit() {
                   />
                 </TabsContent>
 
-                <TabsContent value="blackboard">
-                  <AuditBlackboard
-                    entries={blackboardEntries}
-                    currentIteration={session.current_iteration}
-                  />
-                </TabsContent>
 
                 <TabsContent value="results">
                   {/* Show FitGapResults for single-dataset mode, VennDiagramResults for comparison mode */}
