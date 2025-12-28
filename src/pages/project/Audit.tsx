@@ -95,6 +95,7 @@ export default function Audit() {
     updateSessionStatus,
     refreshSession,
     pruneOrphanNodes,
+    setLocalSession,
     addGraphNodes,
     addGraphEdges,
     removeGraphNodes,
@@ -260,7 +261,10 @@ export default function Audit() {
       
       if (newSession) {
         setSelectedSessionId(newSession.id);
-        setLoadedSessionId(newSession.id); // Auto-load newly created sessions
+        // DON'T set loadedSessionId - keeps useRealtimeAudit from loading empty DB data
+        // loadedSessionId will be set after user clicks "Save to Database"
+        // Instead, set session locally so UI can display it
+        setLocalSession(newSession);
         setSessions((prev) => [newSession, ...prev]);
         setConfigDialogOpen(false);
         
@@ -510,12 +514,11 @@ export default function Audit() {
         throw new Error(result.error || "Save failed");
       }
       
-      // Optimistic update local state
-      addGraphNodes(nodesToSave.map(n => ({ ...n, session_id: session.id })));
-      addGraphEdges(edgesToSave.map(e => ({ ...e, session_id: session.id })));
+      // Now set loadedSessionId to load from database (data is now saved)
+      setLoadedSessionId(session.id);
       
-      // Refresh to sync with DB
-      await refreshSession(session.id);
+      // Clear pipeline results since data is now in DB
+      clearPipelineResults();
       
       toast.success(`Saved complete audit: ${nodesToSave.length} nodes, ${edgesToSave.length} edges, ${cellsToSave.length} cells`);
     } catch (err: any) {
@@ -935,9 +938,9 @@ export default function Audit() {
                       <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                       <span className="hidden sm:inline">Activity</span>
                       <span className="sm:hidden">Act</span>
-                      {activityStream.length > 0 && (
+                      {(pipelineSteps.length > 0 || activityStream.length > 0) && (
                         <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
-                          {activityStream.length}
+                          {pipelineSteps.length > 0 ? pipelineSteps.length : activityStream.length}
                         </Badge>
                       )}
                     </TabsTrigger>

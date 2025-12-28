@@ -79,6 +79,8 @@ export interface UseRealtimeAuditReturn {
   writeTesseractCell: (cell: WriteTesseractCellParams) => Promise<void>;
   refreshSession: (sessionId: string) => Promise<void>;
   pruneOrphanNodes: (sessionId: string) => Promise<number>;
+  // Set session locally without triggering DB load
+  setLocalSession: (session: AuditSession | null) => void;
   // Optimistic update functions for pipeline
   addGraphNodes: (nodes: Partial<AuditGraphNode>[]) => void;
   addGraphEdges: (edges: Partial<AuditGraphEdge>[]) => void;
@@ -177,8 +179,17 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
   // Data is only loaded when user explicitly loads a saved session
   // Data is only saved when user clicks "Save Audit"
   useEffect(() => {
-    if (!sessionId || !shareToken) return;
-    // Only load on initial mount - no realtime subscriptions
+    if (!sessionId || !shareToken) {
+      // Clear all state when no session is selected
+      setSession(null);
+      setBlackboardEntries([]);
+      setTesseractCells([]);
+      setGraphNodes([]);
+      setGraphEdges([]);
+      setActivityStream([]);
+      return;
+    }
+    // Only load on explicit session selection - no realtime subscriptions
     loadSessionData(sessionId);
   }, [sessionId, shareToken, loadSessionData]);
 
@@ -393,5 +404,16 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
     }
   }, [shareToken]);
 
-  return { session, blackboardEntries, tesseractCells, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes, saveAuditData };
+  // Set session locally without triggering DB load (for new sessions)
+  const setLocalSession = useCallback((newSession: AuditSession | null) => {
+    setSession(newSession);
+    // Clear other state for fresh start
+    setBlackboardEntries([]);
+    setTesseractCells([]);
+    setGraphNodes([]);
+    setGraphEdges([]);
+    setActivityStream([]);
+  }, []);
+
+  return { session, blackboardEntries, tesseractCells, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, setLocalSession, addGraphNodes, addGraphEdges, removeGraphNodes, saveAuditData };
 }
