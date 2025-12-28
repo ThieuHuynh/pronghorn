@@ -1,6 +1,6 @@
-// Audit Pipeline Phase 2 V2: ID-based merge with additive remapping
-// LLM only maps concept IDs to new concepts. Code handles all element remapping.
-// Old concepts are marked remappedTo, NOT deleted. Client cleans up at the end.
+// Audit Pipeline Phase 2 V2: MERGE ADVISOR ONLY
+// LLM analyzes concept IDs and suggests merges.
+// Returns ONLY merge instructions. Client handles all graph state.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
@@ -10,41 +10,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Unified concept with unique ID for tracking through merges
-export interface UnifiedConcept {
-  id: string;           // Unique ID like "C1", "C2" - NEVER changes
+// Lightweight concept for LLM prompt (no element tracking)
+interface ConceptInput {
+  id: string;           // e.g., "C1", "C2"
   label: string;
   description: string;
-  d1Ids: string[];
-  d2Ids: string[];
-  elementLabels?: string[];
-  remappedTo?: string;  // If merged, points to new concept ID
 }
 
-interface MergeLogEntry {
-  fromIds: string[];    // Source concept IDs that were merged
-  fromLabels: string[]; // Source concept labels (for display)
-  toId: string;         // New concept ID
-  toLabel: string;      // New concept label
+interface MergeInstruction {
+  sourceIds: string[];      // Concept IDs to merge
+  mergedLabel: string;
+  mergedDescription: string;
 }
 
 interface MergeRequest {
   sessionId: string;
   projectId: string;
   shareToken: string;
-  concepts: UnifiedConcept[];
+  concepts: ConceptInput[];   // Lightweight list
   round: number;
   totalRounds: number;
 }
 
 interface MergeResponse {
-  concepts: UnifiedConcept[];     // ALL concepts: new, remapped, and unchanged
-  mergeLog: MergeLogEntry[];      // What merges happened (for UI display)
-  inputCount: number;
-  outputCount: number;            // Count of non-remapped concepts
-  d1ElementCount: number;
-  d2ElementCount: number;
-  nextConceptId: number;          // For client to continue ID sequence
+  merges: MergeInstruction[];
 }
 
 interface ProjectSettings {
@@ -185,45 +174,18 @@ serve(async (req) => {
       const maxTokens = project?.max_tokens || 16384;
       const modelConfig = getModelConfig(selectedModel);
 
-      // Only consider non-remapped concepts for input counting
-      const activeConcepts = concepts.filter(c => !c.remappedTo);
-      
-      // Count input elements (for verification)
-      const inputD1Count = activeConcepts.reduce((sum, c) => sum + (c.d1Ids?.length || 0), 0);
-      const inputD2Count = activeConcepts.reduce((sum, c) => sum + (c.d2Ids?.length || 0), 0);
-      
-      // Find highest existing concept ID number
-      let nextConceptId = 1;
-      for (const c of concepts) {
-        const match = c.id.match(/^C(\d+)$/);
-        if (match) {
-          nextConceptId = Math.max(nextConceptId, parseInt(match[1], 10) + 1);
-        }
-      }
-      
       console.log(`[merge-v2] Round ${round}/${totalRounds} using ${selectedModel}`);
-      console.log(`[merge-v2] INPUT: ${activeConcepts.length} active concepts, ${inputD1Count} D1 elements, ${inputD2Count} D2 elements`);
+      console.log(`[merge-v2] INPUT: ${concepts.length} concepts to analyze`);
       
       await sendSSE("progress", { 
         phase: "concept_merge", 
-        message: `Round ${round}/${totalRounds}: Analyzing ${activeConcepts.length} concepts...`, 
+        message: `Round ${round}/${totalRounds}: Analyzing ${concepts.length} concepts...`, 
         progress: 10 
       });
 
-      // Build concept text for LLM - ONLY using IDs
-      const conceptsText = activeConcepts.map((c) => {
-        const d1Count = c.d1Ids?.length || 0;
-        const d2Count = c.d2Ids?.length || 0;
-        const sourceInfo = d1Count > 0 && d2Count > 0 
-          ? `[BOTH: ${d1Count} D1 + ${d2Count} D2]`
-          : d1Count > 0 
-            ? `[D1-only: ${d1Count} elements]` 
-            : `[D2-only: ${d2Count} elements]`;
-        
-        const elementsPreview = c.elementLabels && c.elementLabels.length > 0 
-          ? `\n  Elements: ${c.elementLabels.slice(0, 3).map(el => el.slice(0, 60)).join("; ")}${c.elementLabels.length > 3 ? ` (+${c.elementLabels.length - 3} more)` : ""}`
-          : "";
-        return `[${c.id}] "${c.label}" ${sourceInfo}\n  Description: ${c.description}${elementsPreview}`;
+      // Build concept text for LLM - just IDs and labels
+      const conceptsText = concepts.map((c) => {
+        return `[${c.id}] "${c.label}"\n  Description: ${c.description}`;
       }).join("\n\n");
 
       // Round-specific merge criteria
@@ -259,7 +221,7 @@ serve(async (req) => {
 **MERGE CRITERIA:**
 ${criteria}
 
-**Current concepts (${activeConcepts.length} total):**
+**Current concepts (${concepts.length} total):**
 
 ${conceptsText}
 
@@ -308,7 +270,7 @@ Return ONLY the JSON object.`;
       await sendSSE("progress", { phase: "concept_merge", message: "Processing merge instructions...", progress: 60 });
 
       // Parse JSON
-      let parsed: { merges: Array<{ sourceIds: string[]; mergedLabel: string; mergedDescription: string }> };
+      let parsed: { merges: MergeInstruction[] };
       try {
         parsed = JSON.parse(rawText);
       } catch {
@@ -322,110 +284,38 @@ Return ONLY the JSON object.`;
         }
       }
 
-      // Build concept lookup map by ID
-      const conceptById = new Map<string, UnifiedConcept>();
-      for (const c of concepts) {
-        conceptById.set(c.id, c);
-      }
+      // Validate and deduplicate merge instructions
+      const validMerges: MergeInstruction[] = [];
+      const usedIds = new Set<string>();
+      const conceptIds = new Set(concepts.map(c => c.id));
 
-      // Track which concept IDs were merged (to mark remappedTo)
-      const mergedIds = new Set<string>();
-      
-      // Build output concept list and merge log
-      const outputConcepts: UnifiedConcept[] = [];
-      const mergeLog: MergeLogEntry[] = [];
-
-      // Process each merge instruction - use IDs for deterministic lookup
       for (const m of (parsed.merges || [])) {
-        const validSources: UnifiedConcept[] = [];
-        const validSourceIds: string[] = [];
-        const validSourceLabels: string[] = [];
-        
-        for (const id of (m.sourceIds || [])) {
-          // Skip if already used in another merge
-          if (mergedIds.has(id)) {
-            console.log(`[merge-v2] SKIP: "${id}" already merged`);
-            continue;
+        // Filter to only valid IDs that haven't been used yet
+        const validSourceIds = (m.sourceIds || []).filter(id => {
+          if (!conceptIds.has(id)) {
+            console.log(`[merge-v2] Invalid concept ID: "${id}"`);
+            return false;
           }
-          
-          const found = conceptById.get(id);
-          if (found && !found.remappedTo) {
-            validSources.push(found);
-            validSourceIds.push(found.id);
-            validSourceLabels.push(found.label);
-            mergedIds.add(id);
-          } else if (!found) {
-            console.log(`[merge-v2] NOT FOUND: "${id}"`);
-          } else {
-            console.log(`[merge-v2] ALREADY REMAPPED: "${id}"`);
+          if (usedIds.has(id)) {
+            console.log(`[merge-v2] Duplicate concept ID: "${id}"`);
+            return false;
           }
-        }
-        
-        // Only create merged concept if 2+ valid sources
-        if (validSources.length >= 2) {
-          // Create new concept ID
-          const newId = `C${nextConceptId++}`;
-          
-          // Combine all element IDs from source concepts (NO deduplication - preserve exact counts)
-          const combinedD1Ids = validSources.flatMap(c => c.d1Ids || []);
-          const combinedD2Ids = validSources.flatMap(c => c.d2Ids || []);
-          const combinedLabels = validSources.flatMap(c => c.elementLabels || []);
-          
-          const mergedConcept: UnifiedConcept = {
-            id: newId,
-            label: m.mergedLabel,
-            description: m.mergedDescription,
-            d1Ids: combinedD1Ids,
-            d2Ids: combinedD2Ids,
-            elementLabels: combinedLabels,
-          };
-          outputConcepts.push(mergedConcept);
-          
-          // Mark source concepts as remapped (DON'T delete them)
-          for (const src of validSources) {
-            src.remappedTo = newId;
-          }
-          
-          // Add to merge log for UI
-          mergeLog.push({
-            fromIds: validSourceIds,
-            fromLabels: validSourceLabels,
-            toId: newId,
-            toLabel: m.mergedLabel,
+          return true;
+        });
+
+        // Only keep merges with 2+ valid sources
+        if (validSourceIds.length >= 2) {
+          validSourceIds.forEach(id => usedIds.add(id));
+          validMerges.push({
+            sourceIds: validSourceIds,
+            mergedLabel: m.mergedLabel,
+            mergedDescription: m.mergedDescription,
           });
-          
-          console.log(`[merge-v2] MERGED: [${newId}] "${m.mergedLabel}" ← [${validSourceIds.join(", ")}] (${combinedD1Ids.length} D1, ${combinedD2Ids.length} D2)`);
-        } else if (validSources.length === 1) {
-          // Only 1 valid source - unmark it so it passes through unchanged
-          mergedIds.delete(validSources[0].id);
-          console.log(`[merge-v2] UNMERGE: "${validSources[0].id}" (only 1 valid source)`);
+          console.log(`[merge-v2] MERGE: "${m.mergedLabel}" ← [${validSourceIds.join(", ")}]`);
         }
       }
 
-      // Add ALL original concepts (including those marked remappedTo)
-      // This preserves the full history for the client
-      for (const c of concepts) {
-        outputConcepts.push(c);
-      }
-
-      // ========================================
-      // VERIFICATION: Count elements in non-remapped concepts only
-      // ========================================
-      const activeOutputConcepts = outputConcepts.filter(c => !c.remappedTo);
-      const outputD1Count = activeOutputConcepts.reduce((sum, c) => sum + (c.d1Ids?.length || 0), 0);
-      const outputD2Count = activeOutputConcepts.reduce((sum, c) => sum + (c.d2Ids?.length || 0), 0);
-      
-      console.log(`[merge-v2] OUTPUT: ${activeOutputConcepts.length} active concepts, ${outputD1Count} D1 elements, ${outputD2Count} D2 elements`);
-      
-      if (outputD1Count !== inputD1Count) {
-        console.error(`[merge-v2] ❌ D1 ELEMENT LOSS: ${inputD1Count} in → ${outputD1Count} out`);
-      }
-      if (outputD2Count !== inputD2Count) {
-        console.error(`[merge-v2] ❌ D2 ELEMENT LOSS: ${inputD2Count} in → ${outputD2Count} out`);
-      }
-      if (outputD1Count === inputD1Count && outputD2Count === inputD2Count) {
-        console.log(`[merge-v2] ✅ Element counts verified: ${outputD1Count} D1, ${outputD2Count} D2`);
-      }
+      console.log(`[merge-v2] OUTPUT: ${validMerges.length} valid merges`);
 
       await sendSSE("progress", { phase: "concept_merge", message: "Merge complete", progress: 90 });
 
@@ -435,31 +325,22 @@ Return ONLY the JSON object.`;
         p_token: shareToken,
         p_agent_role: "concept_merger_v2",
         p_activity_type: "concept_merge",
-        p_title: `Round ${round}/${totalRounds}: ${activeConcepts.length} → ${activeOutputConcepts.length} concepts`,
-        p_content: mergeLog.length > 0 
-          ? `Merges:\n${mergeLog.map(m => `• [${m.toId}] ${m.toLabel} ← [${m.fromIds.join(", ")}]`).join("\n")}`
+        p_title: `Round ${round}/${totalRounds}: ${validMerges.length} merges`,
+        p_content: validMerges.length > 0 
+          ? `Merges:\n${validMerges.map(m => `• ${m.mergedLabel} ← [${m.sourceIds.join(", ")}]`).join("\n")}`
           : "No merges in this round",
         p_metadata: { 
           round,
           totalRounds,
-          inputCount: activeConcepts.length,
-          outputCount: activeOutputConcepts.length,
-          mergeCount: mergeLog.length,
-          d1ElementCount: outputD1Count,
-          d2ElementCount: outputD2Count,
+          inputCount: concepts.length,
+          mergeCount: validMerges.length,
           model: selectedModel,
         },
       });
 
-      // Return complete result
+      // Return ONLY merge instructions - client handles everything else
       const response: MergeResponse = {
-        concepts: outputConcepts,
-        mergeLog,
-        inputCount: activeConcepts.length,
-        outputCount: activeOutputConcepts.length,
-        d1ElementCount: outputD1Count,
-        d2ElementCount: outputD2Count,
-        nextConceptId,
+        merges: validMerges,
       };
 
       await sendSSE("result", response);
@@ -487,7 +368,7 @@ Return ONLY the JSON object.`;
       ...corsHeaders,
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
     },
   });
 });
