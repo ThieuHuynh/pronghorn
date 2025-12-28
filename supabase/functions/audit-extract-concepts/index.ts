@@ -397,6 +397,16 @@ CRITICAL RULES:
           }
         }
 
+        // For context-aware mode, validate at least 1 concept was returned
+        if (isContextAwareMode) {
+          const newCount = (parsed.new_concepts || []).length;
+          const existingCount = (parsed.existing_concepts || []).length;
+          if (newCount === 0 && existingCount === 0) {
+            console.warn(`[${dataset}] LLM returned 0 concepts - retrying with stronger prompt`);
+            throw new Error("LLM returned 0 concepts - must return at least 1");
+          }
+        }
+
         rawResult = parsed;
         console.log(`[${dataset}] Parsed response successfully`);
         break; // Success - exit retry loop
