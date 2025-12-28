@@ -365,6 +365,108 @@ export function getClaudeTools() {
   }));
 }
 
+// Gemini-compatible params schema (no additionalProperties - Gemini doesn't support it)
+const GEMINI_TOOL_PARAMS_SCHEMA = {
+  type: "object",
+  properties: {
+    // read_dataset_item params
+    dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset to read from" },
+    itemId: { type: "string", description: "The item ID or 8-char prefix to read" },
+    
+    // query_knowledge_graph params
+    filter: { type: "string", enum: ["all", "dataset1_only", "dataset2_only", "shared", "orphans"], description: "Filter nodes by source dataset" },
+    nodeType: { type: "string", description: "Filter by node type" },
+    limit: { type: "integer", description: "Max results to return" },
+    
+    // get_concept_links params
+    nodeId: { type: "string", description: "The knowledge graph node ID" },
+    
+    // write_blackboard params
+    entryType: { type: "string", enum: ["plan", "finding", "observation", "question", "conclusion", "tool_result"], description: "Type of blackboard entry" },
+    content: { type: "string", description: "The content to write" },
+    confidence: { type: "number", description: "Confidence level 0.0-1.0" },
+    targetAgent: { type: "string", description: "Optional target perspective" },
+    
+    // read_blackboard params
+    entryTypes: { type: "array", items: { type: "string" }, description: "Filter to specific entry types" },
+    
+    // create_concept params
+    label: { type: "string", description: "Short label for the concept" },
+    description: { type: "string", description: "Detailed description of the concept" },
+    sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"], description: "Which dataset this concept originates from" },
+    sourceElementIds: { type: "array", items: { type: "string" }, description: "REQUIRED: UUIDs or 8-char prefixes of source artifacts" },
+    
+    // link_concepts params
+    sourceNodeId: { type: "string", description: "D2 element 8-char prefix, concept label, or full graph node UUID" },
+    targetNodeId: { type: "string", description: "Concept label, D1 element prefix, or full graph node UUID" },
+    edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Use 'implements' for D2→Concept edges" },
+    
+    // record_tesseract_cell params
+    elementId: { type: "string", description: "Dataset 1 element ID" },
+    elementLabel: { type: "string", description: "Human-readable label" },
+    step: { type: "integer", description: "Analysis step 1-5" },
+    stepLabel: { type: "string", description: "Label for this step" },
+    polarity: { type: "number", description: "Alignment score -1 to +1" },
+    criticality: { type: "string", enum: ["critical", "major", "minor", "info"], description: "Severity level" },
+    evidenceSummary: { type: "string", description: "Summary of evidence" },
+    
+    // finalize_venn params
+    uniqueToD1: { 
+      type: "array", 
+      items: { 
+        type: "object", 
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" }
+        }
+      },
+      description: "Elements unique to Dataset 1 (gaps)" 
+    },
+    aligned: { 
+      type: "array", 
+      items: { 
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" },
+          sourceElement: { type: "string" },
+          targetElement: { type: "string" }
+        }
+      },
+      description: "Elements present in both datasets" 
+    },
+    uniqueToD2: { 
+      type: "array", 
+      items: { 
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" }
+        }
+      },
+      description: "Elements unique to Dataset 2 (orphans)" 
+    },
+    summary: { 
+      type: "object",
+      properties: {
+        totalD1Coverage: { type: "number" },
+        totalD2Coverage: { type: "number" },
+        alignmentScore: { type: "number" }
+      },
+      description: "Summary statistics" 
+    },
+    // request_next_batch params
+    startIndex: { type: "integer", description: "Starting index (0-based) for the batch" },
+  },
+  // NO additionalProperties here - Gemini doesn't support it
+};
+
 // Convert tools to Gemini function declarations with explicit params
 export function getGeminiFunctionDeclarations() {
   return {
@@ -388,7 +490,7 @@ export function getGeminiFunctionDeclarations() {
                      "link_concepts", "record_tesseract_cell", "finalize_venn"],
               description: "Name of the tool to invoke" 
             },
-            params: TOOL_PARAMS_SCHEMA,
+            params: GEMINI_TOOL_PARAMS_SCHEMA,
             rationale: { type: "string", description: "Why you are calling this tool" },
           },
           required: ["tool", "params"],
