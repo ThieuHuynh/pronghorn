@@ -1110,42 +1110,15 @@ export function useAuditPipeline() {
           },
           () => {},
           (data) => {
-            // Result now returns a unified concept list
+            // Result now returns unified concepts WITH merge instructions from edge function
             const resultConcepts = data.concepts || [];
             roundMergedCount = data.mergeCount || 0;
             
-            // CRITICAL: Track which labels were merged into which new labels
-            // The edge function should return merge instructions in the blackboard/activity
-            // But we can infer from comparing input vs output
-            
-            // Build current round's label -> concept mapping
-            const inputLabels = new Set(currentUnifiedConcepts.map(c => c.label.toLowerCase()));
-            const outputLabelMap = new Map<string, any>();
-            resultConcepts.forEach((c: any) => outputLabelMap.set(c.label.toLowerCase(), c));
-            
-            // Find merged concepts: new labels that weren't in input
-            for (const rc of resultConcepts) {
-              const rcLabelLower = rc.label.toLowerCase();
-              if (!inputLabels.has(rcLabelLower)) {
-                // This is a NEW merged label - find which old labels were absorbed
-                // Check which old concepts are now missing
-                const absorbedLabels: string[] = [];
-                for (const inputC of currentUnifiedConcepts) {
-                  const inputLabelLower = inputC.label.toLowerCase();
-                  if (!outputLabelMap.has(inputLabelLower)) {
-                    // This input concept is missing from output - it was merged
-                    absorbedLabels.push(inputC.label);
-                  }
-                }
-                
-                if (absorbedLabels.length > 0) {
-                  roundMergeInstructions.push({
-                    sourceConcepts: absorbedLabels,
-                    mergedLabel: rc.label,
-                  });
-                }
-              }
-            }
+            // USE THE MERGE INSTRUCTIONS DIRECTLY from edge function - no inference needed!
+            roundMergeInstructions = (data.merges || []).map((m: any) => ({
+              sourceConcepts: m.sourceConcepts || [],
+              mergedLabel: m.mergedLabel || "",
+            }));
             
             // Update merge history: for each source label, update its final destination
             for (const mi of roundMergeInstructions) {
@@ -1159,7 +1132,7 @@ export function useAuditPipeline() {
               }
             }
             
-            console.log(`[merge-history] Round ${round}: ${roundMergeInstructions.length} merge instructions`);
+            console.log(`[merge-history] Round ${round}: ${roundMergeInstructions.length} merge instructions from edge function`);
             roundMergeInstructions.forEach(mi => {
               console.log(`  "${mi.mergedLabel}" ← [${mi.sourceConcepts.join(", ")}]`);
             });

@@ -408,10 +408,11 @@ Return ONLY the JSON object, no other text.`;
 
       await sendSSE("progress", { phase: "concept_merge", message: "Merge complete", progress: 100 });
       
-      // Return unified concept list
+      // Return unified concept list WITH merge instructions
       await sendSSE("result", { 
         concepts: outputConcepts,
         mergeCount,
+        merges: parsed.merges || [],  // The exact sourceConcepts → mergedLabel mapping
       });
       await sendSSE("done", { success: true });
 
