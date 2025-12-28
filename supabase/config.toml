@@ -152,3 +152,6 @@ verify_jwt = false
 
 [functions.audit-enhanced-sort]
 verify_jwt = false
+
+[functions.audit-merge-concepts-v2]
+verify_jwt = false
