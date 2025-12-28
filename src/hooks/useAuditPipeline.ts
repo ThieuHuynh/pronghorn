@@ -964,8 +964,16 @@ export function useAuditPipeline() {
         // Single mode: only extract D1
         const d1Result = await processAllBatches("d1", d1Batches, "d1");
         d1Concepts = d1Result.concepts;
+      } else if (mappingMode === "one_to_many") {
+        // 1:many mode: D1 must complete before D2 so they share accumulated concepts
+        console.log("[extraction] 1:many mode - processing D1 then D2 sequentially");
+        const d1Result = await processAllBatches("d1", d1Batches, "d1");
+        d1Concepts = d1Result.concepts;
+        
+        const d2Result = await processAllBatches("d2", d2Batches, "d2");
+        d2Concepts = d2Result.concepts;
       } else {
-        // Comparison mode: extract D1 and D2 in parallel
+        // 1:1 mode - Comparison mode: extract D1 and D2 in parallel
         const [d1Result, d2Result] = await Promise.allSettled([
           processAllBatches("d1", d1Batches, "d1"),
           processAllBatches("d2", d2Batches, "d2"),
