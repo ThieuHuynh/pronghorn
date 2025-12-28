@@ -464,6 +464,10 @@ export function useAuditPipeline() {
     const localEdges: LocalGraphEdge[] = [];
     const localTesseractCells: LocalTesseractCell[] = [];
     let localVennResult: LocalVennResult | null = null;
+    
+    // CONCEPT ID TRACKING - assigned during extraction, used throughout
+    let nextConceptId = 1;
+    const conceptNodeByConceptId = new Map<string, string>(); // conceptId -> nodeId
 
     // Initialize steps - include enhanced_sort if enabled
     const enhancedSortEnabled = input.enhancedSortEnabled ?? false;
@@ -510,10 +514,11 @@ export function useAuditPipeline() {
       setProgress({ phase: "creating_nodes", message: `Creating ${d1Elements.length + d2Elements.length} nodes...`, progress: 5 });
       updateStep("nodes", { status: "running", message: "Creating nodes locally...", startedAt: new Date() });
 
-      // Create D1 nodes locally
-      for (const element of d1Elements) {
+      // Create D1 nodes locally with STABLE IDs (D1_0, D1_1, etc.)
+      for (let i = 0; i < d1Elements.length; i++) {
+        const element = d1Elements[i];
         const node: LocalGraphNode = {
-          id: localId(),
+          id: `D1_${i}`,  // STABLE ID
           label: element.label,
           description: (element.content || "").slice(0, 2000),
           node_type: "d1_element",
@@ -521,15 +526,16 @@ export function useAuditPipeline() {
           source_element_ids: [element.id],
           color: "#3b82f6",
           size: 15,
-          metadata: { category: element.category || "unknown", originalElementId: element.id },
+          metadata: { category: element.category || "unknown", originalElementId: element.id, elementIndex: i },
         };
         localNodes.push(node);
       }
 
-      // Create D2 nodes locally
-      for (const element of d2Elements) {
+      // Create D2 nodes locally with STABLE IDs (D2_0, D2_1, etc.)
+      for (let i = 0; i < d2Elements.length; i++) {
+        const element = d2Elements[i];
         const node: LocalGraphNode = {
-          id: localId(),
+          id: `D2_${i}`,  // STABLE ID
           label: element.label,
           description: (element.content || "").slice(0, 2000),
           node_type: "d2_element",
@@ -537,7 +543,7 @@ export function useAuditPipeline() {
           source_element_ids: [element.id],
           color: "#22c55e",
           size: 15,
-          metadata: { category: element.category || "unknown", originalElementId: element.id },
+          metadata: { category: element.category || "unknown", originalElementId: element.id, elementIndex: i },
         };
         localNodes.push(node);
       }
@@ -660,8 +666,9 @@ export function useAuditPipeline() {
         
         const concepts: Concept[] = result.concepts || [];
         
-        // Add concept nodes to local graph
+        // Add concept nodes to local graph with CONCEPT IDs assigned here
         for (const concept of concepts) {
+          const conceptId = `C${nextConceptId++}`;
           const conceptNode: LocalGraphNode = {
             id: localId(),
             label: concept.label,
@@ -671,9 +678,10 @@ export function useAuditPipeline() {
             source_element_ids: concept.elementIds,
             color: dataset === "d1" ? "#60a5fa" : "#4ade80",
             size: 20,
-            metadata: { source: dataset, premerge: true },
+            metadata: { source: dataset, premerge: true, conceptId },
           };
           localNodes.push(conceptNode);
+          conceptNodeByConceptId.set(conceptId, conceptNode.id);
 
           // Create edges from element nodes to concept node
           for (const elId of concept.elementIds) {
@@ -686,13 +694,13 @@ export function useAuditPipeline() {
                 edge_type: dataset === "d1" ? "defines" : "implements",
                 label: dataset === "d1" ? "defines" : "implements",
                 weight: 1.0,
-                metadata: { premerge: true },
+                metadata: { premerge: true, conceptId },
               };
               localEdges.push(edge);
             }
           }
 
-          addStepDetail(stepId, `Concept: ${concept.label} (${concept.elementIds?.length || 0} elements)`);
+          addStepDetail(stepId, `Concept ${conceptId}: ${concept.label} (${concept.elementIds?.length || 0} elements)`);
         }
 
         updateResults(); // Update graph
@@ -896,7 +904,8 @@ export function useAuditPipeline() {
                     }
                   }
                 } else {
-                  // New concept
+                  // New concept - assign a concept ID
+                  const conceptId = `C${nextConceptId++}`;
                   targetConceptNode = {
                     id: localId(),
                     label: rc.label,
@@ -906,9 +915,10 @@ export function useAuditPipeline() {
                     source_element_ids: rc.elementIds,
                     color: dataset === "d1" ? "#60a5fa" : "#4ade80",
                     size: 20,
-                    metadata: { source: dataset, premerge: true, recovery: true, attempt },
+                    metadata: { source: dataset, premerge: true, recovery: true, attempt, conceptId },
                   };
                   localNodes.push(targetConceptNode);
+                  conceptNodeByConceptId.set(conceptId, targetConceptNode.id);
                   currentConcepts.push(rc);
                 }
                 
@@ -1021,80 +1031,9 @@ export function useAuditPipeline() {
       const initialD1ElementCount = d1Elements.length;
       const initialD2ElementCount = d2Elements.length;
       
-      // Build concept node lookup by concept ID (conceptId -> nodeId)
-      const conceptNodeByConceptId = new Map<string, string>();
-      
-      // Initialize concept ID counter
-      let nextConceptId = 1;
-      
-      // Create initial concept nodes in the graph from extracted concepts
-      for (const concept of d1Concepts) {
-        const conceptId = `C${nextConceptId++}`;
-        const conceptNode: LocalGraphNode = {
-          id: localId(),
-          label: concept.label,
-          description: concept.description,
-          node_type: "concept",
-          source_dataset: "dataset1",
-          source_element_ids: concept.elementIds,
-          color: "#60a5fa",
-          size: 20,
-          metadata: { conceptId },
-        };
-        localNodes.push(conceptNode);
-        conceptNodeByConceptId.set(conceptId, conceptNode.id);
-        
-        // Create edges from D1 element nodes to this concept
-        for (const elId of concept.elementIds) {
-          const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
-          if (elementNode) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: elementNode.id,
-              target_node_id: conceptNode.id,
-              edge_type: "defines",
-              label: "defines",
-              weight: 1.0,
-              metadata: { conceptId },
-            });
-          }
-        }
-      }
-      
-      for (const concept of d2Concepts) {
-        const conceptId = `C${nextConceptId++}`;
-        const conceptNode: LocalGraphNode = {
-          id: localId(),
-          label: concept.label,
-          description: concept.description,
-          node_type: "concept",
-          source_dataset: "dataset2",
-          source_element_ids: concept.elementIds,
-          color: "#4ade80",
-          size: 20,
-          metadata: { conceptId },
-        };
-        localNodes.push(conceptNode);
-        conceptNodeByConceptId.set(conceptId, conceptNode.id);
-        
-        // Create edges from D2 element nodes to this concept
-        for (const elId of concept.elementIds) {
-          const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
-          if (elementNode) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: elementNode.id,
-              target_node_id: conceptNode.id,
-              edge_type: "implements",
-              label: "implements",
-              weight: 1.0,
-              metadata: { conceptId },
-            });
-          }
-        }
-      }
-      
-      const initialConceptCount = d1Concepts.length + d2Concepts.length;
+      // Concepts are ALREADY created during extraction with conceptId assigned
+      // Just log the initial count
+      const initialConceptCount = localNodes.filter(n => n.node_type === "concept").length;
       addStepDetail("merge", `Starting: ${initialConceptCount} concepts (${initialD1ElementCount} D1, ${initialD2ElementCount} D2 elements)`);
       updateResults();
 
@@ -1110,10 +1049,8 @@ export function useAuditPipeline() {
         });
         addStepDetail("merge", `Round ${round}/${mergeRounds}: ${roundLabel} matching`);
         
-        // Build list of ACTIVE concepts from local graph (no remappedTo)
-        const activeConceptNodes = localNodes.filter(n => 
-          n.node_type === "concept" && !n.metadata?.remappedTo
-        );
+        // Build list of ACTIVE concept nodes (all concepts that still exist)
+        const activeConceptNodes = localNodes.filter(n => n.node_type === "concept");
         
         // Build lightweight concept list for edge function
         const conceptsForLLM = activeConceptNodes.map(n => ({
@@ -1166,26 +1103,31 @@ export function useAuditPipeline() {
 
         const beforeCount = activeConceptNodes.length;
         let mergeCount = 0;
+        let deletedCount = 0;
 
         // ========================================
-        // APPLY MERGES LOCALLY: Local graph is source of truth
+        // APPLY MERGES LOCALLY: Simple & Clean
+        // For each merge: create new concept, retarget edges, delete old concepts
         // ========================================
         for (const merge of mergeInstructions) {
           const { sourceIds, mergedLabel, mergedDescription } = merge;
           
-          // Find the node IDs for source concepts
+          // Find the node IDs for source concepts (skip if already deleted by prior merge)
           const sourceNodeIds: string[] = [];
+          const validSourceIds: string[] = [];
+          
           for (const conceptId of sourceIds) {
             const nodeId = conceptNodeByConceptId.get(conceptId);
-            if (nodeId) {
+            if (nodeId && localNodes.some(n => n.id === nodeId)) {
               sourceNodeIds.push(nodeId);
+              validSourceIds.push(conceptId);
             } else {
-              console.warn(`[merge] Source concept ${conceptId} not found in map`);
+              console.log(`[merge] Skipping ${conceptId} - already merged/deleted`);
             }
           }
           
           if (sourceNodeIds.length < 2) {
-            console.warn(`[merge] Skipping merge - only ${sourceNodeIds.length} valid sources for "${mergedLabel}"`);
+            console.log(`[merge] Skipping merge for "${mergedLabel}" - only ${sourceNodeIds.length} valid sources`);
             continue;
           }
           
@@ -1224,81 +1166,39 @@ export function useAuditPipeline() {
           for (const edge of localEdges) {
             if (sourceNodeIds.includes(edge.target_node_id)) {
               edge.target_node_id = newConceptNode.id;
-              edge.metadata = { ...edge.metadata, remappedTo: newConceptId, round };
             }
           }
           
-          // Mark source nodes as remapped
+          // DELETE old concept nodes immediately (they now have zero edges)
           for (const nodeId of sourceNodeIds) {
-            const sourceNode = localNodes.find(n => n.id === nodeId);
-            if (sourceNode) {
-              sourceNode.metadata = { ...sourceNode.metadata, remappedTo: newConceptId };
+            const idx = localNodes.findIndex(n => n.id === nodeId);
+            if (idx !== -1) {
+              // Remove from conceptNodeByConceptId map
+              const oldConceptId = localNodes[idx].metadata?.conceptId;
+              if (oldConceptId) {
+                conceptNodeByConceptId.delete(oldConceptId);
+              }
+              // Remove node
+              localNodes.splice(idx, 1);
+              deletedCount++;
             }
           }
           
           mergeCount++;
-          addStepDetail("merge", `• ${mergedLabel} ← [${sourceIds.join(", ")}]`);
+          addStepDetail("merge", `• ${mergedLabel} ← [${validSourceIds.join(", ")}]`);
         }
         
-        // ========================================
-        // DELETE orphan concept nodes (remappedTo set AND zero edges)
-        // ========================================
-        const nodesToDelete: string[] = [];
-        
-        for (const node of localNodes) {
-          if (node.node_type === "concept" && node.metadata?.remappedTo) {
-            const hasIncomingEdges = localEdges.some(e => e.target_node_id === node.id);
-            if (!hasIncomingEdges) {
-              nodesToDelete.push(node.id);
-            } else {
-              // Safety net: keep if edges still point here, clear remappedTo
-              console.warn(`[merge] KEEPING "${node.label}" - still has edges`);
-              delete node.metadata.remappedTo;
-            }
-          }
-        }
-        
-        // Delete orphan nodes
-        for (let i = localNodes.length - 1; i >= 0; i--) {
-          if (nodesToDelete.includes(localNodes[i].id)) {
-            localNodes.splice(i, 1);
-          }
-        }
-        
-        const afterCount = localNodes.filter(n => n.node_type === "concept" && !n.metadata?.remappedTo).length;
-        addStepDetail("merge", `Round ${round}: ${beforeCount} → ${afterCount} concepts (${nodesToDelete.length} deleted)`);
+        const afterCount = localNodes.filter(n => n.node_type === "concept").length;
+        addStepDetail("merge", `Round ${round}: ${beforeCount} → ${afterCount} concepts (${deletedCount} deleted)`);
         
         updateResults();
       }
 
       // ========================================
-      // FINAL: Delete any remaining remapped concepts with zero edges
-      // ========================================
-      const finalNodesToDelete: string[] = [];
-      
-      for (const node of localNodes) {
-        if (node.node_type === "concept" && node.metadata?.remappedTo) {
-          const hasEdges = localEdges.some(e => e.target_node_id === node.id);
-          if (!hasEdges) {
-            finalNodesToDelete.push(node.id);
-          } else {
-            delete node.metadata.remappedTo;
-          }
-        }
-      }
-      
-      for (let i = localNodes.length - 1; i >= 0; i--) {
-        if (finalNodesToDelete.includes(localNodes[i].id)) {
-          localNodes.splice(i, 1);
-        }
-      }
-      
-      addStepDetail("merge", `Cleaned up ${finalNodesToDelete.length} remapped concept nodes`);
-
-      // ========================================
       // FINAL VERIFICATION: Zero orphan elements
       // ========================================
-      const elementNodes = localNodes.filter(n => n.node_type === "element");
+      // Check element nodes by type (d1_element or d2_element)
+      const elementNodes = localNodes.filter(n => n.node_type === "d1_element" || n.node_type === "d2_element");
       const elementsWithEdges = new Set(localEdges.map(e => e.source_node_id));
       const orphanElements = elementNodes.filter(n => !elementsWithEdges.has(n.id));
 
@@ -1306,15 +1206,15 @@ export function useAuditPipeline() {
         // Log detailed orphan info for debugging
         console.error(`[merge] CRITICAL: ${orphanElements.length} orphan elements after merge!`);
         for (const orphan of orphanElements.slice(0, 10)) {
-          console.error(`  Orphan: ${orphan.id.slice(0, 8)} "${orphan.label?.slice(0, 40)}" originalElementId=${orphan.metadata?.originalElementId}`);
+          console.error(`  Orphan: ${orphan.id} "${orphan.label?.slice(0, 40)}" originalElementId=${orphan.metadata?.originalElementId}`);
         }
         addStepDetail("merge", `❌ CRITICAL: ${orphanElements.length} elements have no concept connection`);
       } else {
         addStepDetail("merge", `✅ All ${elementNodes.length} elements connected to concepts`);
       }
 
-      // Count final concepts by type (only non-remapped ones)
-      const finalConceptNodes = localNodes.filter(n => n.node_type === "concept" && !n.metadata?.remappedTo);
+      // Count final concepts by type
+      const finalConceptNodes = localNodes.filter(n => n.node_type === "concept");
       const bothCount = finalConceptNodes.filter(n => n.source_dataset === "both").length;
       const d1OnlyCount = finalConceptNodes.filter(n => n.source_dataset === "dataset1").length;
       const d2OnlyCount = finalConceptNodes.filter(n => n.source_dataset === "dataset2").length;
