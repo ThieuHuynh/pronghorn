@@ -27,6 +27,9 @@ const activeNavItems = [
   { icon: Hammer, label: "Build", path: "build" },
   { icon: Database, label: "Database", path: "database" },
   { icon: Rocket, label: "Deploy", path: "deploy" },
+];
+
+const experimentalNavItems = [
   { icon: ClipboardCheck, label: "Audit", path: "audit" },
 ];
 
@@ -132,6 +135,30 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
                 </NavLink>
               ))}
             </div>
+
+            {/* Experimental Section */}
+            {experimentalNavItems.length > 0 && (
+              <div className="pt-4 space-y-1">
+                <div className="flex items-center gap-2 px-3">
+                  {(isMobile || !isCollapsed) && (
+                    <span className="text-xs font-semibold text-muted-foreground">Experimental</span>
+                  )}
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                {experimentalNavItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={buildUrl(`/${item.path}`)}
+                    onClick={() => isMobile && setIsMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    activeClassName="bg-muted text-foreground"
+                  >
+                    <item.icon className="h-4 w-4 flex-shrink-0" />
+                    {(isMobile || !isCollapsed) && <span>{item.label}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            )}
 
             {/* Coming Soon Section */}
             {comingSoonItems.length > 0 && (
