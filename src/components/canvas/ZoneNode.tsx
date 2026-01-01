@@ -87,7 +87,8 @@ export const ZoneNode = memo(({ data, selected, id }: NodeProps<ZoneNodeData>) =
         minHeight={150}
         isVisible={selected}
         lineClassName="border-primary"
-        handleClassName="h-10 w-10 bg-primary border-2 border-background rounded"
+        handleClassName="bg-primary border-2 border-background rounded"
+        handleStyle={{ width: 40, height: 40 }}
       />
       
       {/* Connection Handles */}

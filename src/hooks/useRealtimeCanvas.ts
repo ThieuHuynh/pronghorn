@@ -161,19 +161,24 @@ export function useRealtimeCanvas(
               return;
             }
             
-            // Update only the specific node that changed
-            setNodes((nds) => nds.map((node) => 
-              node.id === payload.new.id 
-                ? {
-                    ...node,
-                    position: payload.new.position as { x: number; y: number },
-                    data: {
-                      ...(payload.new.data || {}),
-                      type: (payload.new.data as any)?.type || payload.new.type,
-                    },
-                  }
-                : node
-            ));
+            // Update only the specific node that changed, then recalculate zone z-indexes
+            setNodes((nds) => {
+              const updatedNodes = nds.map((node) => 
+                node.id === payload.new.id 
+                  ? {
+                      ...node,
+                      position: payload.new.position as { x: number; y: number },
+                      style: (payload.new.data as any)?.style || node.style,
+                      data: {
+                        ...(payload.new.data || {}),
+                        type: (payload.new.data as any)?.type || payload.new.type,
+                      },
+                    }
+                  : node
+              );
+              // Recalculate z-indexes as nesting may have changed
+              return applyZoneZIndexes(updatedNodes);
+            });
           } else if (payload.eventType === 'INSERT' && payload.new) {
             // Add new node (skip if already exists from optimistic update)
             setNodes((nds) => {
@@ -191,7 +196,8 @@ export function useRealtimeCanvas(
                   type: (payload.new.data as any)?.type || payload.new.type,
                 },
               };
-              return [...nds, newNode];
+              // Apply z-indexes to all zones after adding new node
+              return applyZoneZIndexes([...nds, newNode]);
             });
           } else if (payload.eventType === 'DELETE' && payload.old) {
             // Remove deleted node
