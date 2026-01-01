@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useEffect } from 'react';
-import { NodeProps, NodeResizer, useReactFlow } from 'reactflow';
+import { NodeProps, NodeResizer, useReactFlow, Handle, Position } from 'reactflow';
 import { Input } from '@/components/ui/input';
 
 interface LabelNodeData {
@@ -57,8 +57,15 @@ export const LabelNode = memo(({ data, selected, id }: NodeProps<LabelNodeData>)
         minHeight={30}
         isVisible={selected}
         lineClassName="border-primary"
-        handleClassName="h-2.5 w-2.5 bg-primary border-2 border-background rounded"
+        handleClassName="h-5 w-5 bg-primary border-2 border-background rounded"
       />
+      
+      {/* Connection Handles */}
+      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-primary" />
+      
       <div 
         className="h-full w-full flex items-center justify-center px-2"
         onDoubleClick={handleDoubleClick}

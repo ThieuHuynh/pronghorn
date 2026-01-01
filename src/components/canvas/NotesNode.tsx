@@ -1,9 +1,8 @@
 import { memo, useState, useCallback, useEffect } from 'react';
-import { NodeProps, NodeResizer, useReactFlow } from 'reactflow';
+import { NodeProps, NodeResizer, useReactFlow, Handle, Position } from 'reactflow';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface NotesNodeData {
   label?: string;
@@ -61,17 +60,24 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
         minHeight={100}
         isVisible={selected}
         lineClassName="border-primary"
-        handleClassName="h-3 w-3 bg-primary border-2 border-background rounded"
+        handleClassName="h-4 w-4 bg-primary border-2 border-background rounded"
       />
+      
+      {/* Connection Handles */}
+      <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-primary" />
+      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-primary" />
+      
       <div 
         className="h-full w-full rounded-lg border bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 shadow-sm overflow-hidden flex flex-col"
         onDoubleClick={handleDoubleClick}
       >
-        <div className="px-2 py-1 bg-amber-100/80 dark:bg-amber-900/50 border-b border-amber-200 dark:border-amber-800 text-xs font-medium text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+        <div className="px-2 py-1 bg-amber-100/80 dark:bg-amber-900/50 border-b border-amber-200 dark:border-amber-800 text-xs font-medium text-amber-800 dark:text-amber-200 flex items-center gap-1.5 shrink-0">
           <span>📝</span>
           <span>{data.label || 'Notes'}</span>
         </div>
-        <ScrollArea className="flex-1 p-2">
+        <div className="flex-1 p-2 overflow-auto min-h-0">
           {isEditing ? (
             <Textarea
               autoFocus
@@ -79,11 +85,11 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
               onChange={(e) => setContent(e.target.value)}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              className="min-h-full resize-none border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-xs font-mono"
+              className="h-full w-full min-h-0 resize-none border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-xs font-mono p-0"
               placeholder="Enter markdown content..."
             />
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-xs h-full">
               {content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {content}
@@ -93,7 +99,7 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
               )}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </div>
     </>
   );

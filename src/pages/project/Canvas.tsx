@@ -489,14 +489,14 @@ function CanvasFlow() {
 
       // Determine React Flow node type and default style based on dropped type
       let nodeType = "custom";
-      let defaultStyle: { width?: number; height?: number } = {};
+      let defaultStyle: { width?: number; height?: number; zIndex?: number } = {};
       
       if (type === "NOTES") {
         nodeType = "notes";
         defaultStyle = { width: 250, height: 200 };
       } else if (type === "ZONE") {
         nodeType = "zone";
-        defaultStyle = { width: 400, height: 300 };
+        defaultStyle = { width: 400, height: 300, zIndex: -1 };
       } else if (type === "LABEL") {
         nodeType = "label";
         defaultStyle = { width: 150, height: 40 };
@@ -506,6 +506,7 @@ function CanvasFlow() {
         id: crypto.randomUUID(),
         type: nodeType,
         position,
+        zIndex: type === "ZONE" ? -1 : undefined,
         style: Object.keys(defaultStyle).length > 0 ? defaultStyle : undefined,
         data: {
           label: `New ${type}`,
@@ -550,14 +551,14 @@ function CanvasFlow() {
 
       // Determine React Flow node type and default style based on type
       let nodeType = "custom";
-      let defaultStyle: { width?: number; height?: number } = {};
+      let defaultStyle: { width?: number; height?: number; zIndex?: number } = {};
       
       if (type === "NOTES") {
         nodeType = "notes";
         defaultStyle = { width: 250, height: 200 };
       } else if (type === "ZONE") {
         nodeType = "zone";
-        defaultStyle = { width: 400, height: 300 };
+        defaultStyle = { width: 400, height: 300, zIndex: -1 };
       } else if (type === "LABEL") {
         nodeType = "label";
         defaultStyle = { width: 150, height: 40 };
@@ -567,6 +568,7 @@ function CanvasFlow() {
         id: crypto.randomUUID(),
         type: nodeType,
         position,
+        zIndex: type === "ZONE" ? -1 : undefined,
         style: Object.keys(defaultStyle).length > 0 ? defaultStyle : undefined,
         data: {
           label: `New ${type}`,
