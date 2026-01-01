@@ -59,7 +59,7 @@ export const LabelNode = memo(({ data, selected, id }: NodeProps<LabelNodeData>)
         minHeight={30}
         isVisible={selected}
         lineClassName="border-primary"
-        handleClassName="h-5 w-5 bg-primary border-2 border-background rounded"
+        handleClassName="h-10 w-10 bg-primary border-2 border-background rounded"
       />
       
       {/* Connection Handles */}

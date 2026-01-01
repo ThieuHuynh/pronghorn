@@ -55,6 +55,67 @@ const initialNodes: Node[] = [];
 
 const initialEdges: Edge[] = [];
 
+// Annotation node types that should NOT be affected by Auto Order
+const ANNOTATION_TYPES = ['notes', 'zone', 'label', 'NOTES', 'ZONE', 'LABEL'];
+
+// Helper: Check if a node is fully contained inside a zone
+const isNodeFullyInsideZone = (node: Node, zone: Node): boolean => {
+  const nodeWidth = (node.style?.width as number) || (node.data?.style?.width as number) || 150;
+  const nodeHeight = (node.style?.height as number) || (node.data?.style?.height as number) || 60;
+  const zoneWidth = (zone.style?.width as number) || (zone.data?.style?.width as number) || 200;
+  const zoneHeight = (zone.style?.height as number) || (zone.data?.style?.height as number) || 150;
+  
+  return (
+    node.position.x >= zone.position.x &&
+    node.position.y >= zone.position.y &&
+    node.position.x + nodeWidth <= zone.position.x + zoneWidth &&
+    node.position.y + nodeHeight <= zone.position.y + zoneHeight
+  );
+};
+
+// Get all node IDs fully contained in a zone (recursive for nested zones)
+const getContainedNodeIds = (
+  zoneId: string, 
+  allNodes: Node[], 
+  positionOverrides?: Map<string, { x: number; y: number }>
+): string[] => {
+  const zone = allNodes.find(n => n.id === zoneId);
+  if (!zone) return [];
+  
+  const zonePos = positionOverrides?.get(zoneId) || zone.position;
+  const zoneWidth = (zone.style?.width as number) || (zone.data?.style?.width as number) || 200;
+  const zoneHeight = (zone.style?.height as number) || (zone.data?.style?.height as number) || 150;
+  
+  const containedIds: string[] = [];
+  
+  allNodes.forEach(node => {
+    if (node.id === zoneId) return; // Skip the zone itself
+    
+    const nodePos = positionOverrides?.get(node.id) || node.position;
+    const nodeWidth = (node.style?.width as number) || (node.data?.style?.width as number) || 150;
+    const nodeHeight = (node.style?.height as number) || (node.data?.style?.height as number) || 60;
+    
+    // Check if fully contained using stored positions
+    const isContained = (
+      nodePos.x >= zonePos.x &&
+      nodePos.y >= zonePos.y &&
+      nodePos.x + nodeWidth <= zonePos.x + zoneWidth &&
+      nodePos.y + nodeHeight <= zonePos.y + zoneHeight
+    );
+    
+    if (isContained) {
+      containedIds.push(node.id);
+      
+      // If it's a zone, recursively get its contained nodes too
+      if (node.type === 'zone') {
+        containedIds.push(...getContainedNodeIds(node.id, allNodes, positionOverrides));
+      }
+    }
+  });
+  
+  return containedIds;
+};
+
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token, isTokenSet, tokenMissing } = useShareToken(projectId);
@@ -73,6 +134,9 @@ function CanvasFlow() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Track node positions at drag start for delta calculation
+  const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   
   // Fetch node types from database (include legacy for rendering existing nodes)
   const { data: allNodeTypes } = useNodeTypes(true);
@@ -258,19 +322,78 @@ function CanvasFlow() {
     }
   }, [userCollapsedPanel]);
 
+  // Capture starting positions on drag start
+  const onNodeDragStart = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      // Store starting positions for all nodes (needed for delta calculation)
+      nodes.forEach(n => {
+        dragStartPositionsRef.current.set(n.id, { ...n.position });
+      });
+    },
+    [nodes]
+  );
+
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      saveNode(node, true, true); // Immediate save on drag stop, is drag operation
+      // Save the dragged node
+      saveNode(node, true, true);
+      
+      // If it's a zone, also save all contained nodes that moved with it
+      if (node.type === 'zone') {
+        const containedNodeIds = getContainedNodeIds(node.id, nodes, dragStartPositionsRef.current);
+        containedNodeIds.forEach(id => {
+          const containedNode = nodes.find(n => n.id === id);
+          if (containedNode) {
+            saveNode(containedNode, true, true);
+          }
+        });
+      }
+      
+      // Clear start positions
+      dragStartPositionsRef.current.clear();
     },
-    [saveNode]
+    [nodes, saveNode]
   );
 
   const onNodeDrag = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      // Only handle zone movement specially
+      if (node.type === 'zone') {
+        const startPos = dragStartPositionsRef.current.get(node.id);
+        if (startPos) {
+          const deltaX = node.position.x - startPos.x;
+          const deltaY = node.position.y - startPos.y;
+          
+          if (deltaX !== 0 || deltaY !== 0) {
+            // Find all nodes contained in this zone (using start positions for containment check)
+            const containedNodeIds = getContainedNodeIds(node.id, nodes, dragStartPositionsRef.current);
+            
+            if (containedNodeIds.length > 0) {
+              // Move all contained nodes by the same delta
+              setNodes(nds => nds.map(n => {
+                if (containedNodeIds.includes(n.id)) {
+                  const nStartPos = dragStartPositionsRef.current.get(n.id);
+                  if (nStartPos) {
+                    return {
+                      ...n,
+                      position: {
+                        x: nStartPos.x + deltaX,
+                        y: nStartPos.y + deltaY
+                      }
+                    };
+                  }
+                }
+                return n;
+              }));
+            }
+          }
+        }
+      }
+      
       // Throttled save during drag (every 200ms), is drag operation
       saveNode(node, false, true);
     },
-    [saveNode]
+    [nodes, setNodes, saveNode]
   );
 
   const handleNodeUpdate = useCallback(
@@ -993,10 +1116,35 @@ function CanvasFlow() {
       .sort((a, b) => a.level - b.level)
       .flatMap(level => level.types);
     
-    // Determine which nodes to order
-    const nodesToOrder = selectedNodesList.length > 1 
+    // Helper: Check if a node is inside ANY zone
+    const isNodeInsideAnyZone = (node: Node): boolean => {
+      const zones = nodes.filter(n => n.type === 'zone');
+      return zones.some(zone => zone.id !== node.id && isNodeFullyInsideZone(node, zone));
+    };
+    
+    // Determine candidate nodes
+    const candidateNodes = selectedNodesList.length > 1 
       ? selectedNodesList 
       : visibleNodes;
+    
+    // Filter out:
+    // 1. Annotation nodes (notes, zone, label)
+    // 2. Nodes that are inside any zone
+    const nodesToOrder = candidateNodes.filter(node => {
+      const nodeType = node.type?.toLowerCase();
+      
+      // Skip annotation types
+      if (ANNOTATION_TYPES.includes(nodeType || '')) {
+        return false;
+      }
+      
+      // Skip nodes inside zones
+      if (isNodeInsideAnyZone(node)) {
+        return false;
+      }
+      
+      return true;
+    });
     
     if (nodesToOrder.length === 0) return;
     
@@ -1369,6 +1517,7 @@ function CanvasFlow() {
                 onConnect={onConnect}
                 onNodeClick={onNodeClick}
                 onEdgeClick={onEdgeClick}
+                onNodeDragStart={onNodeDragStart}
                 onNodeDrag={onNodeDrag}
                 onNodeDragStop={onNodeDragStop}
                 onInit={setReactFlowInstance}

@@ -141,7 +141,7 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
         minHeight={100}
         isVisible={selected}
         lineClassName="border-primary"
-        handleClassName="h-4 w-4 bg-primary border-2 border-background rounded"
+        handleClassName="h-8 w-8 bg-primary border-2 border-background rounded"
       />
       
       {/* Connection Handles */}
