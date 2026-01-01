@@ -7489,6 +7489,9 @@ export type Database = {
         | "TABLE"
         | "AGENT"
         | "OTHER"
+        | "NOTES"
+        | "ZONE"
+        | "LABEL"
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
@@ -7701,6 +7704,9 @@ export const Constants = {
         "TABLE",
         "AGENT",
         "OTHER",
+        "NOTES",
+        "ZONE",
+        "LABEL",
       ],
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       project_token_role: ["owner", "editor", "viewer"],
