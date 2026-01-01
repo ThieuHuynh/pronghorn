@@ -1141,7 +1141,7 @@ export function AddArtifactModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
+      <DialogContent className="w-[calc(100%-50px)] max-w-none h-[calc(100vh-50px)] p-0 gap-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-4 pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div>
@@ -1190,13 +1190,39 @@ export function AddArtifactModal({
                 {activeTab === "manual" && (
                   <div className="space-y-4">
                     <div className="text-sm text-muted-foreground">
-                      Enter text, markdown, or structured content manually.
+                      Enter text, markdown, or structured content manually. You can also paste images here (Ctrl/Cmd+V).
                     </div>
                     <Textarea
                       ref={textareaRef}
-                      placeholder="Enter artifact content..."
+                      placeholder="Enter artifact content... (Tip: Paste images with Ctrl/Cmd+V)"
                       value={manualContent}
                       onChange={(e) => setManualContent(e.target.value)}
+                      onPaste={(e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        
+                        const imageFiles: File[] = [];
+                        for (let i = 0; i < items.length; i++) {
+                          const item = items[i];
+                          if (item.type.startsWith('image/')) {
+                            const file = item.getAsFile();
+                            if (file) {
+                              const namedFile = new File(
+                                [file], 
+                                `pasted-image-${Date.now()}-${i}.${file.type.split('/')[1] || 'png'}`,
+                                { type: file.type }
+                              );
+                              imageFiles.push(namedFile);
+                            }
+                          }
+                        }
+                        
+                        if (imageFiles.length > 0) {
+                          e.preventDefault();
+                          handleUniversalImagesAdded(imageFiles);
+                          toast.success(`${imageFiles.length} image${imageFiles.length !== 1 ? 's' : ''} added to Images tab`);
+                        }
+                      }}
                       className="min-h-[300px] font-mono text-sm"
                     />
                   </div>
