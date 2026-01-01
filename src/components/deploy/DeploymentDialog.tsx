@@ -68,6 +68,7 @@ const DeploymentDialog = ({
   onSuccess,
 }: DeploymentDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaveAndDeploying, setIsSaveAndDeploying] = useState(false);
   const [isSyncingEnvVars, setIsSyncingEnvVars] = useState(false);
   const [isLoadingSecrets, setIsLoadingSecrets] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
@@ -510,6 +511,41 @@ const DeploymentDialog = ({
     }
   };
 
+  // Save and then trigger a deploy on Render
+  const handleSaveAndDeploy = async () => {
+    setIsSaveAndDeploying(true);
+    try {
+      // First, run the normal save
+      await handleSubmit();
+      
+      // Then trigger deploy if we have a Render service
+      if (deployment?.render_service_id) {
+        toast.info("Triggering deployment...");
+        const { data, error } = await supabase.functions.invoke("render-service", {
+          body: {
+            action: "deploy",
+            deploymentId: deployment.id,
+            shareToken: shareToken || null,
+          },
+        });
+
+        if (error) {
+          console.error("Deploy error:", error);
+          toast.error("Saved but failed to trigger deploy");
+        } else if (data?.success) {
+          toast.success("Saved and deployment triggered");
+        } else {
+          toast.error(data?.error || "Failed to trigger deployment");
+        }
+      }
+    } catch (error: any) {
+      console.error("Save and deploy error:", error);
+      toast.error(error.message || "Failed to save and deploy");
+    } finally {
+      setIsSaveAndDeploying(false);
+    }
+  };
+
   const hasRenderService = mode === "edit" && deployment?.render_service_id;
   const isEditMode = mode === "edit";
   const currentTypeConfig = projectTypes.find(t => t.value === form.projectType);
@@ -824,10 +860,30 @@ const DeploymentDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isEditMode ? "Save Changes" : "Create Deployment"}
-          </Button>
+          {hasRenderService ? (
+            <>
+              <Button 
+                variant="outline"
+                onClick={handleSubmit} 
+                disabled={isSubmitting || isSaveAndDeploying}
+              >
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save
+              </Button>
+              <Button 
+                onClick={handleSaveAndDeploy} 
+                disabled={isSubmitting || isSaveAndDeploying}
+              >
+                {isSaveAndDeploying && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save & Deploy
+              </Button>
+            </>
+          ) : (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isEditMode ? "Save Changes" : "Create Deployment"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
