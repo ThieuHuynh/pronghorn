@@ -35,8 +35,8 @@ export function EdgePropertiesPanel({
   useEffect(() => {
     if (edge) {
       setLabel((edge.label as string) || "");
-      // Default to React Flow's default edge type (Bezier) when not explicitly set
-      setLineType(edge.type || "default");
+      // Get edge type from data.edgeType (stored for CustomEdge to use)
+      setLineType((edge.data?.edgeType as string) || "default");
       setColor((edge.style?.stroke as string) || "#64748b");
       setThickness((edge.style?.strokeWidth as number) || 2);
     }
@@ -49,7 +49,8 @@ export function EdgePropertiesPanel({
 
   const handleLineTypeChange = (newType: string) => {
     setLineType(newType);
-    onVisualUpdate(edge.id, { type: newType });
+    // Store edge type in data.edgeType for CustomEdge to read
+    onVisualUpdate(edge.id, { data: { ...edge.data, edgeType: newType } });
   };
 
   const handleColorChange = (newColor: string) => {
@@ -77,7 +78,7 @@ export function EdgePropertiesPanel({
   const handleSave = () => {
     onUpdate(edge.id, {
       label,
-      type: lineType,
+      data: { ...edge.data, edgeType: lineType },
       style: {
         ...edge.style,
         stroke: color,

@@ -30,7 +30,7 @@ interface NodePropertiesPanelProps {
   projectId: string;
   isOpen: boolean;
   onToggle: () => void;
-  onCreateMultipleNotesFromArtifacts?: (artifacts: Artifact[]) => void;
+  onCreateMultipleNotesFromArtifacts?: (artifacts: Artifact[], sourceNode?: Node) => void;
 }
 
 export function NodePropertiesPanel({
@@ -103,22 +103,31 @@ export function NodePropertiesPanel({
     }
     
     if (selectedArtifacts.length === 1) {
-      // Single artifact: update current node
+      // Single artifact: update current node with image embedded as markdown
       const artifact = selectedArtifacts[0];
+      
+      // Build content with image embedded as markdown (like paste behavior)
+      let nodeContent = artifact.content || '';
+      if (artifact.image_url) {
+        const imageMarkdown = `![${artifact.ai_title || 'Artifact Image'}](${artifact.image_url})`;
+        nodeContent = nodeContent 
+          ? `${nodeContent}\n\n${imageMarkdown}` 
+          : imageMarkdown;
+      }
+      
       onUpdate(node.id, {
         data: {
           ...node.data,
           artifactId: artifact.id,
-          content: artifact.content,
-          imageUrl: artifact.image_url,
+          content: nodeContent,  // Image embedded in content as markdown
           label: artifact.ai_title || node.data.label,
         },
       });
-      toast.success("Artifact linked to Notes");
+      toast.success("Artifact imported to Notes");
     } else {
-      // Multiple artifacts: create multiple Notes nodes
+      // Multiple artifacts: create multiple Notes nodes with cascading layout
       if (onCreateMultipleNotesFromArtifacts) {
-        onCreateMultipleNotesFromArtifacts(selectedArtifacts);
+        onCreateMultipleNotesFromArtifacts(selectedArtifacts, node);  // Pass source node for cascading
         toast.success(`Creating ${selectedArtifacts.length} Notes nodes from artifacts`);
       }
     }

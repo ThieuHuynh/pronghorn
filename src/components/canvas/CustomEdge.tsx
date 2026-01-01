@@ -1,5 +1,24 @@
 import { memo } from 'react';
-import { EdgeProps, getBezierPath } from 'reactflow';
+import { getBezierPath, getStraightPath, getSmoothStepPath, BaseEdge, EdgeLabelRenderer } from 'reactflow';
+
+interface CustomEdgeProps {
+  id: string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  sourcePosition: any;
+  targetPosition: any;
+  style?: React.CSSProperties;
+  label?: string | React.ReactNode;
+  labelStyle?: React.CSSProperties;
+  labelBgStyle?: React.CSSProperties;
+  selected?: boolean;
+  // React Flow passes the edge's type here when using custom edge components
+  data?: {
+    edgeType?: string;
+  };
+}
 
 export const CustomEdge = memo(({
   id,
@@ -14,15 +33,46 @@ export const CustomEdge = memo(({
   labelStyle,
   labelBgStyle,
   selected,
-}: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  data,
+}: CustomEdgeProps) => {
+  // Get edge type from data (set by EdgePropertiesPanel)
+  const edgeType = data?.edgeType || 'default';
+  
+  let edgePath: string;
+  let labelX: number;
+  let labelY: number;
+
+  const pathParams = {
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
-  });
+  };
+
+  switch (edgeType) {
+    case 'straight':
+      [edgePath, labelX, labelY] = getStraightPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+      });
+      break;
+    case 'smoothstep':
+      [edgePath, labelX, labelY] = getSmoothStepPath(pathParams);
+      break;
+    case 'step':
+      [edgePath, labelX, labelY] = getSmoothStepPath({
+        ...pathParams,
+        borderRadius: 0,
+      });
+      break;
+    default:
+      // Default to bezier curve
+      [edgePath, labelX, labelY] = getBezierPath(pathParams);
+  }
 
   // Extract stroke color and width from style prop, with defaults
   const strokeColor = (style?.stroke as string) || 'hsl(var(--primary))';
@@ -30,18 +80,6 @@ export const CustomEdge = memo(({
 
   return (
     <>
-      {/* Glow effect when selected */}
-      {selected && (
-        <path
-          d={edgePath}
-          fill="none"
-          strokeWidth={strokeWidth + 8}
-          stroke="rgba(249, 115, 22, 0.5)"
-          className="react-flow__edge-path"
-          style={{ filter: 'blur(4px)' }}
-        />
-      )}
-      
       {/* Main edge path */}
       <path
         id={id}

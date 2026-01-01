@@ -699,31 +699,41 @@ function CanvasFlow() {
 
   // Create multiple Notes nodes from selected artifacts
   const handleCreateMultipleNotesFromArtifacts = useCallback(
-    async (artifacts: any[]) => {
+    async (artifacts: any[], sourceNode?: Node) => {
       if (!reactFlowInstance) return;
       
-      const startPosition = selectedNode?.position || { x: 100, y: 100 };
+      // Use source node position or fall back to selected node or default
+      const startPosition = sourceNode?.position || selectedNode?.position || { x: 100, y: 100 };
+      const nodeWidth = (sourceNode?.style?.width as number) || 250;
+      const nodeHeight = (sourceNode?.style?.height as number) || 200;
       
-      // Create a Notes node for each artifact in a grid layout
+      // Create a Notes node for each artifact with cascading layout
       for (let i = 0; i < artifacts.length; i++) {
         const artifact = artifacts[i];
-        const col = i % 3;
-        const row = Math.floor(i / 3);
+        
+        // Build content with image embedded as markdown (like paste behavior)
+        let nodeContent = artifact.content || '';
+        if (artifact.image_url) {
+          const imageMarkdown = `![${artifact.ai_title || 'Artifact Image'}](${artifact.image_url})`;
+          nodeContent = nodeContent 
+            ? `${nodeContent}\n\n${imageMarkdown}` 
+            : imageMarkdown;
+        }
         
         const newNode: Node = {
           id: crypto.randomUUID(),
           type: "notes",
+          // Cascade: +100px for each subsequent node
           position: {
-            x: startPosition.x + col * 280,
-            y: startPosition.y + row * 230,
+            x: startPosition.x + (i + 1) * 100,
+            y: startPosition.y + (i + 1) * 100,
           },
-          style: { width: 250, height: 200 },
+          style: { width: nodeWidth, height: nodeHeight },
           data: {
             type: "NOTES",
             nodeType: "notes",
             label: artifact.ai_title || "Artifact",
-            content: artifact.content,
-            imageUrl: artifact.image_url,
+            content: nodeContent,  // Image embedded as markdown
             artifactId: artifact.id,
           },
         };
@@ -734,7 +744,7 @@ function CanvasFlow() {
       
       toast({
         title: `Created ${artifacts.length} Notes nodes`,
-        description: "Notes imported from artifacts",
+        description: "Notes cascaded from selected node",
       });
     },
     [reactFlowInstance, selectedNode, setNodes, saveNode, toast]
