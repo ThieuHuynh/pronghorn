@@ -11,7 +11,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2 } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy } from "lucide-react";
 import { VisualRecognitionDialog } from "@/components/artifacts/VisualRecognitionDialog";
 import { EnhanceImageDialog } from "@/components/artifacts/EnhanceImageDialog";
 import { ArtifactDownloadDropdown } from "@/components/artifacts/ArtifactDownloadDropdown";
@@ -285,6 +285,21 @@ ${artifact.content}`;
 
   const clearProvenanceFilter = () => {
     setProvenanceFilter(null);
+  };
+
+  const handleCloneArtifact = async (artifact: typeof artifacts[0]) => {
+    try {
+      await addArtifact(
+        artifact.content,
+        artifact.source_type || undefined,
+        artifact.source_id || undefined,
+        artifact.image_url || undefined
+      );
+      toast.success("Artifact cloned successfully");
+    } catch (error) {
+      console.error("Error cloning artifact:", error);
+      toast.error("Failed to clone artifact");
+    }
   };
 
   if (tokenMissing) {
@@ -642,6 +657,18 @@ ${artifact.content}`;
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    onClick={() => handleCloneArtifact(artifact)}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Clone Artifact</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" })}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -837,6 +864,19 @@ ${artifact.content}`;
                                     />
                                   </TooltipTrigger>
                                   <TooltipContent>Download</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => handleCloneArtifact(artifact)}
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Clone Artifact</TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
