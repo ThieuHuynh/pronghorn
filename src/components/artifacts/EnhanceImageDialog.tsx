@@ -15,7 +15,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3, Square, RectangleHorizontal, RectangleVertical } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3, Square, RectangleHorizontal, RectangleVertical, Bot } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +48,13 @@ interface EnhanceImageDialogProps {
 
 type OutputMode = 'add' | 'replace';
 type AspectRatio = '1:1' | '16:9' | '9:16' | '4:5';
+
+// Available Gemini image models
+const IMAGE_MODELS = [
+  { id: 'gemini-2.0-flash-exp-image-generation', label: 'Gemini 2.0 Flash (Experimental)', description: 'Fast, good quality' },
+  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash Preview', description: 'Latest preview model' },
+  { id: 'gemini-2.0-flash-preview-image-generation', label: 'Gemini 2.0 Flash Preview', description: 'Preview image gen' },
+];
 
 const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
   '1:1': { width: 1024, height: 1024 },
@@ -79,6 +93,7 @@ export function EnhanceImageDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [compactView, setCompactView] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+  const [selectedModel, setSelectedModel] = useState(IMAGE_MODELS[0].id);
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -93,6 +108,7 @@ export function EnhanceImageDialog({
       setIsProcessing(false);
       setIsSaving(false);
       setAspectRatio('16:9');
+      setSelectedModel(IMAGE_MODELS[0].id);
     }
   }, [open]);
 
@@ -196,13 +212,28 @@ export function EnhanceImageDialog({
           body: JSON.stringify({
             images,
             prompt: finalPrompt,
+            model: selectedModel,
           }),
         }
       );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to enhance image");
+        console.error("Enhance image API error:", errorData);
+        
+        // Show detailed error with hint if available
+        const errorMessage = errorData.hint || errorData.error || "Failed to enhance image";
+        const textResponse = errorData.textResponse;
+        
+        if (textResponse) {
+          toast.error(`${errorMessage}`, {
+            description: `Model said: "${textResponse.substring(0, 100)}..."`,
+            duration: 8000,
+          });
+        } else {
+          toast.error(errorMessage, { duration: 6000 });
+        }
+        return;
       }
 
       const data = await response.json();
@@ -435,6 +466,29 @@ export function EnhanceImageDialog({
                 </div>
               </div>
 
+
+              {/* Model Selection */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Model
+                </Label>
+                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isProcessing}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IMAGE_MODELS.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex flex-col">
+                          <span>{model.label}</span>
+                          <span className="text-xs text-muted-foreground">{model.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Prompt Input */}
               <div className="space-y-2">
