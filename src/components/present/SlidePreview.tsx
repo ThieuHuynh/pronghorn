@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SlideRenderer } from "./SlideRenderer";
+import { SlideCanvas } from "./SlideCanvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, StickyNote, Image as ImageIcon } from "lucide-react";
@@ -43,7 +44,6 @@ interface SlidePreviewProps {
   theme?: "default" | "light" | "vibrant";
   externalFullscreen?: boolean;
   fontScale?: number;
-  // New props for editing capabilities
   onUpdateSlide?: (index: number, updates: Partial<Slide>) => void;
   projectContext?: string;
   imageStyle?: string;
@@ -68,7 +68,6 @@ export function SlidePreview({
   const [isImageGeneratorOpen, setIsImageGeneratorOpen] = useState(false);
   const [showControls, setShowControls] = useState(false);
   
-  // Use external fullscreen if provided
   const effectiveFullscreen = externalFullscreen || isFullscreen;
 
   const currentSlide = slides[selectedSlideIndex];
@@ -83,38 +82,32 @@ export function SlidePreview({
     if (canGoNext) onSlideChange(selectedSlideIndex + 1);
   };
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft" && canGoPrev) handlePrev();
     if (e.key === "ArrowRight" && canGoNext) handleNext();
     if (e.key === "Escape" && isFullscreen) setIsFullscreen(false);
   };
 
-  // Handle layout change - optimistic update
   const handleLayoutChange = (layoutId: string) => {
     if (onUpdateSlide) {
       onUpdateSlide(selectedSlideIndex, { layoutId });
     }
   };
 
-  // Handle font scale change - optimistic update
   const handleFontScaleChange = (newFontScale: number) => {
     if (onUpdateSlide) {
       onUpdateSlide(selectedSlideIndex, { fontScale: newFontScale });
     }
   };
 
-  // Handle notes save
   const handleSaveNotes = (notes: string) => {
     if (onUpdateSlide) {
       onUpdateSlide(selectedSlideIndex, { notes });
     }
   };
 
-  // Handle image generation
   const handleImageGenerated = (imageUrl: string) => {
     if (onUpdateSlide && currentSlide) {
-      // Update the slide's image content
       const updatedContent = [...(currentSlide.content || [])];
       const imageIndex = updatedContent.findIndex(c => c.type === "image" || c.regionId === "image" || c.regionId === "diagram");
       
@@ -135,10 +128,8 @@ export function SlidePreview({
     }
   };
 
-  // Check if current layout supports images
   const layoutSupportsImage = currentSlide && ["image-left", "image-right", "architecture", "title-cover"].includes(currentSlide.layoutId);
 
-  // Get current image URL
   const getCurrentImageUrl = () => {
     if (!currentSlide) return undefined;
     const imageContent = currentSlide.content?.find(c => c.type === "image" || c.regionId === "image" || c.regionId === "diagram");
@@ -166,15 +157,14 @@ export function SlidePreview({
           "flex-1 relative transition-all",
           showNotes && "w-2/3"
         )}>
-          <SlideRenderer
-            slide={currentSlide}
-            layouts={layouts}
-            theme={theme}
-            isPreview={false}
-            isFullscreen={true}
-            fontScale={currentSlide.fontScale || fontScale}
-            className="h-full w-full"
-          />
+          <SlideCanvas className="h-full w-full">
+            <SlideRenderer
+              slide={currentSlide}
+              layouts={layouts}
+              theme={theme}
+              fontScale={currentSlide.fontScale || fontScale}
+            />
+          </SlideCanvas>
           
           {/* Floating controls overlay in fullscreen */}
           {showControls && onUpdateSlide && (
@@ -219,7 +209,6 @@ export function SlidePreview({
           </div>
         )}
         
-        {/* Image generator dialog */}
         <SlideImageGenerator
           open={isImageGeneratorOpen}
           onOpenChange={setIsImageGeneratorOpen}
@@ -314,34 +303,31 @@ export function SlidePreview({
           effectiveFullscreen && "h-full"
         )}>
           {effectiveFullscreen ? (
-            <SlideRenderer
-              slide={currentSlide}
-              layouts={layouts}
-              theme={theme}
-              isPreview={false}
-              isFullscreen={true}
-              fontScale={currentSlide.fontScale || fontScale}
-              className="h-full w-full"
-            />
+            <SlideCanvas className="h-full w-full">
+              <SlideRenderer
+                slide={currentSlide}
+                layouts={layouts}
+                theme={theme}
+                fontScale={currentSlide.fontScale || fontScale}
+              />
+            </SlideCanvas>
           ) : (
             <Card className="h-full overflow-hidden">
-              <CardContent className="p-0 h-full flex items-center justify-center bg-muted/20">
-                <div className="w-full max-w-4xl">
+              <CardContent className="p-4 h-full flex items-center justify-center bg-muted/20">
+                <SlideCanvas className="w-full max-w-4xl">
                   <SlideRenderer
                     slide={currentSlide}
                     layouts={layouts}
                     theme={theme}
-                    isPreview={false}
-                    isFullscreen={false}
                     fontScale={currentSlide.fontScale || fontScale}
                   />
-                </div>
+                </SlideCanvas>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Speaker notes panel - always show when toggled, even if no notes yet */}
+        {/* Speaker notes panel */}
         {showNotes && onUpdateSlide && (
           <Card className="w-1/3 shrink-0">
             <CardContent className="p-4">
@@ -353,7 +339,6 @@ export function SlidePreview({
           </Card>
         )}
         
-        {/* Readonly notes when no update handler */}
         {showNotes && !onUpdateSlide && (
           <Card className="w-1/3 shrink-0">
             <CardContent className="p-4">
@@ -374,7 +359,6 @@ export function SlidePreview({
         <span>{currentSlide.content?.length || 0} content blocks</span>
       </div>
       
-      {/* Image generator dialog */}
       <SlideImageGenerator
         open={isImageGeneratorOpen}
         onOpenChange={setIsImageGeneratorOpen}

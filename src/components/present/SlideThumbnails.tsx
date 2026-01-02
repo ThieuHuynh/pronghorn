@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { toPng } from "html-to-image";
 import { SlideRenderer } from "./SlideRenderer";
+import { SlideCanvasFixed } from "./SlideCanvas";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -39,6 +40,13 @@ interface SlideThumbnailsProps {
   theme?: "default" | "light" | "vibrant";
 }
 
+// Thumbnail dimensions - render at 2x for quality
+const THUMB_WIDTH = 384;
+const THUMB_HEIGHT = 216;
+// Design canvas size for thumbnails
+const DESIGN_WIDTH = 960;
+const DESIGN_HEIGHT = 540;
+
 // Component to generate a single thumbnail - renders offscreen then captures
 function ThumbnailGenerator({ 
   slide, 
@@ -56,16 +64,15 @@ function ThumbnailGenerator({
 
   useEffect(() => {
     if (renderRef.current && !hasCapture) {
-      // Wait for render to complete - longer delay for complex slides
       const timer = setTimeout(async () => {
         if (renderRef.current) {
           try {
             const bgColor = theme === 'light' ? '#ffffff' : theme === 'vibrant' ? '#1a0d26' : '#1e293b';
             const dataUrl = await toPng(renderRef.current, {
               cacheBust: true,
-              pixelRatio: 2,
-              width: 384,
-              height: 216,
+              pixelRatio: 1,
+              width: DESIGN_WIDTH,
+              height: DESIGN_HEIGHT,
               backgroundColor: bgColor,
             });
             onCapture(dataUrl);
@@ -80,8 +87,7 @@ function ThumbnailGenerator({
     }
   }, [slide, hasCapture, onCapture, theme]);
 
-  // Offscreen container - use fixed positioning with visibility:visible (not opacity:0)
-  // This is the proven approach from parseDocx.ts that works with html-to-image
+  // Offscreen container at design size
   return (
     <div 
       ref={renderRef}
@@ -89,8 +95,8 @@ function ThumbnailGenerator({
         position: 'fixed',
         left: 0,
         top: 0,
-        width: 384,
-        height: 216,
+        width: DESIGN_WIDTH,
+        height: DESIGN_HEIGHT,
         zIndex: -9999,
         visibility: 'visible',
         pointerEvents: 'none',
@@ -102,10 +108,9 @@ function ThumbnailGenerator({
         slide={slide}
         layouts={layouts}
         theme={theme as any}
-        isPreview={true}
-        isFullscreen={false}
         fontScale={slide.fontScale || 1}
-        className="w-full h-full"
+        designWidth={DESIGN_WIDTH}
+        designHeight={DESIGN_HEIGHT}
       />
     </div>
   );
@@ -118,13 +123,11 @@ export function SlideThumbnails({
   onSlideChange, 
   theme = "default" 
 }: SlideThumbnailsProps) {
-  // Use refs for persistent caching across re-renders/view changes
   const thumbnailCacheRef = useRef<Record<string, string>>({});
   const contentHashRef = useRef<Record<string, string>>({});
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<Set<string>>(new Set());
 
-  // Create a content hash for detecting actual slide changes (including theme)
   const getContentHash = (slide: Slide): string => {
     const contentStr = JSON.stringify({
       layoutId: slide.layoutId,
@@ -133,9 +136,8 @@ export function SlideThumbnails({
       content: slide.content,
       imageUrl: slide.imageUrl,
       fontScale: slide.fontScale,
-      theme: theme, // Include theme so thumbnails regenerate on theme change
+      theme: theme,
     });
-    // Simple hash
     let hash = 0;
     for (let i = 0; i < contentStr.length; i++) {
       const char = contentStr.charCodeAt(i);
@@ -145,7 +147,6 @@ export function SlideThumbnails({
     return `${slide.id}-${hash}`;
   };
 
-  // Generate thumbnails only for slides that have changed
   useEffect(() => {
     if (!slides || slides.length === 0) return;
     
@@ -154,16 +155,13 @@ export function SlideThumbnails({
       const hash = getContentHash(slide);
       const existingHash = contentHashRef.current[slide.id];
       
-      // Check if we already have a cached thumbnail for this content
       if (thumbnailCacheRef.current[hash]) {
-        // Use cached thumbnail
         if (!thumbnails[hash]) {
           setThumbnails(prev => ({ ...prev, [hash]: thumbnailCacheRef.current[hash] }));
         }
         return;
       }
       
-      // Only regenerate if content actually changed (including theme changes)
       if (existingHash !== hash && !generating.has(hash)) {
         setGenerating(prev => new Set(prev).add(hash));
         contentHashRef.current[slide.id] = hash;
@@ -173,7 +171,6 @@ export function SlideThumbnails({
 
   const handleCapture = (slide: Slide, dataUrl: string) => {
     const hash = getContentHash(slide);
-    // Cache in ref for persistence
     thumbnailCacheRef.current[hash] = dataUrl;
     setThumbnails(prev => ({ ...prev, [hash]: dataUrl }));
     setGenerating(prev => {
@@ -223,12 +220,10 @@ export function SlideThumbnails({
                 )}
               >
                 <div className="relative">
-                  {/* Slide number badge */}
                   <div className="absolute top-1 left-1 z-10 bg-background/80 backdrop-blur-sm text-xs font-medium px-1.5 py-0.5 rounded">
                     {index + 1}
                   </div>
                   
-                  {/* 16:9 aspect ratio thumbnail */}
                   <div className="w-full aspect-video bg-muted">
                     {thumbnailUrl ? (
                       <img 
@@ -248,7 +243,6 @@ export function SlideThumbnails({
                   </div>
                 </div>
                 
-                {/* Slide title */}
                 <div className="p-1.5 bg-muted/50 border-t overflow-hidden">
                   <p className="text-xs font-medium truncate text-left max-w-full">
                     {slide.title || "Untitled Slide"}

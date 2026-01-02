@@ -31,57 +31,39 @@ interface SlideRendererProps {
   layouts?: any[];
   theme?: "default" | "light" | "vibrant";
   className?: string;
-  isPreview?: boolean;
-  isFullscreen?: boolean;
+  /** Font scale multiplier (default 1) - applies to all text */
   fontScale?: number;
+  /** Callback for clicking image placeholder */
   onAddImageClick?: () => void;
+  /** Design width for the canvas (default 960) */
+  designWidth?: number;
+  /** Design height for the canvas (default 540) */
+  designHeight?: number;
 }
 
-// Fluid typography scale based on container width
-const fluidSize = {
-  // Titles
-  titleFull: 'clamp(1.5rem, 5cqw, 4rem)',
-  titlePreview: 'clamp(0.75rem, 4cqw, 1.25rem)',
-  titleCoverFull: 'clamp(2rem, 7cqw, 5rem)',
-  titleCoverPreview: 'clamp(1rem, 5cqw, 1.5rem)',
-  
-  // Subtitles
-  subtitleFull: 'clamp(0.875rem, 2.5cqw, 1.5rem)',
-  subtitlePreview: 'clamp(0.5rem, 2cqw, 0.875rem)',
-  
-  // Body text
-  bodyFull: 'clamp(0.875rem, 2cqw, 1.25rem)',
-  bodyPreview: 'clamp(0.5rem, 1.5cqw, 0.75rem)',
-  
-  // Small text (descriptions, muted)
-  smallFull: 'clamp(0.75rem, 1.5cqw, 1rem)',
-  smallPreview: 'clamp(0.5rem, 1.25cqw, 0.625rem)',
-  
-  // Stats
-  statValueFull: 'clamp(1.5rem, 5cqw, 3.5rem)',
-  statValuePreview: 'clamp(1rem, 4cqw, 1.5rem)',
-  
-  // Spacing
-  gapFull: 'clamp(0.5rem, 1.5cqw, 1rem)',
-  gapPreview: 'clamp(0.25rem, 1cqw, 0.5rem)',
-  paddingFull: 'clamp(1rem, 3cqw, 2rem)',
-  paddingPreview: 'clamp(0.5rem, 2cqw, 1rem)',
-  
-  // Icons
-  bulletIconFull: 'clamp(6px, 1cqw, 12px)',
-  bulletIconPreview: 'clamp(4px, 1cqw, 6px)',
-  iconBoxFull: 'clamp(2rem, 4cqw, 3.5rem)',
-  iconBoxPreview: 'clamp(1.25rem, 3cqw, 2rem)',
-  iconSizeFull: 'clamp(1rem, 2cqw, 1.75rem)',
-  iconSizePreview: 'clamp(0.75rem, 1.5cqw, 1rem)',
-  
-  // Timeline
-  timelineCircleFull: 'clamp(1.5rem, 3cqw, 2.5rem)',
-  timelineCirclePreview: 'clamp(1rem, 2.5cqw, 1.5rem)',
+// Fixed typography sizes for 960x540 design canvas
+// All values in pixels - will scale uniformly with the canvas
+const FONT_SIZES = {
+  titleCover: 72,
+  title: 42,
+  subtitle: 22,
+  body: 18,
+  small: 14,
+  statValue: 56,
+  bulletIcon: 8,
+  iconBox: 48,
+  iconSize: 24,
+  timelineCircle: 32,
+};
+
+const SPACING = {
+  gap: 12,
+  padding: 32,
+  paddingSmall: 16,
 };
 
 // Markdown renderer for consistent styling
-const MarkdownText = ({ content, style, fontSize }: { content: string; style?: React.CSSProperties; fontSize?: string }) => (
+const MarkdownText = ({ content, style, fontSize }: { content: string; style?: React.CSSProperties; fontSize?: number }) => (
   <ReactMarkdown
     components={{
       p: ({ children }) => <p className="mb-2" style={{ ...style, fontSize }}>{children}</p>,
@@ -101,35 +83,30 @@ export function SlideRenderer({
   layouts, 
   theme = "default", 
   className = "", 
-  isPreview = false, 
-  isFullscreen = false,
   fontScale = 1,
-  onAddImageClick 
+  onAddImageClick,
+  designWidth = 960,
+  designHeight = 540,
 }: SlideRendererProps) {
   const { layoutId, title, subtitle, content, imageUrl } = slide;
   
-  // Apply font scale multiplier to fluid sizes
-  const scaledFluidSize = useMemo(() => {
-    if (fontScale === 1) return fluidSize;
-    // Apply scale factor to clamp values
-    const scale = (value: string) => {
-      // Parse clamp and multiply the values
-      const match = value.match(/clamp\(([\d.]+)rem,\s*([\d.]+)([a-z]+)\s*(?:\+\s*([\d.]+)rem)?,\s*([\d.]+)rem\)/);
-      if (match) {
-        const [, min, preferred, unit, offset, max] = match;
-        const scaledMin = (parseFloat(min) * fontScale).toFixed(3);
-        const scaledMax = (parseFloat(max) * fontScale).toFixed(3);
-        const scaledPreferred = (parseFloat(preferred) * fontScale).toFixed(2);
-        const scaledOffset = offset ? (parseFloat(offset) * fontScale).toFixed(3) : null;
-        return `clamp(${scaledMin}rem, ${scaledPreferred}${unit}${scaledOffset ? ` + ${scaledOffset}rem` : ''}, ${scaledMax}rem)`;
-      }
-      return value;
+  // Apply font scale to all sizes
+  const fs = useMemo(() => {
+    return {
+      titleCover: FONT_SIZES.titleCover * fontScale,
+      title: FONT_SIZES.title * fontScale,
+      subtitle: FONT_SIZES.subtitle * fontScale,
+      body: FONT_SIZES.body * fontScale,
+      small: FONT_SIZES.small * fontScale,
+      statValue: FONT_SIZES.statValue * fontScale,
+      bulletIcon: FONT_SIZES.bulletIcon * fontScale,
+      iconBox: FONT_SIZES.iconBox * fontScale,
+      iconSize: FONT_SIZES.iconSize * fontScale,
+      timelineCircle: FONT_SIZES.timelineCircle * fontScale,
     };
-    
-    return Object.fromEntries(
-      Object.entries(fluidSize).map(([key, value]) => [key, scale(value)])
-    ) as typeof fluidSize;
   }, [fontScale]);
+
+  const sp = SPACING;
 
   const themeColors = useMemo((): ThemeColors & { 
     sectionGradient: string; 
@@ -170,15 +147,10 @@ export function SlideRenderer({
     }
   }, [theme]);
 
-  // Fluid size helpers - use scaled version
-  const fs = (full: keyof typeof fluidSize, preview: keyof typeof fluidSize) => 
-    isPreview ? scaledFluidSize[preview] : scaledFluidSize[full];
-
   // === UNIFIED CONTENT EXTRACTION ===
   const getContentByType = (type: string) => content?.find(c => c.type === type);
   const getContentByRegion = (regionId: string) => content?.find(c => c.regionId === regionId);
   
-  // Get main content - check all possible formats
   const mainContent = useMemo(() => {
     return getContentByRegion("content") || 
            getContentByRegion("main") || 
@@ -193,22 +165,18 @@ export function SlideRenderer({
   const statsContent = content?.filter(c => c.type === "stat");
   const gridContent = getContentByType("icon-grid") || getContentByRegion("grid");
 
-  // Extract the actual text/items from mainContent
   const mainText = mainContent?.data?.text || (typeof mainContent?.data === 'string' ? mainContent.data : null);
   const mainItems = mainContent?.data?.items;
 
-  // Get image URL from various possible locations
   const getImageUrl = () => {
     const url = imageContent?.data?.url || 
            imageContent?.data?.imageUrl || 
            getContentByRegion("diagram")?.data?.url ||
            imageUrl;
     
-    // Check if URL is a valid image (not a placeholder filename)
     if (url && (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/'))) {
       return url;
     }
-    // Reject placeholder-like URLs that won't load
     if (url && (url.includes('placeholder') || url.endsWith('.svg') && !url.startsWith('http'))) {
       return null;
     }
@@ -219,20 +187,20 @@ export function SlideRenderer({
   const isSectionDivider = layoutId === "section-divider";
   const isFullBleed = ["title-cover", "section-divider"].includes(layoutId);
 
-  // === RENDER HELPERS WITH FLUID TYPOGRAPHY ===
+  // === RENDER HELPERS WITH FIXED PIXEL SIZES ===
   const renderTitle = (centered = false) => (
     <div 
       className={`shrink-0 ${centered ? 'text-center' : ''}`}
       style={{ 
-        padding: fs('paddingFull', 'paddingPreview'),
-        paddingBottom: fs('gapFull', 'gapPreview'),
+        padding: sp.padding,
+        paddingBottom: sp.gap,
       }}
     >
       <h2 
         className="font-bold font-raleway leading-tight"
         style={{ 
           color: themeColors.foreground,
-          fontSize: fs('titleFull', 'titlePreview'),
+          fontSize: fs.title,
         }}
       >
         {title}
@@ -242,7 +210,7 @@ export function SlideRenderer({
           className="mt-1 opacity-80"
           style={{ 
             color: themeColors.muted,
-            fontSize: fs('subtitleFull', 'subtitlePreview'),
+            fontSize: fs.subtitle,
           }}
         >
           {subtitle}
@@ -252,40 +220,40 @@ export function SlideRenderer({
   );
 
   const renderBullets = (items: any[]) => (
-    <ul style={{ display: 'flex', flexDirection: 'column', gap: fs('gapFull', 'gapPreview') }}>
+    <ul style={{ display: 'flex', flexDirection: 'column', gap: sp.gap }}>
       {items.map((item: any, i: number) => (
         <li 
           key={i} 
           className="flex items-start"
           style={{ 
             color: themeColors.foreground,
-            gap: fs('gapFull', 'gapPreview'),
+            gap: sp.gap,
           }}
         >
           <Circle 
             className="flex-shrink-0 mt-1.5" 
             style={{ 
-              width: fs('bulletIconFull', 'bulletIconPreview'),
-              height: fs('bulletIconFull', 'bulletIconPreview'),
+              width: fs.bulletIcon,
+              height: fs.bulletIcon,
               color: themeColors.primary,
               fill: themeColors.primary,
             }} 
           />
           <div 
             className="flex-1"
-            style={{ fontSize: fs('bodyFull', 'bodyPreview') }}
+            style={{ fontSize: fs.body }}
           >
             {typeof item === "string" ? (
               <MarkdownText 
                 content={item} 
                 style={{ color: themeColors.foreground }}
-                fontSize={fs('bodyFull', 'bodyPreview')}
+                fontSize={fs.body}
               />
             ) : (
               <>
                 <span className="font-semibold">{item.title}</span>
                 {item.description && (
-                  <p style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview'), marginTop: '0.25rem' }}>
+                  <p style={{ color: themeColors.muted, fontSize: fs.small, marginTop: 4 }}>
                     {item.description}
                   </p>
                 )}
@@ -305,12 +273,12 @@ export function SlideRenderer({
       return (
         <div 
           className="leading-relaxed"
-          style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
+          style={{ color: themeColors.foreground, fontSize: fs.body }}
         >
           <MarkdownText 
             content={mainText} 
             style={{ color: themeColors.foreground }}
-            fontSize={fs('bodyFull', 'bodyPreview')}
+            fontSize={fs.body}
           />
         </div>
       );
@@ -330,17 +298,17 @@ export function SlideRenderer({
   );
 
   const renderTimeline = (steps: any[]) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: fs('gapFull', 'gapPreview') }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: sp.gap }}>
       {steps.map((step: any, i: number) => (
-        <div key={i} className="flex items-start" style={{ gap: fs('gapFull', 'gapPreview') }}>
+        <div key={i} className="flex items-start" style={{ gap: sp.gap }}>
           <div 
             className="shrink-0 rounded-full flex items-center justify-center font-bold"
             style={{ 
               background: themeColors.primary, 
               color: themeColors.background,
-              width: fs('timelineCircleFull', 'timelineCirclePreview'),
-              height: fs('timelineCircleFull', 'timelineCirclePreview'),
-              fontSize: fs('smallFull', 'smallPreview'),
+              width: fs.timelineCircle,
+              height: fs.timelineCircle,
+              fontSize: fs.small,
             }}
           >
             {i + 1}
@@ -348,12 +316,12 @@ export function SlideRenderer({
           <div className="flex-1 pt-0.5">
             <div 
               className="font-semibold"
-              style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
+              style={{ color: themeColors.foreground, fontSize: fs.body }}
             >
               {step.title}
             </div>
             {step.description && (
-              <div style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview'), marginTop: '0.25rem' }}>
+              <div style={{ color: themeColors.muted, fontSize: fs.small, marginTop: 4 }}>
                 {step.description}
               </div>
             )}
@@ -364,25 +332,25 @@ export function SlideRenderer({
   );
 
   const renderStats = (stats: SlideContent[]) => (
-    <div className="grid grid-cols-2" style={{ gap: fs('gapFull', 'gapPreview') }}>
+    <div className="grid grid-cols-2" style={{ gap: sp.gap }}>
       {stats.map((stat, i) => (
         <div 
           key={i} 
           className="flex flex-col items-center justify-center rounded-lg" 
           style={{ 
             background: `${themeColors.primary}11`,
-            padding: fs('paddingFull', 'paddingPreview'),
+            padding: sp.padding,
           }}
         >
           <div 
             className="font-bold font-raleway"
-            style={{ color: themeColors.primary, fontSize: fs('statValueFull', 'statValuePreview') }}
+            style={{ color: themeColors.primary, fontSize: fs.statValue }}
           >
             {stat.data?.value || "0"}
           </div>
           <div 
             className="mt-1 text-center" 
-            style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview') }}
+            style={{ color: themeColors.muted, fontSize: fs.small }}
           >
             {stat.data?.label || ""}
           </div>
@@ -392,36 +360,36 @@ export function SlideRenderer({
   );
 
   const renderIconGrid = (items: any[]) => (
-    <div className="grid grid-cols-2" style={{ gap: fs('gapFull', 'gapPreview') }}>
+    <div className="grid grid-cols-2" style={{ gap: sp.gap }}>
       {items.map((item: any, i: number) => (
         <div 
           key={i} 
           className="flex flex-col items-center text-center"
-          style={{ padding: fs('gapFull', 'gapPreview') }}
+          style={{ padding: sp.gap }}
         >
           <div 
             className="rounded-lg flex items-center justify-center mb-2"
             style={{ 
               background: `${themeColors.primary}22`,
-              width: fs('iconBoxFull', 'iconBoxPreview'),
-              height: fs('iconBoxFull', 'iconBoxPreview'),
+              width: fs.iconBox,
+              height: fs.iconBox,
             }}
           >
             <CheckCircle2 
               style={{ 
-                width: fs('iconSizeFull', 'iconSizePreview'), 
-                height: fs('iconSizeFull', 'iconSizePreview'), 
+                width: fs.iconSize, 
+                height: fs.iconSize, 
                 color: themeColors.primary 
               }} 
             />
           </div>
           <div 
             className="font-semibold"
-            style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
+            style={{ color: themeColors.foreground, fontSize: fs.body }}
           >
             {item.title}
           </div>
-          <div style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview') }}>
+          <div style={{ color: themeColors.muted, fontSize: fs.small }}>
             {item.description}
           </div>
         </div>
@@ -429,27 +397,75 @@ export function SlideRenderer({
     </div>
   );
 
-  // === LAYOUT RENDERING ===
-  // Container with size containment for cqw units
-  // Always maintain 16:9 aspect ratio for consistency
-  const containerClass = `
-    relative font-raleway w-full h-full
-    ${className}
-  `;
+  // Image placeholder for layouts without images
+  const renderImagePlaceholder = () => (
+    <div 
+      className={`w-full h-full min-h-[100px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center ${onAddImageClick ? 'cursor-pointer hover:bg-opacity-20' : ''}`}
+      style={{ 
+        borderColor: themeColors.muted, 
+        color: themeColors.muted,
+        background: `${themeColors.primary}08`,
+      }}
+      onClick={onAddImageClick}
+    >
+      <ImageIcon 
+        style={{ 
+          width: fs.iconBox,
+          height: fs.iconBox,
+          marginBottom: sp.gap,
+          opacity: 0.5,
+        }} 
+      />
+      <span style={{ fontSize: fs.small }}>
+        {onAddImageClick ? 'Click to add image' : 'No image'}
+      </span>
+    </div>
+  );
 
+  // Helper to render column content
+  const renderColumnContent = (colContent: SlideContent | undefined) => {
+    if (!colContent?.data) return null;
+    
+    if (colContent.data.items) {
+      return renderBullets(colContent.data.items);
+    }
+    
+    const textContent = colContent.data.text || (typeof colContent.data === 'string' ? colContent.data : null);
+    if (textContent) {
+      return (
+        <div 
+          className="leading-relaxed"
+          style={{ color: themeColors.foreground, fontSize: fs.body }}
+        >
+          <MarkdownText 
+            content={textContent} 
+            style={{ color: themeColors.foreground }}
+            fontSize={fs.body}
+          />
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  // === CONTAINER STYLES ===
+  // Fixed dimensions matching the design canvas - NO responsive breakpoints
   const containerStyle: React.CSSProperties = {
-    containerType: 'size',
+    width: designWidth,
+    height: designHeight,
     background: isSectionDivider 
       ? themeColors.sectionGradient 
       : themeColors.background,
     color: themeColors.foreground,
-    aspectRatio: '16 / 9',
+    overflow: 'hidden',
+    position: 'relative',
   };
 
   // Title cover / Section divider
   if (isFullBleed) {
     return (
-      <div className={containerClass} style={containerStyle}>
+      <div className={`font-raleway ${className}`} style={containerStyle}>
         {imgUrl && (
           <div className="absolute inset-0">
             <img 
@@ -472,23 +488,23 @@ export function SlideRenderer({
         )}
         <div 
           className="relative z-10 flex flex-col items-center justify-center h-full text-center"
-          style={{ padding: fs('paddingFull', 'paddingPreview') }}
+          style={{ padding: sp.padding }}
         >
           <h1 
             className="font-bold font-raleway leading-tight"
             style={{ 
               color: themeColors.foreground,
-              fontSize: fs('titleCoverFull', 'titleCoverPreview'),
+              fontSize: fs.titleCover,
             }}
           >
             {title}
           </h1>
           {subtitle && (
             <p 
-              className="mt-3 sm:mt-4 opacity-80"
+              className="mt-4 opacity-80"
               style={{ 
                 color: themeColors.muted,
-                fontSize: fs('subtitleFull', 'subtitlePreview'),
+                fontSize: fs.subtitle,
               }}
             >
               {subtitle}
@@ -500,66 +516,37 @@ export function SlideRenderer({
   }
 
   // Image layouts (image-left, image-right, architecture)
+  // FIXED: Always use side-by-side layout, never stack vertically
   if (["image-left", "image-right", "architecture"].includes(layoutId)) {
     const hasImage = !!imgUrl;
     const isArchitecture = layoutId === "architecture";
     const imageFirst = layoutId === "image-left";
     
-    // Placeholder for image layouts without images
-    const renderImagePlaceholder = () => (
-      <div 
-        className={`w-full h-full min-h-[100px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center ${onAddImageClick ? 'cursor-pointer hover:bg-opacity-20' : ''}`}
-        style={{ 
-          borderColor: themeColors.muted, 
-          color: themeColors.muted,
-          background: `${themeColors.primary}08`,
-        }}
-        onClick={onAddImageClick}
-      >
-        <ImageIcon 
-          style={{ 
-            width: fs('iconBoxFull', 'iconBoxPreview'),
-            height: fs('iconBoxFull', 'iconBoxPreview'),
-            marginBottom: fs('gapFull', 'gapPreview'),
-            opacity: 0.5,
-          }} 
-        />
-        <span style={{ fontSize: fs('smallFull', 'smallPreview') }}>
-          {onAddImageClick ? 'Click to add image' : 'No image'}
-        </span>
-      </div>
-    );
-    
     return (
-      <div className={containerClass} style={containerStyle}>
-        <div className={`
-          flex flex-col h-full
-          ${isFullscreen ? 'lg:flex-row' : ''}
-        `}>
-          {/* Image section - on mobile: top for image-left, bottom for image-right */}
+      <div className={`font-raleway ${className}`} style={containerStyle}>
+        <div className="flex flex-row h-full">
+          {/* Image section - fixed 40% width */}
           {imageFirst && (
-            <div className={`
-              shrink-0 
-              ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
-            `}
-            style={{ padding: fs('gapFull', 'gapPreview') }}
+            <div 
+              className="shrink-0 h-full"
+              style={{ width: '40%', padding: sp.gap }}
             >
               {hasImage ? renderImage(imgUrl, imageContent?.data?.alt) : renderImagePlaceholder()}
             </div>
           )}
           
-          {/* Content section */}
-          <div className={`
-            flex-1 flex flex-col justify-center min-h-0
-            ${isFullscreen ? 'lg:flex-1' : ''}
-          `}>
+          {/* Content section - 60% width */}
+          <div 
+            className="flex-1 flex flex-col justify-center min-h-0"
+            style={{ width: imageFirst || isArchitecture ? '60%' : '60%' }}
+          >
             {renderTitle()}
             <div 
               className="flex-1 overflow-y-auto min-h-0"
               style={{ 
-                paddingLeft: fs('paddingFull', 'paddingPreview'),
-                paddingRight: fs('paddingFull', 'paddingPreview'),
-                paddingBottom: fs('paddingFull', 'paddingPreview'),
+                paddingLeft: sp.padding,
+                paddingRight: sp.padding,
+                paddingBottom: sp.padding,
               }}
             >
               {isArchitecture && !hasImage ? (
@@ -568,8 +555,8 @@ export function SlideRenderer({
                   style={{ 
                     borderColor: themeColors.muted, 
                     color: themeColors.muted,
-                    padding: fs('paddingFull', 'paddingPreview'),
-                    fontSize: fs('bodyFull', 'bodyPreview'),
+                    padding: sp.padding,
+                    fontSize: fs.body,
                   }}
                 >
                   Architecture Diagram Placeholder
@@ -580,13 +567,11 @@ export function SlideRenderer({
             </div>
           </div>
 
-          {/* Image at bottom for image-right */}
+          {/* Image at right for image-right */}
           {!imageFirst && !isArchitecture && (
-            <div className={`
-              shrink-0 
-              ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
-            `}
-            style={{ padding: fs('gapFull', 'gapPreview') }}
+            <div 
+              className="shrink-0 h-full"
+              style={{ width: '40%', padding: sp.gap }}
             >
               {hasImage ? renderImage(imgUrl, imageContent?.data?.alt) : renderImagePlaceholder()}
             </div>
@@ -595,12 +580,8 @@ export function SlideRenderer({
           {/* Architecture shows image in content area if available */}
           {isArchitecture && hasImage && (
             <div 
-              className="flex-1"
-              style={{ 
-                paddingLeft: fs('paddingFull', 'paddingPreview'),
-                paddingRight: fs('paddingFull', 'paddingPreview'),
-                paddingBottom: fs('paddingFull', 'paddingPreview'),
-              }}
+              className="shrink-0 h-full"
+              style={{ width: '40%', padding: sp.gap }}
             >
               {renderImage(imgUrl, "Architecture diagram")}
             </div>
@@ -613,15 +594,15 @@ export function SlideRenderer({
   // Stats grid
   if (layoutId === "stats-grid" && statsContent && statsContent.length > 0) {
     return (
-      <div className={containerClass} style={containerStyle}>
+      <div className={`font-raleway ${className}`} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
           <div 
             className="flex-1 flex items-center justify-center min-h-0"
             style={{ 
-              paddingLeft: fs('paddingFull', 'paddingPreview'),
-              paddingRight: fs('paddingFull', 'paddingPreview'),
-              paddingBottom: fs('paddingFull', 'paddingPreview'),
+              paddingLeft: sp.padding,
+              paddingRight: sp.padding,
+              paddingBottom: sp.padding,
             }}
           >
             {renderStats(statsContent)}
@@ -634,15 +615,15 @@ export function SlideRenderer({
   // Timeline
   if (layoutId === "timeline" && timelineContent?.data?.steps) {
     return (
-      <div className={containerClass} style={containerStyle}>
+      <div className={`font-raleway ${className}`} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
           <div 
             className="flex-1 overflow-y-auto min-h-0"
             style={{ 
-              paddingLeft: fs('paddingFull', 'paddingPreview'),
-              paddingRight: fs('paddingFull', 'paddingPreview'),
-              paddingBottom: fs('paddingFull', 'paddingPreview'),
+              paddingLeft: sp.padding,
+              paddingRight: sp.padding,
+              paddingBottom: sp.padding,
             }}
           >
             {renderTimeline(timelineContent.data.steps)}
@@ -655,15 +636,15 @@ export function SlideRenderer({
   // Icon grid
   if (layoutId === "icon-grid" && gridContent?.data?.items) {
     return (
-      <div className={containerClass} style={containerStyle}>
+      <div className={`font-raleway ${className}`} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
           <div 
             className="flex-1 flex items-center min-h-0"
             style={{ 
-              paddingLeft: fs('paddingFull', 'paddingPreview'),
-              paddingRight: fs('paddingFull', 'paddingPreview'),
-              paddingBottom: fs('paddingFull', 'paddingPreview'),
+              paddingLeft: sp.padding,
+              paddingRight: sp.padding,
+              paddingBottom: sp.padding,
             }}
           >
             <div className="w-full">
@@ -675,36 +656,7 @@ export function SlideRenderer({
     );
   }
 
-  // Helper to render column content (handles items, text, or richtext)
-  const renderColumnContent = (colContent: SlideContent | undefined) => {
-    if (!colContent?.data) return null;
-    
-    // If it has items, render as bullets
-    if (colContent.data.items) {
-      return renderBullets(colContent.data.items);
-    }
-    
-    // If it has text, render as markdown
-    const textContent = colContent.data.text || (typeof colContent.data === 'string' ? colContent.data : null);
-    if (textContent) {
-      return (
-        <div 
-          className="leading-relaxed"
-          style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
-        >
-          <MarkdownText 
-            content={textContent} 
-            style={{ color: themeColors.foreground }}
-            fontSize={fs('bodyFull', 'bodyPreview')}
-          />
-        </div>
-      );
-    }
-    
-    return null;
-  };
-
-  // Two-column / Comparison
+  // Two-column / Comparison - FIXED: Always side-by-side
   if (["two-column", "comparison"].includes(layoutId)) {
     const leftContent = getContentByRegion("left-content") || getContentByRegion("left");
     const rightContent = getContentByRegion("right-content") || getContentByRegion("right");
@@ -713,28 +665,24 @@ export function SlideRenderer({
     const hasRight = rightContent?.data?.items || rightContent?.data?.text || typeof rightContent?.data === 'string';
     
     return (
-      <div className={containerClass} style={containerStyle}>
+      <div className={`font-raleway ${className}`} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
           <div 
-            className={`
-              flex-1 overflow-y-auto min-h-0
-              flex flex-col
-              ${isFullscreen ? 'lg:flex-row' : ''}
-            `}
+            className="flex-1 overflow-y-auto min-h-0 flex flex-row"
             style={{ 
-              paddingLeft: fs('paddingFull', 'paddingPreview'),
-              paddingRight: fs('paddingFull', 'paddingPreview'),
-              paddingBottom: fs('paddingFull', 'paddingPreview'),
-              gap: fs('gapFull', 'gapPreview'),
+              paddingLeft: sp.padding,
+              paddingRight: sp.padding,
+              paddingBottom: sp.padding,
+              gap: sp.gap,
             }}
           >
             {hasLeft && (
-              <div className={isFullscreen ? 'lg:flex-1' : ''}>
+              <div className="flex-1">
                 {leftContent?.data?.title && (
                   <h3 
                     className="font-semibold mb-2"
-                    style={{ color: themeColors.primary, fontSize: fs('bodyFull', 'bodyPreview') }}
+                    style={{ color: themeColors.primary, fontSize: fs.body }}
                   >
                     {leftContent.data.title}
                   </h3>
@@ -743,11 +691,11 @@ export function SlideRenderer({
               </div>
             )}
             {hasRight && (
-              <div className={isFullscreen ? 'lg:flex-1' : ''}>
+              <div className="flex-1">
                 {rightContent?.data?.title && (
                   <h3 
                     className="font-semibold mb-2"
-                    style={{ color: themeColors.primary, fontSize: fs('bodyFull', 'bodyPreview') }}
+                    style={{ color: themeColors.primary, fontSize: fs.body }}
                   >
                     {rightContent.data.title}
                   </h3>
@@ -763,15 +711,15 @@ export function SlideRenderer({
 
   // Default: title-content, bullets, or any unrecognized layout
   return (
-    <div className={containerClass} style={containerStyle}>
+    <div className={`font-raleway ${className}`} style={containerStyle}>
       <div className="flex flex-col h-full justify-center">
         {renderTitle()}
         <div 
           className="flex-1 overflow-y-auto min-h-0"
           style={{ 
-            paddingLeft: fs('paddingFull', 'paddingPreview'),
-            paddingRight: fs('paddingFull', 'paddingPreview'),
-            paddingBottom: fs('paddingFull', 'paddingPreview'),
+            paddingLeft: sp.padding,
+            paddingRight: sp.padding,
+            paddingBottom: sp.padding,
           }}
         >
           {renderTextContent()}

@@ -663,10 +663,7 @@ export default function Present() {
                 slide={currentSlide}
                 layouts={layouts}
                 theme={currentTheme}
-                isPreview={false}
-                isFullscreen={true}
                 fontScale={currentSlide.fontScale || 1}
-                className="w-full h-full"
                 onAddImageClick={() => setIsImageGeneratorOpen(true)}
               />
             </div>
@@ -1081,10 +1078,7 @@ export default function Present() {
                                 slide={currentSlide}
                                 layouts={layouts}
                                 theme={currentTheme}
-                                isPreview={false}
-                                isFullscreen={false}
                                 fontScale={currentSlide.fontScale || 1}
-                                className="w-full h-full"
                                 onAddImageClick={() => setIsImageGeneratorOpen(true)}
                               />
                             </div>
