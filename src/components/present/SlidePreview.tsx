@@ -137,16 +137,23 @@ export function SlidePreview({
       </div>
 
       {/* Main slide area */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        <div className={cn("flex-1", showNotes && currentSlide.notes && "w-2/3")}>
+      <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+        <div className={cn("flex-1 overflow-hidden", showNotes && currentSlide.notes && "w-2/3")}>
           <Card className="h-full overflow-hidden">
-            <CardContent className="p-0 h-full flex items-center justify-center bg-muted/20">
-              <div className="w-full max-w-4xl">
+            <CardContent className={cn(
+              "p-0 h-full flex items-center justify-center bg-muted/20",
+              isFullscreen && "p-4"
+            )}>
+              <div className={cn(
+                "w-full h-full",
+                !isFullscreen && "max-w-4xl"
+              )}>
                 <SlideRenderer
                   slide={currentSlide}
                   layouts={layouts}
                   theme={theme}
                   isPreview={false}
+                  isFullscreen={isFullscreen}
                 />
               </div>
             </CardContent>

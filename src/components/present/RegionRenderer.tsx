@@ -62,6 +62,7 @@ interface RegionRendererProps {
   content?: SlideContent;
   slideTitle?: string;
   slideSubtitle?: string;
+  slideImageUrl?: string;
   themeColors: ThemeColors;
   isPreview?: boolean;
 }
@@ -70,7 +71,8 @@ export function RegionRenderer({
   region, 
   content, 
   slideTitle, 
-  slideSubtitle, 
+  slideSubtitle,
+  slideImageUrl,
   themeColors, 
   isPreview = false 
 }: RegionRendererProps) {
@@ -225,15 +227,23 @@ export function RegionRenderer({
           );
 
         case "image":
+          const imageUrl = content.data?.url || content.data?.imageUrl || slideImageUrl;
+          if (!imageUrl) return null;
           return (
-            <img
-              src={content.data?.url || ""}
-              alt={content.data?.alt || ""}
-              className="w-full h-full"
-              style={{ 
-                objectFit: (region.objectFit as any) || "cover",
-              }}
-            />
+            <div className="w-full h-full relative overflow-hidden rounded-lg">
+              <img
+                src={imageUrl}
+                alt={content.data?.alt || "Slide image"}
+                className="w-full h-full object-cover"
+                style={{ 
+                  objectFit: (region.objectFit as any) || "cover",
+                }}
+                onError={(e) => {
+                  // Hide broken images
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
           );
 
         case "timeline":

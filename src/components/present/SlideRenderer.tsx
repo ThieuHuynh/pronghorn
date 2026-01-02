@@ -52,9 +52,10 @@ interface SlideRendererProps {
   theme?: "default" | "light" | "vibrant";
   className?: string;
   isPreview?: boolean;
+  isFullscreen?: boolean;
 }
 
-export function SlideRenderer({ slide, layouts, theme = "default", className = "", isPreview = false }: SlideRendererProps) {
+export function SlideRenderer({ slide, layouts, theme = "default", className = "", isPreview = false, isFullscreen = false }: SlideRendererProps) {
   const layout = useMemo(() => 
     layouts.find(l => l.id === slide.layoutId) || layouts[0],
     [layouts, slide.layoutId]
@@ -129,11 +130,17 @@ export function SlideRenderer({ slide, layouts, theme = "default", className = "
   const isFullBleed = ["title-cover", "section-divider"].includes(slide.layoutId);
   const isSectionDivider = slide.layoutId === "section-divider";
 
+  // For fullscreen on mobile/portrait, use flex layout instead of fixed aspect ratio
+  const useFlexLayout = isFullscreen;
+
   return (
     <div 
       className={`relative font-raleway overflow-hidden ${className}`}
       style={{
-        aspectRatio: "16/9",
+        ...(useFlexLayout 
+          ? { minHeight: "100%", width: "100%" }
+          : { aspectRatio: "16/9" }
+        ),
         background: isSectionDivider 
           ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
           : themeColors.background,
@@ -232,6 +239,7 @@ export function SlideRenderer({ slide, layouts, theme = "default", className = "
                 content={content}
                 slideTitle={slide.title}
                 slideSubtitle={slide.subtitle}
+                slideImageUrl={slide.imageUrl}
                 themeColors={themeColors}
                 isPreview={isPreview}
               />

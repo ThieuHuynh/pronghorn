@@ -47,6 +47,7 @@ interface GeneratedSlide {
   content: SlideContent[];
   notes?: string;
   imageUrl?: string;
+  imagePrompt?: string;
 }
 
 // Generate unique ID
@@ -128,6 +129,43 @@ function parseAgentResponseText(rawText: string): any {
 
   console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
   return null;
+}
+
+// Generate slide image using the enhance-image edge function
+async function generateSlideImage(
+  prompt: string, 
+  supabaseUrl: string, 
+  supabaseKey: string
+): Promise<string | null> {
+  try {
+    console.log(`🎨 Generating slide image for: "${prompt.substring(0, 100)}..."`);
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/enhance-image`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        prompt: `Professional presentation visual: ${prompt}. High quality, clean, modern design suitable for a business presentation slide.`,
+        model: "gemini-2.5-flash-image",
+        images: [], // No source images, pure generation
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Image generation failed:", response.status, errorText);
+      return null;
+    }
+    
+    const data = await response.json();
+    console.log("✅ Slide image generated successfully");
+    return data.imageUrl; // Returns base64 data URL
+  } catch (error) {
+    console.error("Image generation error:", error);
+    return null;
+  }
 }
 
 // Grok structured output schema for presentation slides
@@ -1035,16 +1073,43 @@ Use ONLY markdown: **bold**, *italic*. For lists use "bullets" type.
 
 FORBIDDEN: <b>, </b>, <i>, <ul>, <li>, <p>, <br>, <strong>, <em>, <div>, <span>
 
+### IMAGE GENERATION (IMPORTANT!)
+For visual impact, use image-capable layouts and include an "imagePrompt" field at the SLIDE level:
+- "image-left": Large image on left, content on right
+- "image-right": Content on left, large image on right  
+- "architecture": System diagram visualization
+- "title-cover": Full background image for cover slides
+
+When using these layouts, add an "imagePrompt" field to the slide object describing what image to generate:
+
+Example slide with image:
+{
+  "id": "uuid-here",
+  "order": 2,
+  "layoutId": "image-right",
+  "title": "Our Technology Stack",
+  "imagePrompt": "Modern tech stack visualization with interconnected nodes representing cloud services, APIs, and databases. Blue gradient, abstract geometric, professional.",
+  "content": [
+    { "regionId": "content", "type": "richtext", "data": { "text": "Our platform leverages..." } }
+  ],
+  "notes": "Discuss the technical architecture..."
+}
+
+IMPORTANT: 
+- At least 30% of slides should use image layouts (image-left, image-right, architecture, or title-cover)
+- Write descriptive imagePrompt fields that will generate professional visuals
+- Image prompts should be 1-2 sentences describing an abstract, professional visual
+
 ### Required Slide Sequence
-1. COVER: Title slide with project name, tagline, date
+1. COVER: Title slide with project name, tagline, date (layoutId: "title-cover", include imagePrompt for abstract background)
 2. EXECUTIVE SUMMARY: Bottom-line-up-front key takeaways
-3. OVERVIEW: Project purpose, scope, objectives
+3. OVERVIEW: Project purpose, scope, objectives (consider image-right layout)
 4. REQUIREMENTS: Key requirements summary with bullets
-5. ARCHITECTURE: System design with components
+5. ARCHITECTURE: System design with components (layoutId: "architecture" with imagePrompt for diagram)
 6. TECHNOLOGY: Tech stack with icon grid
 7. STATUS: Current metrics with stats grid
 8. CHALLENGES: Risks and blockers
-9. OPPORTUNITIES: Growth areas
+9. OPPORTUNITIES: Growth areas (consider image-left layout)
 10. NEXT STEPS: Roadmap with timeline
 
 For detailed mode, add section dividers and expand each topic.
@@ -1163,6 +1228,79 @@ Return ONLY a JSON object with a "slides" array. No markdown, no explanation.`;
           }
 
           console.log(`Generated ${slidesJson.length} slides`);
+
+          // ============ IMAGE GENERATION PHASE ============
+          // Find slides with imagePrompt and generate images for them
+          const slidesNeedingImages = slidesJson.filter(
+            (s: any) => s.imagePrompt && !s.imageUrl
+          );
+
+          if (slidesNeedingImages.length > 0) {
+            controller.enqueue(encoder.encode(sseMessage("status", { 
+              phase: "generating_images", 
+              message: `Generating images for ${slidesNeedingImages.length} slides...` 
+            })));
+
+            let imagesGenerated = 0;
+            const maxImages = Math.min(slidesNeedingImages.length, 5); // Limit to 5 images to avoid timeout
+
+            for (let i = 0; i < maxImages; i++) {
+              const slide = slidesNeedingImages[i];
+              
+              controller.enqueue(encoder.encode(sseMessage("status", { 
+                phase: "generating_images", 
+                message: `Generating image ${i + 1}/${maxImages}: "${slide.title}"...` 
+              })));
+
+              const imageUrl = await generateSlideImage(
+                slide.imagePrompt!,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (imageUrl) {
+                // Update the slide with the generated image
+                const slideIndex = slidesJson.findIndex((s: any) => s.id === slide.id);
+                if (slideIndex !== -1) {
+                  slidesJson[slideIndex].imageUrl = imageUrl;
+
+                  // Also add to content array for the image region if not already present
+                  const imageLayouts: Record<string, string> = {
+                    "image-left": "image",
+                    "image-right": "image",
+                    "architecture": "diagram",
+                    "title-cover": "background",
+                  };
+                  
+                  const imageRegion = imageLayouts[slide.layoutId];
+                  if (imageRegion) {
+                    const hasImageContent = slidesJson[slideIndex].content?.some(
+                      (c: any) => c.regionId === imageRegion && c.type === "image"
+                    );
+                    
+                    if (!hasImageContent) {
+                      slidesJson[slideIndex].content = slidesJson[slideIndex].content || [];
+                      slidesJson[slideIndex].content.push({
+                        regionId: imageRegion,
+                        type: "image",
+                        data: { url: imageUrl, alt: slide.imagePrompt }
+                      });
+                    }
+                  }
+                }
+                imagesGenerated++;
+              }
+            }
+
+            await addToBlackboard({
+              source: "image_generation",
+              category: "observation",
+              content: `Generated ${imagesGenerated} images for ${slidesNeedingImages.length} image-capable slides (limited to ${maxImages} to avoid timeout).`,
+              data: { generated: imagesGenerated, requested: slidesNeedingImages.length, maxAllowed: maxImages }
+            });
+
+            console.log(`✅ Generated ${imagesGenerated}/${maxImages} slide images`);
+          }
 
         } catch (llmError: any) {
           console.error("LLM slide generation failed:", llmError);
