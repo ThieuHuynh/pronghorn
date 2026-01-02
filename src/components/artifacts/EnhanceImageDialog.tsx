@@ -22,10 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3, Square, RectangleHorizontal, RectangleVertical, Bot } from "lucide-react";
+import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3, Square, RectangleHorizontal, RectangleVertical, Bot, AlertTriangle, Edit3 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+interface TextOnlyResponse {
+  text: string;
+  retryPrompt: string;
+}
 
 interface Artifact {
   id: string;
@@ -93,6 +98,7 @@ export function EnhanceImageDialog({
   const [compactView, setCompactView] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [selectedModel, setSelectedModel] = useState(IMAGE_MODELS[0].id);
+  const [textOnlyResponse, setTextOnlyResponse] = useState<TextOnlyResponse | null>(null);
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -108,6 +114,7 @@ export function EnhanceImageDialog({
       setIsSaving(false);
       setAspectRatio('16:9');
       setSelectedModel(IMAGE_MODELS[0].id);
+      setTextOnlyResponse(null);
     }
   }, [open]);
 
@@ -171,14 +178,16 @@ export function EnhanceImageDialog({
     });
   };
 
-  const handleEnhance = async () => {
-    if (!prompt.trim()) {
+  const handleEnhance = async (overridePrompt?: string) => {
+    const usePrompt = overridePrompt || prompt;
+    if (!usePrompt.trim()) {
       toast.error("Please enter a prompt");
       return;
     }
 
     setIsProcessing(true);
     setGeneratedImage(null);
+    setTextOnlyResponse(null);
 
     try {
       // Fetch all selected images as base64 (if any selected)
@@ -191,11 +200,11 @@ export function EnhanceImageDialog({
       );
 
       // Add transparent canvas for aspect ratio control (skip for 16:9 landscape - Nano Banana default)
-      let finalPrompt = prompt.trim();
+      let finalPrompt = usePrompt.trim();
       if (aspectRatio !== '16:9') {
         const transparentCanvas = generateTransparentCanvas(aspectRatio);
         images.push(transparentCanvas);
-        finalPrompt = `${prompt.trim()}. Use the last image as the reference for the final aspect ratio and dimensions.`;
+        finalPrompt = `${usePrompt.trim()}. Use the last image as the reference for the final aspect ratio and dimensions.`;
       }
 
       console.log(`Sending ${images.length} images to enhance-image function`);
@@ -220,18 +229,21 @@ export function EnhanceImageDialog({
         const errorData = await response.json();
         console.error("Enhance image API error:", errorData);
         
+        // Check if this is a text-only response (status 422)
+        if (response.status === 422 && errorData.textResponse) {
+          setTextOnlyResponse({
+            text: errorData.textResponse,
+            retryPrompt: errorData.retryPrompt || `Create a visual diagram showing: ${usePrompt}`,
+          });
+          toast.warning("Model returned text instead of image", {
+            description: "See below for details and retry options",
+          });
+          return;
+        }
+        
         // Show detailed error with hint if available
         const errorMessage = errorData.hint || errorData.error || "Failed to enhance image";
-        const textResponse = errorData.textResponse;
-        
-        if (textResponse) {
-          toast.error(`${errorMessage}`, {
-            description: `Model said: "${textResponse.substring(0, 100)}..."`,
-            duration: 8000,
-          });
-        } else {
-          toast.error(errorMessage, { duration: 6000 });
-        }
+        toast.error(errorMessage, { duration: 6000 });
         return;
       }
 
@@ -541,6 +553,44 @@ export function EnhanceImageDialog({
               </div>
             </div>
           )}
+
+          {/* Text-only response panel */}
+          {textOnlyResponse && (
+            <div className="space-y-4 border rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-medium">Model returned text instead of an image</span>
+              </div>
+              
+              <div className="text-sm text-muted-foreground">
+                Your prompt may have been interpreted as a question. The model responded with:
+              </div>
+              
+              <ScrollArea className="h-[200px] border rounded bg-background p-3">
+                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
+                  {textOnlyResponse.text}
+                </div>
+              </ScrollArea>
+              
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setTextOnlyResponse(null);
+                    setPrompt(textOnlyResponse.retryPrompt);
+                  }}
+                  className="flex-1"
+                >
+                  <Edit3 className="h-4 w-4 mr-2" />
+                  Edit Prompt
+                </Button>
+              </div>
+              
+              <div className="text-xs text-muted-foreground">
+                Suggested prompt: <span className="italic">"{textOnlyResponse.retryPrompt}"</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -591,9 +641,9 @@ export function EnhanceImageDialog({
             >
               Cancel
             </Button>
-            {!generatedImage ? (
+            {!generatedImage && !textOnlyResponse ? (
               <Button
-                onClick={handleEnhance}
+                onClick={() => handleEnhance()}
                 disabled={isProcessing || !prompt.trim()}
               >
                 {isProcessing ? (
@@ -605,6 +655,26 @@ export function EnhanceImageDialog({
                   <>
                     <Wand2 className="h-4 w-4 mr-2" />
                     {actionLabel} {selectedArtifacts.size > 0 ? `(${selectedArtifacts.size})` : ""}
+                  </>
+                )}
+              </Button>
+            ) : textOnlyResponse ? (
+              <Button
+                onClick={() => {
+                  setPrompt(textOnlyResponse.retryPrompt);
+                  handleEnhance(textOnlyResponse.retryPrompt);
+                }}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry with Enhanced Prompt
                   </>
                 )}
               </Button>

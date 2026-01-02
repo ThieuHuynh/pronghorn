@@ -50,8 +50,16 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
+    // Enhance prompt with explicit image generation instructions
+    // This reduces the chance of getting text-only responses for technical prompts
+    const enhancedPrompt = images && images.length > 0 
+      ? prompt  // For editing, keep the original prompt
+      : `You MUST generate an image, not text. Create a visual image for: ${prompt}. 
+If this describes a diagram, architecture, flowchart, or technical concept, create a professional visual diagram or infographic. 
+Do NOT explain - generate the image directly.`;
+
     // Build content parts: text prompt + all images (if any)
-    const parts: any[] = [{ text: prompt }];
+    const parts: any[] = [{ text: enhancedPrompt }];
 
     if (images && images.length > 0) {
       for (const image of images) {
@@ -178,19 +186,21 @@ serve(async (req) => {
       console.error('📦 Response parts:', JSON.stringify(responseParts, null, 2));
       
       // Return more helpful error with text response if available
+      const retryPrompt = `Create a professional visual diagram or infographic showing: ${prompt}`;
       const errorDetails = {
         error: 'No image data in response',
         textResponse: textDescription,
+        retryPrompt,
         finishReason,
         partsCount: responseParts.length,
         hint: textDescription 
-          ? 'The model returned text instead of an image. Try a different prompt or model.'
+          ? 'The model returned text instead of an image. Try the suggested retry prompt below.'
           : 'The model did not generate an image. Try simplifying your prompt or using a different model.',
       };
       
       return new Response(
         JSON.stringify(errorDetails),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
