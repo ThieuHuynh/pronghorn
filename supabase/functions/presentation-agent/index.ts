@@ -996,19 +996,29 @@ Generate a ${mode === "concise" ? "10-15" : "20-30"} slide presentation followin
 - content: array of content blocks with regionId, type, and data
 - notes: speaker notes explaining key points
 
-### Available Layouts
-- "title-cover": Full cover with background, title, subtitle, date
-- "section-divider": Bold section break with number and title
-- "title-content": Header with richtext content below
-- "two-column": Side-by-side content areas
-- "image-left" / "image-right": Media with content
-- "stats-grid": 4-cell grid for metrics
-- "bullets": Clean bullet points
-- "quote": Callout or key insight
-- "architecture": Large diagram display
-- "comparison": Side-by-side with headers
-- "timeline": Horizontal process flow
-- "icon-grid": Features or steps with icons
+### Available Layouts and Their Region IDs
+CRITICAL: You MUST use the EXACT regionId listed for each layout. Do NOT use "main" or any other generic ID.
+
+- "title-cover": regions=[background(image), title(heading), subtitle(text), date(text)]
+- "section-divider": regions=[section-number(heading), title(heading), subtitle(text)]
+- "title-content": regions=[title(heading), content(text/bullets/richtext)]
+- "two-column": regions=[title(heading), left-content(richtext), right-content(richtext)]
+- "image-left": regions=[title(heading), image(image), content(richtext)]
+- "image-right": regions=[title(heading), content(richtext), image(image)]
+- "stats-grid": regions=[title(heading), stat-1(stat), stat-2(stat), stat-3(stat), stat-4(stat)]
+- "bullets": regions=[title(heading), bullets(bullets)]
+- "quote": regions=[quote(text), attribution(text)]
+- "architecture": regions=[title(heading), diagram(image)]
+- "comparison": regions=[title(heading), left-header(heading), right-header(heading), left-content(bullets), right-content(bullets)]
+- "timeline": regions=[title(heading), timeline(timeline)]
+- "icon-grid": regions=[title(heading), subtitle(text), grid(icon-grid)]
+
+### Region ID Examples
+For "bullets" layout: { regionId: "bullets", type: "bullets", data: {...} }
+For "stats-grid" layout: { regionId: "stat-1", type: "stat", data: {...} }, { regionId: "stat-2", ... }
+For "title-content" layout: { regionId: "content", type: "richtext", data: {...} }
+For "timeline" layout: { regionId: "timeline", type: "timeline", data: {...} }
+For "icon-grid" layout: { regionId: "grid", type: "icon-grid", data: {...} }
 
 ### Content Block Types
 - "heading": { text: string, level: 1|2|3 }

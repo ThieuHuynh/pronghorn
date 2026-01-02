@@ -74,8 +74,8 @@ export function SlideThumbnails({
             </div>
             
             {/* Slide title */}
-            <div className="p-1.5 bg-muted/50 border-t">
-              <p className="text-xs font-medium truncate text-left">
+            <div className="p-1.5 bg-muted/50 border-t overflow-hidden">
+              <p className="text-xs font-medium truncate text-left max-w-full">
                 {slide.title || "Untitled Slide"}
               </p>
             </div>

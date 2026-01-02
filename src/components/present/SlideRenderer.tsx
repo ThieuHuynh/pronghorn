@@ -86,9 +86,43 @@ export function SlideRenderer({ slide, layouts, theme = "default", className = "
     }
   }, [theme]);
 
-  // Get content for a specific region
+  // Map of primary content region IDs for each layout (for fallback from "main")
+  const primaryRegionMap: Record<string, string> = {
+    "title-cover": "background",
+    "section-divider": "title",
+    "title-content": "content",
+    "two-column": "left-content",
+    "image-left": "content",
+    "image-right": "content",
+    "stats-grid": "stat-1",
+    "bullets": "bullets",
+    "quote": "quote",
+    "architecture": "diagram",
+    "comparison": "left-content",
+    "timeline": "timeline",
+    "icon-grid": "grid",
+  };
+
+  // Get content for a region with smart fallback for "main" regionId
   const getRegionContent = (regionId: string) => {
-    return slide.content?.find(c => c.regionId === regionId);
+    // First try exact match
+    let content = slide.content?.find(c => c.regionId === regionId);
+    if (content) return content;
+
+    // If this is the primary content region for this layout, check for "main" fallback
+    const primaryRegion = primaryRegionMap[slide.layoutId];
+    if (regionId === primaryRegion) {
+      content = slide.content?.find(c => c.regionId === "main");
+      if (content) return content;
+    }
+
+    // For content-type regions, also check "main" as general fallback
+    const contentRegions = ["content", "bullets", "diagram", "grid", "timeline", "quote", "left-content", "right-content"];
+    if (contentRegions.includes(regionId)) {
+      content = slide.content?.find(c => c.regionId === "main");
+    }
+
+    return content;
   };
 
   // Check if layout is a special full-bleed type
