@@ -26,7 +26,7 @@ import { FontScaleControl } from "@/components/present/FontScaleControl";
 import { LayoutSelector } from "@/components/present/LayoutSelector";
 import { SlideRenderer } from "@/components/present/SlideRenderer";
 import { SlideImageGenerator, IMAGE_MODELS, IMAGE_STYLES } from "@/components/present/SlideImageGenerator";
-import { exportPresentationToPdf } from "@/lib/presentationPdfExport";
+import { PdfExportRenderer, PdfExportRendererRef } from "@/components/present/PdfExportRenderer";
 // Layouts loaded from static JSON
 const presentationLayoutsData = {
   layouts: [
@@ -167,7 +167,7 @@ export default function Present() {
   
   // PDF export state
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const slideRenderRef = useRef<HTMLDivElement>(null);
+  const pdfExportRef = useRef<PdfExportRendererRef>(null);
   
   // Image generator state for slide-level
   const [isSlideImageGeneratorOpen, setIsSlideImageGeneratorOpen] = useState(false);
@@ -354,7 +354,7 @@ export default function Present() {
   };
 
   // Export as PDF
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     if (!selectedPresentation) return;
     const slides = getSlides(selectedPresentation);
     if (slides.length === 0) {
@@ -363,28 +363,17 @@ export default function Present() {
     }
 
     setIsExportingPdf(true);
-    toast.info("Generating PDF...", { duration: 10000 });
+    pdfExportRef.current?.startExport();
+  };
 
-    try {
-      await exportPresentationToPdf(
-        selectedPresentation.name,
-        slides,
-        (slideIndex) => {
-          // Create a temporary container for rendering
-          const container = document.getElementById(`pdf-slide-render-${slideIndex}`);
-          return container;
-        },
-        (current, total) => {
-          toast.info(`Capturing slide ${current}/${total}...`, { id: "pdf-progress" });
-        }
-      );
-      toast.success("PDF exported successfully!", { id: "pdf-progress" });
-    } catch (error) {
-      console.error("PDF export error:", error);
-      toast.error("Failed to export PDF");
-    } finally {
-      setIsExportingPdf(false);
-    }
+  const handlePdfExportComplete = () => {
+    setIsExportingPdf(false);
+  };
+
+  const handlePdfExportError = (error: Error) => {
+    console.error("PDF export error:", error);
+    toast.error("Failed to export PDF");
+    setIsExportingPdf(false);
   };
 
   // Update slide data - OPTIMISTIC updates
@@ -881,6 +870,19 @@ export default function Present() {
           </div>
         </div>
       </div>
+
+      {/* PDF Export Renderer - offscreen */}
+      {selectedPresentation && isExportingPdf && (
+        <PdfExportRenderer
+          ref={pdfExportRef}
+          slides={getSlides(selectedPresentation)}
+          layouts={layouts}
+          presentationName={selectedPresentation.name}
+          theme={currentTheme}
+          onComplete={handlePdfExportComplete}
+          onError={handlePdfExportError}
+        />
+      )}
     </div>
   );
 }
