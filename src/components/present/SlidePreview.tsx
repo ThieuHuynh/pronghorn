@@ -36,6 +36,7 @@ interface SlidePreviewProps {
   selectedSlideIndex: number;
   onSlideChange: (index: number) => void;
   theme?: "default" | "light" | "vibrant";
+  externalFullscreen?: boolean; // When true, skip controls and render slide only
 }
 
 export function SlidePreview({ 
@@ -43,10 +44,14 @@ export function SlidePreview({
   layouts, 
   selectedSlideIndex, 
   onSlideChange, 
-  theme = "default" 
+  theme = "default",
+  externalFullscreen = false
 }: SlidePreviewProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  
+  // Use external fullscreen if provided
+  const effectiveFullscreen = externalFullscreen || isFullscreen;
 
   const currentSlide = slides[selectedSlideIndex];
   const canGoPrev = selectedSlideIndex > 0;
@@ -75,11 +80,27 @@ export function SlidePreview({
     );
   }
 
+  // External fullscreen mode - just render the slide, no controls
+  if (externalFullscreen) {
+    return (
+      <div className="h-full w-full">
+        <SlideRenderer
+          slide={currentSlide}
+          layouts={layouts}
+          theme={theme}
+          isPreview={false}
+          isFullscreen={true}
+          className="h-full w-full"
+        />
+      </div>
+    );
+  }
+
   return (
     <div 
       className={cn(
         "flex flex-col",
-        isFullscreen ? "fixed inset-0 z-50 bg-background" : "h-full"
+        effectiveFullscreen ? "fixed inset-0 z-50 bg-background" : "h-full"
       )}
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -127,7 +148,7 @@ export function SlidePreview({
             size="sm"
             onClick={() => setIsFullscreen(!isFullscreen)}
           >
-            {isFullscreen ? (
+            {effectiveFullscreen ? (
               <Minimize2 className="h-4 w-4" />
             ) : (
               <Maximize2 className="h-4 w-4" />
@@ -139,14 +160,14 @@ export function SlidePreview({
       {/* Main slide area */}
       <div className={cn(
         "flex-1 flex gap-4",
-        isFullscreen ? "h-[calc(100dvh-60px)] overflow-hidden" : "min-h-0 overflow-hidden"
+        effectiveFullscreen ? "h-[calc(100dvh-60px)] overflow-hidden" : "min-h-0 overflow-hidden"
       )}>
         <div className={cn(
           "flex-1",
           showNotes && currentSlide.notes && "w-2/3",
-          isFullscreen && "h-full"
+          effectiveFullscreen && "h-full"
         )}>
-          {isFullscreen ? (
+          {effectiveFullscreen ? (
             <SlideRenderer
               slide={currentSlide}
               layouts={layouts}

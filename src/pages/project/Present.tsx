@@ -361,6 +361,68 @@ export default function Present() {
     );
   }
 
+  // Fullscreen rendering - bypasses all page layout
+  if (isFullscreen && selectedPresentation) {
+    const slides = getSlides(selectedPresentation);
+    const currentSlide = slides[selectedSlideIndex];
+    
+    if (currentSlide) {
+      return (
+        <div 
+          className="fixed inset-0 z-50 bg-background flex flex-col"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setIsFullscreen(false);
+            if (e.key === "ArrowLeft" && selectedSlideIndex > 0) setSelectedSlideIndex(prev => prev - 1);
+            if (e.key === "ArrowRight" && selectedSlideIndex < slides.length - 1) setSelectedSlideIndex(prev => prev + 1);
+          }}
+        >
+          {/* Controls bar */}
+          <div className="shrink-0 flex items-center justify-between p-3 border-b bg-background/95">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
+                disabled={selectedSlideIndex === 0}
+              >
+                <span className="sr-only">Previous</span>
+                ←
+              </Button>
+              <span className="text-sm font-medium min-w-16 text-center">
+                {selectedSlideIndex + 1} / {slides.length}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
+                disabled={selectedSlideIndex === slides.length - 1}
+              >
+                <span className="sr-only">Next</span>
+                →
+              </Button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setIsFullscreen(false)}>
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* Slide fills remaining space */}
+          <div className="flex-1 min-h-0">
+            <SlidePreview
+              slides={slides}
+              layouts={layouts}
+              selectedSlideIndex={selectedSlideIndex}
+              onSlideChange={setSelectedSlideIndex}
+              theme={currentTheme}
+              externalFullscreen={true}
+            />
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <ProjectSidebar projectId={projectId || ""} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
