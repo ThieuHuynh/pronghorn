@@ -466,10 +466,38 @@ export function SlideRenderer({
     );
   }
 
+  // Helper to render column content (handles items, text, or richtext)
+  const renderColumnContent = (colContent: SlideContent | undefined) => {
+    if (!colContent?.data) return null;
+    
+    // If it has items, render as bullets
+    if (colContent.data.items) {
+      return renderBullets(colContent.data.items);
+    }
+    
+    // If it has text, render as markdown
+    const textContent = colContent.data.text || (typeof colContent.data === 'string' ? colContent.data : null);
+    if (textContent) {
+      return (
+        <div 
+          className={`leading-relaxed ${isPreview ? 'text-xs' : 'text-sm md:text-base'}`}
+          style={{ color: themeColors.foreground }}
+        >
+          <MarkdownText content={textContent} style={{ color: themeColors.foreground }} />
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   // Two-column / Comparison
   if (["two-column", "comparison"].includes(layoutId)) {
     const leftContent = getContentByRegion("left-content") || getContentByRegion("left");
     const rightContent = getContentByRegion("right-content") || getContentByRegion("right");
+    
+    const hasLeft = leftContent?.data?.items || leftContent?.data?.text || typeof leftContent?.data === 'string';
+    const hasRight = rightContent?.data?.items || rightContent?.data?.text || typeof rightContent?.data === 'string';
     
     return (
       <div className={containerClass} style={containerStyle}>
@@ -480,26 +508,30 @@ export function SlideRenderer({
             flex flex-col gap-4
             ${isFullscreen ? 'lg:flex-row lg:gap-8' : ''}
           `}>
-            {leftContent?.data?.items && (
+            {hasLeft && (
               <div className={isFullscreen ? 'lg:flex-1' : ''}>
-                <h3 
-                  className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
-                  style={{ color: themeColors.primary }}
-                >
-                  {leftContent.data?.title || "Option A"}
-                </h3>
-                {renderBullets(leftContent.data.items)}
+                {leftContent?.data?.title && (
+                  <h3 
+                    className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
+                    style={{ color: themeColors.primary }}
+                  >
+                    {leftContent.data.title}
+                  </h3>
+                )}
+                {renderColumnContent(leftContent)}
               </div>
             )}
-            {rightContent?.data?.items && (
+            {hasRight && (
               <div className={isFullscreen ? 'lg:flex-1' : ''}>
-                <h3 
-                  className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
-                  style={{ color: themeColors.primary }}
-                >
-                  {rightContent.data?.title || "Option B"}
-                </h3>
-                {renderBullets(rightContent.data.items)}
+                {rightContent?.data?.title && (
+                  <h3 
+                    className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
+                    style={{ color: themeColors.primary }}
+                  >
+                    {rightContent.data.title}
+                  </h3>
+                )}
+                {renderColumnContent(rightContent)}
               </div>
             )}
           </div>
