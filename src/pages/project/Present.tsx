@@ -416,8 +416,18 @@ export default function Present() {
     }
 
     setIsExportingPdf(true);
-    pdfExportRef.current?.startExport();
   };
+  
+  // Trigger PDF export after state change and re-render
+  useEffect(() => {
+    if (isExportingPdf && pdfExportRef.current) {
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        pdfExportRef.current?.startExport();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isExportingPdf]);
 
   const handlePdfExportComplete = () => {
     setIsExportingPdf(false);
@@ -1188,8 +1198,8 @@ export default function Present() {
         </div>
       </div>
 
-      {/* PDF Export Renderer - offscreen */}
-      {selectedPresentation && isExportingPdf && workingSlides && (
+      {/* PDF Export Renderer - always mounted when we have slides for ref stability */}
+      {selectedPresentation && workingSlides && workingSlides.length > 0 && (
         <PdfExportRenderer
           ref={pdfExportRef}
           slides={workingSlides}

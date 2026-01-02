@@ -53,22 +53,28 @@ export function SlideCanvas({
     return () => observer.disconnect();
   }, [designWidth, designHeight]);
 
-  // Calculate centered offset
+  // Calculate scaled dimensions
   const scaledWidth = designWidth * scale;
   const scaledHeight = designHeight * scale;
 
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full h-full overflow-hidden ${className}`}
-      style={{ aspectRatio: `${designWidth} / ${designHeight}` }}
+      className={`relative overflow-hidden ${className}`}
+      style={{ 
+        // Use aspect ratio to maintain 16:9 but constrain to parent
+        width: '100%',
+        height: '100%',
+        maxWidth: '100%',
+        maxHeight: '100%',
+      }}
     >
-      {/* Centering wrapper */}
+      {/* Centering wrapper - positions the scaled content */}
       <div 
         className="absolute inset-0 flex items-center justify-center"
         style={{ pointerEvents: 'none' }}
       >
-        {/* Scaled content container */}
+        {/* Scaled content container - fixed design size with transform */}
         <div
           style={{
             width: designWidth,
@@ -76,6 +82,7 @@ export function SlideCanvas({
             transform: `scale(${scale})`,
             transformOrigin: 'center center',
             pointerEvents: 'auto',
+            flexShrink: 0,
           }}
         >
           {children}
