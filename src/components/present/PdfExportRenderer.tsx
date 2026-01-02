@@ -144,8 +144,8 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
     // Get background color based on theme
     const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
 
-    // Use fixed positioning with opacity 0 instead of negative coordinates
-    // This keeps element in rendering context while invisible
+    // Use fixed positioning with visibility:visible (not opacity:0)
+    // This is the proven approach from parseDocx.ts that works with html-to-image
     return (
       <div
         ref={renderRef}
@@ -156,8 +156,9 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
           width: 1920,
           height: 1080,
           zIndex: -9999,
+          visibility: "visible",
           pointerEvents: "none",
-          opacity: 0,
+          overflow: "hidden",
           backgroundColor: bgColor,
         }}
       >

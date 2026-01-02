@@ -56,32 +56,32 @@ function ThumbnailGenerator({
 
   useEffect(() => {
     if (renderRef.current && !hasCapture) {
-      // Wait for render to complete
-      const timer = setTimeout(() => {
+      // Wait for render to complete - longer delay for complex slides
+      const timer = setTimeout(async () => {
         if (renderRef.current) {
-          toPng(renderRef.current, {
-            cacheBust: true,
-            pixelRatio: 2,
-            width: 384,
-            height: 216,
-            backgroundColor: theme === 'light' ? '#ffffff' : '#1e293b',
-          })
-            .then((dataUrl) => {
-              onCapture(dataUrl);
-              setHasCapture(true);
-            })
-            .catch((err) => {
-              console.warn("Failed to capture thumbnail:", err);
-              setHasCapture(true);
+          try {
+            const bgColor = theme === 'light' ? '#ffffff' : theme === 'vibrant' ? '#1a0d26' : '#1e293b';
+            const dataUrl = await toPng(renderRef.current, {
+              cacheBust: true,
+              pixelRatio: 2,
+              width: 384,
+              height: 216,
+              backgroundColor: bgColor,
             });
+            onCapture(dataUrl);
+            setHasCapture(true);
+          } catch (err) {
+            console.warn("Failed to capture thumbnail:", err);
+            setHasCapture(true);
+          }
         }
-      }, 500);
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [slide, hasCapture, onCapture, theme]);
 
-  // Offscreen container - use fixed positioning to keep in DOM but invisible
-  // Note: absolute positioning outside viewport can cause rendering issues in some browsers
+  // Offscreen container - use fixed positioning with visibility:visible (not opacity:0)
+  // This is the proven approach from parseDocx.ts that works with html-to-image
   return (
     <div 
       ref={renderRef}
@@ -92,8 +92,10 @@ function ThumbnailGenerator({
         width: 384,
         height: 216,
         zIndex: -9999,
+        visibility: 'visible',
         pointerEvents: 'none',
-        opacity: 0,
+        overflow: 'hidden',
+        background: theme === 'light' ? '#ffffff' : theme === 'vibrant' ? '#1a0d26' : '#1e293b',
       }}
     >
       <SlideRenderer

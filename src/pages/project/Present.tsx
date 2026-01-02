@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight, Code } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight, Code, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
@@ -154,6 +154,9 @@ export default function Present() {
   // Fullscreen edit mode
   const [showEditControls, setShowEditControls] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  
+  // Image generation dialog state
+  const [isImageGeneratorOpen, setIsImageGeneratorOpen] = useState(false);
 
   // Load presentations list (lightweight - metadata only)
   useEffect(() => {
@@ -631,6 +634,15 @@ export default function Present() {
               value={currentSlide.fontScale || 1} 
               onChange={handleFontScaleChange} 
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsImageGeneratorOpen(true)}
+              title="Generate Image"
+            >
+              <ImageIcon className="h-4 w-4 mr-1" />
+              Image
+            </Button>
             {isRecasting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
           </div>
         )}
@@ -652,9 +664,9 @@ export default function Present() {
             </div>
           </div>
           
-          {/* Notes panel */}
+          {/* Notes panel - wider for better readability */}
           {showNotes && (
-            <div className="w-80 border-l bg-background p-4 flex flex-col overflow-hidden">
+            <div className="w-96 border-l bg-background p-4 flex flex-col overflow-hidden">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 shrink-0">
                 <StickyNote className="h-4 w-4" />
                 Speaker Notes
@@ -991,6 +1003,14 @@ export default function Present() {
                               value={currentSlide.fontScale || 1} 
                               onChange={handleFontScaleChange} 
                             />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsImageGeneratorOpen(true)}
+                              title="Generate Image"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                            </Button>
                             <div className="flex-1" />
                             <div className="flex items-center gap-2">
                               <Button
@@ -1160,6 +1180,21 @@ export default function Present() {
           theme={currentTheme}
           onComplete={handlePdfExportComplete}
           onError={handlePdfExportError}
+        />
+      )}
+
+      {/* Image Generator Dialog */}
+      {currentSlide && (
+        <SlideImageGenerator
+          open={isImageGeneratorOpen}
+          onOpenChange={setIsImageGeneratorOpen}
+          onImageGenerated={(url) => {
+            handleUpdateSlide(selectedSlideIndex, { imageUrl: url });
+            setIsImageGeneratorOpen(false);
+          }}
+          currentImageUrl={currentSlide.imageUrl}
+          initialPrompt={currentSlide.imagePrompt || `Image for: ${currentSlide.title}`}
+          projectContext={getProjectContext()}
         />
       )}
     </div>

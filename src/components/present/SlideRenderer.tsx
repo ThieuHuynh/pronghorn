@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Circle, CheckCircle2 } from "lucide-react";
+import { Circle, CheckCircle2, ImageIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface SlideContent {
@@ -489,6 +489,30 @@ export function SlideRenderer({
     const isArchitecture = layoutId === "architecture";
     const imageFirst = layoutId === "image-left";
     
+    // Placeholder for image layouts without images
+    const renderImagePlaceholder = () => (
+      <div 
+        className="w-full h-full min-h-[100px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center"
+        style={{ 
+          borderColor: themeColors.muted, 
+          color: themeColors.muted,
+          background: `${themeColors.primary}08`,
+        }}
+      >
+        <ImageIcon 
+          style={{ 
+            width: fs('iconBoxFull', 'iconBoxPreview'),
+            height: fs('iconBoxFull', 'iconBoxPreview'),
+            marginBottom: fs('gapFull', 'gapPreview'),
+            opacity: 0.5,
+          }} 
+        />
+        <span style={{ fontSize: fs('smallFull', 'smallPreview') }}>
+          Click to add image
+        </span>
+      </div>
+    );
+    
     return (
       <div className={containerClass} style={containerStyle}>
         <div className={`
@@ -496,14 +520,14 @@ export function SlideRenderer({
           ${isFullscreen ? 'lg:flex-row' : ''}
         `}>
           {/* Image section - on mobile: top for image-left, bottom for image-right */}
-          {hasImage && imageFirst && (
+          {imageFirst && (
             <div className={`
               shrink-0 
               ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
             `}
             style={{ padding: fs('gapFull', 'gapPreview') }}
             >
-              {renderImage(imgUrl, imageContent?.data?.alt)}
+              {hasImage ? renderImage(imgUrl, imageContent?.data?.alt) : renderImagePlaceholder()}
             </div>
           )}
           
@@ -540,14 +564,14 @@ export function SlideRenderer({
           </div>
 
           {/* Image at bottom for image-right */}
-          {hasImage && !imageFirst && !isArchitecture && (
+          {!imageFirst && !isArchitecture && (
             <div className={`
               shrink-0 
               ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
             `}
             style={{ padding: fs('gapFull', 'gapPreview') }}
             >
-              {renderImage(imgUrl, imageContent?.data?.alt)}
+              {hasImage ? renderImage(imgUrl, imageContent?.data?.alt) : renderImagePlaceholder()}
             </div>
           )}
 
