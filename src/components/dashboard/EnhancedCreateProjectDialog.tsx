@@ -162,32 +162,9 @@ export function EnhancedCreateProjectDialog() {
     setIsCreating(true);
 
     try {
-      console.log("[EnhancedCreateProjectDialog] Getting organization");
-      
-      // Get or create default organization
-      let { data: orgs } = await supabase.from('organizations').select('id').limit(1);
-      
-      let orgId: string;
-      if (!orgs || orgs.length === 0) {
-        console.log("[EnhancedCreateProjectDialog] Creating new organization");
-        const { data: newOrg, error: orgError } = await supabase
-          .from('organizations')
-          .insert({ name: 'Default Organization' })
-          .select('id')
-          .single();
-        
-        if (orgError) {
-          console.error("[EnhancedCreateProjectDialog] Org creation error:", orgError);
-          throw orgError;
-        }
-        orgId = newOrg.id;
-      } else {
-        orgId = orgs[0].id;
-      }
-
       console.log("[EnhancedCreateProjectDialog] Calling create-project edge function");
 
-      // Use edge function to create project
+      // Use edge function to create project (no org_id needed)
       const { data: result, error: functionError } = await supabase.functions.invoke("create-project", {
         body: {
           projectData: {
@@ -200,7 +177,6 @@ export function EnhancedCreateProjectDialog() {
             timeline_end: timelineEnd || null,
             priority: priority,
             tags: tags ? tags.split(',').map(t => t.trim()) : null,
-            org_id: orgId,
             status: 'DESIGN',
           },
           techStackIds: Array.from(selectedTechStacks),

@@ -47,9 +47,9 @@ serve(async (req) => {
 
     // Step 1: Create project using RPC (Exception: no token required for initial creation)
     // The RPC returns TABLE(id uuid, share_token uuid), so we get an array
+    // Note: org_id is now optional - we don't pass it unless explicitly provided
     const { data: projectResult, error: projectError } = await supabase.rpc('insert_project_with_token', {
       p_name: projectData.name,
-      p_org_id: projectData.org_id,
       p_description: projectData.description || null,
       p_organization: projectData.organization || null,
       p_budget: projectData.budget || null,

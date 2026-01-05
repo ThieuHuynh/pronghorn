@@ -2262,7 +2262,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           name: string
-          org_id: string
+          org_id: string | null
           organization: string | null
           priority: string | null
           scope: string | null
@@ -2286,7 +2286,7 @@ export type Database = {
           id?: string
           max_tokens?: number | null
           name: string
-          org_id: string
+          org_id?: string | null
           organization?: string | null
           priority?: string | null
           scope?: string | null
@@ -2310,7 +2310,7 @@ export type Database = {
           id?: string
           max_tokens?: number | null
           name?: string
-          org_id?: string
+          org_id?: string | null
           organization?: string | null
           priority?: string | null
           scope?: string | null
@@ -4835,7 +4835,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           name: string
-          org_id: string
+          org_id: string | null
           organization: string | null
           priority: string | null
           scope: string | null
@@ -6011,7 +6011,7 @@ export type Database = {
           p_budget?: number
           p_description?: string
           p_name: string
-          p_org_id: string
+          p_org_id?: string
           p_organization?: string
           p_scope?: string
           p_status?: Database["public"]["Enums"]["project_status"]
@@ -6510,7 +6510,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           name: string
-          org_id: string
+          org_id: string | null
           organization: string | null
           priority: string | null
           scope: string | null
@@ -7144,7 +7144,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           name: string
-          org_id: string
+          org_id: string | null
           organization: string | null
           priority: string | null
           scope: string | null
@@ -7216,7 +7216,7 @@ export type Database = {
               id: string
               max_tokens: number | null
               name: string
-              org_id: string
+              org_id: string | null
               organization: string | null
               priority: string | null
               scope: string | null
@@ -7262,7 +7262,7 @@ export type Database = {
               id: string
               max_tokens: number | null
               name: string
-              org_id: string
+              org_id: string | null
               organization: string | null
               priority: string | null
               scope: string | null
