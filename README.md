@@ -16,6 +16,7 @@ A standards-first, agentic AI platform that transforms unstructured requirements
 
 - [Overview](#overview)
 - [Core Features](#core-features)
+- [AI Agents & Orchestration](#ai-agents--orchestration)
 - [Database Management](#database-management)
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
@@ -39,10 +40,11 @@ Pronghorn is an open-source AI-powered software development platform created by 
 - **Build** → Generate production code with autonomous AI coding agents
 - **Ship** → Deploy to cloud platforms with integrated CI/CD
 
-The platform operates in three modes:
+The platform operates in multiple modes:
 1. **Design Mode**: Visual specification building with React Flow canvas
-2. **Audit Mode**: Continuous validation against standards
+2. **Audit Mode**: Multi-agent cross-comparison between project datasets
 3. **Build Mode**: Autonomous code generation with real-time monitoring
+4. **Present Mode**: AI-generated project presentations with blackboard reasoning
 
 ---
 
@@ -65,29 +67,123 @@ Interactive canvas for system design:
 - 24+ node types (WEB_COMPONENT, API_ROUTER, DATABASE, SCHEMA, TABLE, etc.)
 - Data-driven node types from database (add types without code changes)
 - Real-time collaboration with multi-user editing
+- Layer management for complex diagrams
+- Lasso selection for bulk operations
 
-### 🤖 Multi-Agent AI Teams
-Orchestrated AI specialists working together:
-- **Architect Agent**: Designs system structure
-- **Developer Agent**: Implements components
-- **DBA Agent**: Designs database schemas
-- **Security Agent**: Reviews for vulnerabilities
-- **QA Agent**: Validates against requirements
+### 📊 AI Presentation Generator
+Create professional Gamma-style presentations from project data:
+- **Blackboard Memory Pattern**: Agent sequentially reads project data, accumulates insights
+- **15+ Slide Layouts**: Cover, bullets, stats grid, architecture, timeline, comparison, etc.
+- **Multiple Themes**: Professional Dark, Clean Light, Vibrant Gradient
+- **Mode Options**: Concise (10-15 slides) or Detailed (20-30 slides)
+- **Cover Image Generation**: AI-generated cover images with style selection (Photorealistic, Illustrated, Abstract, Cartoon, Whiteboard, Infographic)
+- **PDF Export**: High-quality PDF generation with slide notes (low/high resolution)
+- **Real-time Editing**: Edit slides, notes, layouts, and font scaling per slide
+- **JSON/Markdown Export**: Download for backup or import into external tools
 
-Agents share a blackboard for iterative refinement across multiple epochs.
+### 🔍 Multi-Agent Audit System
+Cognitive cross-comparison between project datasets:
+- **Dataset Comparison**: Compare Requirements ↔ Canvas, Canvas ↔ Repository, Standards ↔ Code
+- **1:1 and 1:Many Modes**: Compare single pairs or iterate one dataset against another
+- **Tesseract Evidence Grid**: 3D visualization (X: elements, Y: iterations, Z: polarity scores)
+- **Knowledge Graph**: Visual concept mapping with force-directed layout
+- **Multi-Perspective Agents**: Security Analyst, Business Analyst, Developer, End User, Architect
+- **Venn Diagram Output**: Unique to D1, Aligned, Unique to D2 (Challenges)
+- **Blackboard Collaboration**: Agents share findings on append-only blackboard
+- **Consensus Voting**: Agents vote when analysis is complete
+- **Local-First Processing**: All processing happens client-side until explicit save
+
+### 📚 Build Books
+Curated organizational templates:
+- **Standards Collections**: Pre-packaged compliance standards
+- **Tech Stack Bundles**: Recommended technology combinations
+- **Organization Branding**: Custom covers and descriptions
+- **Apply to Projects**: One-click application of standards and tech stacks
+- **Admin Publishing**: Draft/Published workflow for admins
+- **Gallery Discovery**: Browse and clone published Build Books
+
+### 🤝 Collaborative Document Editing
+Real-time AI-assisted document editing:
+- **CollaborationAgent**: AI partner for document refinement
+- **Line-Level Operations**: Precise edit_lines with surgical changes
+- **Project Context Attachment**: Include requirements, canvas, artifacts as context
+- **Change Tracking**: Real-time diff visualization with timeline
+- **Human-First Approach**: AI respects human edits, never replaces entire documents
+- **Merge to Artifact**: Integrate changes back to original document
+
+### 🖼️ Project Gallery
+Discover and clone public projects:
+- **Browse Published Projects**: Explore community-shared projects
+- **Preview Mode**: View project details before cloning
+- **One-Click Clone**: Clone any public project to your dashboard
+- **Search & Filter**: Find projects by tags, name, or description
 
 ### 💻 AI Coding Agent
 Autonomous file operations with full Git workflow:
 - Read, edit, create, delete, rename files
 - Staging → Commit → Push workflow
-- Real-time progress monitoring
+- Real-time progress monitoring with operation timeline
 - Support for pause/resume and abort operations
+- Raw LLM logs viewer for debugging
 
 ### ⚡ Instant Collaboration
 No-login-required sharing:
-- Token-based project access
+- Token-based project access with role hierarchy
 - Anonymous project creation with session persistence
 - Real-time Supabase subscriptions for live updates
+- Token Management UI for owners
+
+---
+
+## AI Agents & Orchestration
+
+### 🤖 Multi-Agent AI Teams
+Orchestrated AI specialists working together on canvas design:
+
+| Agent | Focus |
+|-------|-------|
+| **Architect Agent** | System structure and component hierarchy |
+| **Developer Agent** | Implementation details and code patterns |
+| **DBA Agent** | Database schemas and data modeling |
+| **Security Agent** | Vulnerability assessment and secure patterns |
+| **QA Agent** | Test coverage and validation strategies |
+| **DevOps Agent** | Deployment and infrastructure |
+| **UX Agent** | User experience and interface design |
+| **API Agent** | API design and integration patterns |
+| **Performance Agent** | Optimization and scalability |
+| **Documentation Agent** | Technical documentation |
+
+Agents share a blackboard for iterative refinement across multiple epochs with critic review.
+
+### 📝 Specification Agents
+Generate comprehensive documents from project data:
+
+| Agent | Output |
+|-------|--------|
+| **Overview** | Executive summary and project scope |
+| **Technical Specification** | Detailed technical documentation |
+| **Cloud Architecture** | AWS/Azure/GCP infrastructure design |
+| **API Specification** | OpenAPI/REST endpoint documentation |
+| **Security Analysis** | Threat modeling and security controls |
+| **Data Requirements** | Data models and storage requirements |
+| **Accessibility** | WCAG compliance and accessibility audit |
+| **Internationalization** | i18n/l10n requirements |
+| **DevOps** | CI/CD and deployment strategies |
+| **Testing** | Test strategy and coverage plans |
+| **Standards Compliance** | Regulatory compliance mapping |
+| **Executive Summary** | Business-focused project overview |
+| **Project Charter** | Governance and stakeholder documentation |
+
+### 🔍 Audit Agents
+Multi-perspective analysis for cross-comparison:
+
+| Agent | Perspective |
+|-------|-------------|
+| **Security Analyst** | Vulnerability and risk assessment |
+| **Business Analyst** | Business value and ROI analysis |
+| **Developer** | Implementation feasibility |
+| **End User** | Usability and user experience |
+| **Architect** | System design and patterns |
 
 ---
 
@@ -100,10 +196,20 @@ Pronghorn provides full PostgreSQL database lifecycle management with AI-powered
 | Feature | Description |
 |---------|-------------|
 | **One-Click Provisioning** | Create PostgreSQL databases via Render.com with automatic configuration |
-| **External Connections** | Connect to any PostgreSQL instance with secure connection string storage |
+| **External Connections** | Connect to any PostgreSQL instance (AWS RDS, Aurora, Neon, Railway, etc.) |
 | **SSL Configuration** | Support for `require`, `prefer`, `disable` SSL modes |
 | **Status Tracking** | Real-time database status (pending, creating, available, error, suspended) |
-| **Connection Testing** | Verify connectivity before saving external connections |
+| **Connection Testing** | Verify connectivity with 10-second timeout handling |
+| **Secure Storage** | Connection strings stored encrypted via edge function secrets |
+
+### 🔗 External Database Support
+
+Connect to any PostgreSQL-compatible database:
+- **AWS RDS/Aurora**: Standard PostgreSQL connections with public accessibility
+- **Neon/Supabase/Railway**: Cloud PostgreSQL providers
+- **Self-Hosted**: Any PostgreSQL 12+ instance
+- **Connection Timeout**: 10-second timeout for unresponsive hosts
+- **Network Guidance**: Help for configuring security groups and VPC access
 
 ### 🔍 Schema Explorer
 
@@ -143,6 +249,7 @@ Multi-step wizard for importing data from files:
 - Primary key recommendations
 - Index suggestions for common patterns
 - Foreign key relationship detection (JSON files)
+- Entity-Relationship Diagram (ERD) visualization
 
 ### 📋 Migration Tracking
 
@@ -152,6 +259,8 @@ Automatic DDL statement history:
 - **DROP** - Tracked for audit trail
 - **Object Metadata** - Schema, name, type for each migration
 - **Execution Log** - Timestamp, user, and full SQL content
+
+---
 
 ## Technology Stack
 
@@ -167,6 +276,10 @@ Automatic DDL statement history:
 | **Monaco Editor** | Code editing (VS Code engine) |
 | **TanStack Query** | Server state management |
 | **React Router DOM** | Client-side routing |
+| **Framer Motion** | Animations and transitions |
+| **Recharts** | Data visualization and charts |
+| **jsPDF** | PDF generation |
+| **html-to-image** | Screenshot/image capture |
 
 ### Backend (Supabase)
 
@@ -174,17 +287,17 @@ Automatic DDL statement history:
 |------------|---------|
 | **PostgreSQL** | Primary database |
 | **Row Level Security** | Token-based access control |
-| **Edge Functions** | Deno serverless functions |
+| **Edge Functions** | Deno serverless functions (53 functions) |
 | **Realtime** | WebSocket subscriptions |
 | **Storage** | File and artifact storage |
 
 ### LLM Providers
 
-| Provider | Models |
-|----------|--------|
-| **Google Gemini** | gemini-2.5-flash, gemini-2.5-pro |
-| **Anthropic Claude** | claude-opus-4-5 |
-| **xAI Grok** | grok-4-1-fast-reasoning, grok-4-1-fast-non-reasoning |
+| Provider | Chat Models | Image Models |
+|----------|-------------|--------------|
+| **Google Gemini** | gemini-2.5-flash, gemini-2.5-pro | gemini-2.5-flash-image, gemini-3-pro-image-preview |
+| **Anthropic Claude** | claude-opus-4-5 | - |
+| **xAI Grok** | grok-4-1-fast-reasoning, grok-4-1-fast-non-reasoning | - |
 
 ---
 
@@ -199,32 +312,86 @@ pronghorn/
 │   │   │   ├── CanvasNode.tsx     # Node rendering
 │   │   │   ├── CanvasPalette.tsx  # Node type selector
 │   │   │   ├── AgentFlow.tsx      # Multi-agent orchestration UI
+│   │   │   ├── AIArchitectDialog.tsx
+│   │   │   ├── LayersManager.tsx
+│   │   │   ├── Lasso.tsx
 │   │   │   └── ...
 │   │   ├── build/                 # Coding agent interface
 │   │   │   ├── UnifiedAgentInterface.tsx
 │   │   │   ├── AgentProgressMonitor.tsx
 │   │   │   ├── StagingPanel.tsx
+│   │   │   ├── RawLLMLogsViewer.tsx
 │   │   │   └── ...
 │   │   ├── deploy/                # Database & deployment components
 │   │   │   ├── DatabaseExplorer.tsx      # Schema browser & SQL editor
 │   │   │   ├── DatabaseImportWizard.tsx  # Multi-step data import
 │   │   │   ├── SqlQueryEditor.tsx        # Monaco SQL editor
 │   │   │   ├── ConnectDatabaseDialog.tsx # External DB connections
+│   │   │   ├── ExternalDatabaseCard.tsx
 │   │   │   ├── import/                   # Import wizard sub-components
 │   │   │   │   ├── FileUploader.tsx
 │   │   │   │   ├── ExcelDataGrid.tsx
 │   │   │   │   ├── SchemaCreator.tsx
+│   │   │   │   ├── DatabaseErdView.tsx
+│   │   │   │   ├── JsonRelationshipFlow.tsx
 │   │   │   │   └── SqlReviewPanel.tsx
+│   │   │   └── ...
+│   │   ├── present/               # Presentation generator components
+│   │   │   ├── SlideRenderer.tsx
+│   │   │   ├── SlideCanvas.tsx
+│   │   │   ├── SlideThumbnails.tsx
+│   │   │   ├── LayoutSelector.tsx
+│   │   │   ├── FontScaleControl.tsx
+│   │   │   ├── SlideImageGenerator.tsx
+│   │   │   ├── PdfExportRenderer.tsx
+│   │   │   └── ...
+│   │   ├── audit/                 # Multi-agent audit components
+│   │   │   ├── AuditConfigurationDialog.tsx
+│   │   │   ├── AuditBlackboard.tsx
+│   │   │   ├── TesseractVisualizer.tsx
+│   │   │   ├── VennDiagramResults.tsx
+│   │   │   ├── KnowledgeGraph.tsx
+│   │   │   ├── KnowledgeGraphWebGL.tsx
+│   │   │   ├── PipelineActivityStream.tsx
+│   │   │   └── ...
+│   │   ├── collaboration/         # Collaborative editing
+│   │   │   ├── CollaborationEditor.tsx
+│   │   │   ├── CollaborationChat.tsx
+│   │   │   ├── CollaborationTimeline.tsx
+│   │   │   ├── CollaborationHeatmap.tsx
+│   │   │   └── ...
+│   │   ├── buildbook/             # Build Book components
+│   │   │   ├── BuildBookCard.tsx
+│   │   │   ├── BuildBookChat.tsx
+│   │   │   ├── ApplyBuildBookDialog.tsx
+│   │   │   └── ...
+│   │   ├── gallery/               # Project gallery components
+│   │   │   ├── GalleryCard.tsx
+│   │   │   ├── GalleryPreviewDialog.tsx
+│   │   │   ├── GalleryCloneDialog.tsx
+│   │   │   └── ...
+│   │   ├── artifacts/             # Artifact management
+│   │   │   ├── ArtifactPdfViewer.tsx
+│   │   │   ├── ArtifactDocxViewer.tsx
+│   │   │   ├── ArtifactExcelViewer.tsx
+│   │   │   ├── VisualRecognitionDialog.tsx
+│   │   │   ├── EnhanceImageDialog.tsx
 │   │   │   └── ...
 │   │   ├── repository/            # File tree, editor, Git integration
 │   │   │   ├── FileTree.tsx
 │   │   │   ├── CodeEditor.tsx
+│   │   │   ├── IDEModal.tsx
+│   │   │   ├── ContentSearchDialog.tsx
 │   │   │   └── ...
 │   │   ├── requirements/          # Requirements tree management
 │   │   ├── standards/             # Standards library UI
+│   │   ├── specifications/        # Specification generation
 │   │   ├── dashboard/             # Project cards, creation dialogs
 │   │   ├── layout/                # Navigation, sidebar, header
 │   │   └── project/               # Project-specific selectors
+│   │       ├── TokenManagement.tsx      # Token CRUD UI
+│   │       ├── AccessLevelBanner.tsx
+│   │       └── ...
 │   │
 │   ├── contexts/
 │   │   ├── AuthContext.tsx        # Authentication state & methods
@@ -232,16 +399,28 @@ pronghorn/
 │   │
 │   ├── hooks/
 │   │   ├── useShareToken.ts       # Token extraction & caching
+│   │   ├── useAuditPipeline.ts    # Audit orchestration state
 │   │   ├── useRealtimeCanvas.ts   # Canvas real-time sync
 │   │   ├── useRealtimeRequirements.ts
 │   │   ├── useRealtimeArtifacts.ts
 │   │   ├── useRealtimeLayers.ts
+│   │   ├── useRealtimeCollaboration.ts
+│   │   ├── useRealtimeBuildBooks.ts
+│   │   ├── useInfiniteAgentMessages.ts
+│   │   ├── useInfiniteAgentOperations.ts
 │   │   └── ...
 │   │
 │   ├── pages/
 │   │   ├── Landing.tsx            # Marketing landing page
 │   │   ├── Dashboard.tsx          # Project list
 │   │   ├── Auth.tsx               # Login/signup/SSO
+│   │   ├── Gallery.tsx            # Public project gallery
+│   │   ├── BuildBooks.tsx         # Build Book catalog
+│   │   ├── BuildBookDetail.tsx    # Build Book viewer
+│   │   ├── BuildBookEditor.tsx    # Build Book editor (admin)
+│   │   ├── Standards.tsx          # Global standards library
+│   │   ├── TechStacks.tsx         # Tech stack management
+│   │   ├── Settings.tsx           # User settings
 │   │   ├── Terms.tsx              # Terms of Use
 │   │   ├── Privacy.tsx            # Privacy Policy
 │   │   └── project/               # Project-specific pages
@@ -252,7 +431,9 @@ pronghorn/
 │   │       ├── Artifacts.tsx
 │   │       ├── Chat.tsx
 │   │       ├── Deploy.tsx
+│   │       ├── Database.tsx
 │   │       ├── Audit.tsx
+│   │       ├── Present.tsx
 │   │       ├── Specifications.tsx
 │   │       ├── Standards.tsx
 │   │       └── ProjectSettings.tsx
@@ -265,32 +446,32 @@ pronghorn/
 │   ├── lib/
 │   │   ├── tokenCache.ts          # Synchronous token caching
 │   │   ├── connectionLogic.ts     # Canvas edge validation
+│   │   ├── stagingOperations.ts   # Git staging utilities
+│   │   ├── presentationPdfExport.ts
+│   │   ├── sqlParser.ts           # SQL parsing utilities
 │   │   └── utils.ts               # Utility functions
 │   │
 │   └── main.tsx                   # Application entry point
 │
 ├── supabase/
-│   ├── functions/                 # 25+ Deno edge functions
-│   │   ├── create-project/
-│   │   ├── coding-agent-orchestrator/
-│   │   ├── orchestrate-agents/
-│   │   ├── decompose-requirements/
-│   │   ├── sync-repo-push/
-│   │   ├── sync-repo-pull/
-│   │   ├── chat-stream-gemini/
-│   │   ├── chat-stream-anthropic/
-│   │   ├── chat-stream-xai/
-│   │   ├── ai-architect/
-│   │   ├── ai-architect-critic/
-│   │   └── ...
+│   ├── functions/                 # 53 Deno edge functions (see below)
 │   └── config.toml                # Supabase configuration
 │
 ├── public/
-│   └── data/
-│       ├── agents.json            # Multi-agent definitions
-│       ├── buildAgents.json       # Coding agent config
-│       ├── connectionLogic.json   # Canvas edge rules
-│       └── graphicStyles.json     # Canvas styling
+│   ├── data/
+│   │   ├── agents.json                    # Specification agents (13 types)
+│   │   ├── buildAgents.json               # Canvas multi-agent definitions (10 agents)
+│   │   ├── connectionLogic.json           # Canvas edge validation rules
+│   │   ├── graphicStyles.json             # Image generation styles (6 categories)
+│   │   ├── presentAgentInstructions.json  # Presentation agent blackboard spec
+│   │   ├── presentationLayouts.json       # 15 slide layouts + themes
+│   │   ├── auditAgentInstructions.json    # Audit orchestrator specification
+│   │   ├── codingAgentInstructions.json   # Coding agent tools & patterns
+│   │   ├── collaborationAgentInstructions.json  # Document collaboration agent
+│   │   └── deploymentSettings.json        # Multi-runtime deploy configurations
+│   │
+│   └── features/
+│       └── audit.md                       # Audit system documentation
 │
 └── README.md
 ```
@@ -414,6 +595,16 @@ Examples:
 /project/abc123/requirements/t/def456
 /project/abc123/build/t/def456
 ```
+
+### Token Management UI
+
+Manage project access tokens from Project Settings:
+- **Create Tokens**: Generate new viewer, editor, or owner tokens with optional labels
+- **Set Expiration**: Optional token expiry dates
+- **Copy Share Links**: One-click copy of shareable URLs
+- **Roll Tokens**: Regenerate token values while keeping the same ID
+- **Revoke Access**: Delete tokens to remove access
+- **Current Token Indicator**: Shows which token is currently in use
 
 ### Core Authorization Functions
 
@@ -568,68 +759,111 @@ export function clearProjectToken(projectId: string): void {
 
 ## Edge Functions
 
-Pronghorn includes 25+ Deno edge functions for server-side operations.
+Pronghorn includes **53 Deno edge functions** for server-side operations.
 
-### Function Categories
+### Project Management
 
-#### Project Management
 | Function | Purpose |
 |----------|---------|
 | `create-project` | Project creation with token generation |
-| `generate-specification` | Generate project specification documents |
+| `delete-project` | Secure project deletion with cascade |
+| `clone-project` | Full project cloning with all data |
+| `project-activity` | Activity analytics by time period |
+| `log-activity` | Activity event logging |
 
-#### Requirements Processing
-| Function | Purpose |
-|----------|---------|
-| `decompose-requirements` | AI decomposition into Epics/Features/Stories |
-| `expand-requirement` | Expand single requirement with AI |
-| `expand-standards` | Generate standards from descriptions |
+### AI Agents & Orchestration
 
-#### AI Agents
 | Function | Purpose |
 |----------|---------|
 | `orchestrate-agents` | Multi-agent canvas design iteration |
 | `ai-architect` | Architecture generation |
 | `ai-architect-critic` | Architecture review and critique |
-| `coding-agent-orchestrator` | Autonomous coding agent |
+| `coding-agent-orchestrator` | Autonomous coding agent with file operations |
+| `presentation-agent` | Blackboard-based slide generation |
+| `collaboration-agent-orchestrator` | Collaborative document editing |
+| `audit-orchestrator` | Multi-agent audit coordination |
+| `audit-extract-concepts` | Concept extraction for audit datasets |
+| `audit-merge-concepts` | Concept merging across datasets |
+| `audit-merge-concepts-v2` | Enhanced concept merging with graph linking |
+| `audit-generate-venn` | Venn diagram synthesis from knowledge graph |
+| `audit-build-tesseract` | Evidence grid construction |
+| `audit-enhanced-sort` | Smart sorting for audit data |
 
-#### Chat & Streaming
+### Requirements & Standards
+
 | Function | Purpose |
 |----------|---------|
-| `chat-stream-gemini` | Gemini streaming chat |
-| `chat-stream-anthropic` | Claude streaming chat |
-| `chat-stream-xai` | Grok streaming chat |
-| `summarize-chat` | Generate chat summaries |
-| `summarize-artifact` | Generate artifact summaries |
+| `decompose-requirements` | AI decomposition into Epics/Features/Stories |
+| `expand-requirement` | Expand single requirement with AI |
+| `expand-standards` | Generate standards from descriptions |
+| `ai-create-standards` | Bulk AI standards generation |
+| `generate-specification` | Specification document generation |
 
-#### Repository & Git
+### Chat & Streaming
+
+| Function | Purpose |
+|----------|---------|
+| `chat-stream-gemini` | Gemini streaming chat with SSE |
+| `chat-stream-anthropic` | Claude streaming chat with SSE |
+| `chat-stream-xai` | Grok streaming chat with SSE |
+| `summarize-chat` | Chat session summarization |
+| `summarize-artifact` | Artifact content summarization |
+
+### Image & Media
+
+| Function | Purpose |
+|----------|---------|
+| `generate-image` | AI image generation (Gemini) |
+| `enhance-image` | Image editing/creation with Gemini image models |
+| `upload-artifact-image` | Image upload to Supabase storage |
+| `visual-recognition` | OCR and document text extraction |
+| `ingest-artifacts` | Bulk artifact ingestion from files |
+
+### Repository & Git
+
 | Function | Purpose |
 |----------|---------|
 | `sync-repo-push` | Push commits to GitHub |
 | `sync-repo-pull` | Pull from GitHub |
 | `create-empty-repo` | Create empty repository |
-| `create-repo-from-template` | Clone from template |
-| `clone-public-repo` | Clone public repository |
+| `create-repo-from-template` | Clone from GitHub template |
+| `clone-public-repo` | Clone any public repository |
 | `link-existing-repo` | Link existing GitHub repo |
+| `staging-operations` | Stage/unstage/commit workflow |
 
-#### Deployment
-| Function | Purpose |
-|----------|---------|
-| `render-service` | Render.com service management |
-| `generate-local-package` | Local development package |
+### Database Management
 
-#### Database Management
 | Function | Purpose |
 |----------|---------|
 | `manage-database` | Schema browsing, SQL execution, data export |
 | `render-database` | Render.com PostgreSQL provisioning |
 | `database-agent-import` | AI-powered schema inference for imports |
+| `database-connection-secrets` | Secure connection string encryption |
 
-#### Media
+### Deployment
+
 | Function | Purpose |
 |----------|---------|
-| `generate-image` | AI image generation |
-| `upload-artifact-image` | Image upload handling |
+| `render-service` | Render.com web service management |
+| `deployment-secrets` | Deployment environment variable storage |
+| `generate-local-package` | Local development package generation |
+| `report-local-issue` | Local testing log capture and reporting |
+
+### Presentation
+
+| Function | Purpose |
+|----------|---------|
+| `presentation-agent` | Blackboard-based slide generation |
+| `recast-slide-layout` | Slide layout restructuring with AI |
+
+### Admin & Auth
+
+| Function | Purpose |
+|----------|---------|
+| `admin-management` | Admin role management |
+| `send-auth-email` | Custom auth emails via Resend |
+| `superadmin-github-management` | GitHub organization management |
+| `superadmin-render-management` | Render.com organization management |
 
 ### Edge Function Pattern
 
@@ -825,15 +1059,6 @@ const { data } = await supabase.rpc('get_canvas_nodes_with_token', {
 - All actual data fetching requires a valid `share_token` validated by RLS
 - **Risk Assessment**: Minimal - no data leakage occurs
 
-#### Why Not Use Private Channels?
-
-Supabase's private channel feature requires:
-1. RLS policies on `realtime.messages` table
-2. JWT-based authentication via `supabase.realtime.setAuth()`
-3. Authenticated users (not anonymous/token-based access)
-
-Our token-based RBAC system is incompatible with Supabase's private channel authorization model. Since broadcasts carry no sensitive data, the current architecture is secure without requiring private channels.
-
 #### Summary: Defense in Depth
 
 ```
@@ -902,6 +1127,7 @@ For edge functions, the following secrets are configured in Supabase:
 | `GITHUB_PAT` | Default repository operations |
 | `RENDER_API_KEY` | Render.com deployments & databases |
 | `RENDER_OWNER_ID` | Render.com account ID |
+| `RESEND_API_KEY` | Custom email delivery |
 
 ### Database Tables
 
@@ -913,6 +1139,7 @@ Key tables for database management:
 | `project_database_connections` | External database connections |
 | `project_database_sql` | Saved SQL queries per database |
 | `project_migrations` | DDL migration history tracking |
+| `project_tokens` | Project access tokens with roles |
 
 ---
 
@@ -940,6 +1167,18 @@ For application deployments, Pronghorn supports Render.com:
 | Staging | `uat-{appname}.onrender.com` |
 | Production | `prod-{appname}.onrender.com` |
 
+### Supported Runtimes
+
+| Runtime | Description |
+|---------|-------------|
+| Node.js | React, Vue, Express backends |
+| Python | Flask, FastAPI, Django |
+| Go | Compiled Go applications |
+| Ruby | Rails, Sinatra applications |
+| Rust | Compiled Rust binaries |
+| Elixir | Phoenix applications |
+| Docker | Custom Dockerfile deployments |
+
 ### Local Development Package
 
 Generate a local development package for testing:
@@ -966,25 +1205,11 @@ This application is currently in Alpha testing by the **Government of Alberta**.
 
 ### Liability Waiver
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE GOVERNMENT OF ALBERTA, ITS MINISTERS, OFFICERS, EMPLOYEES, OR AGENTS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+By using this application, you acknowledge that it is provided "as is" without any warranties, express or implied. The Government of Alberta assumes no liability for any issues, data loss, or damages that may result from using this application during the testing period.
 
-### Third-Party Services
+### License
 
-Pronghorn integrates with the following third-party services:
-
-| Service | Terms |
-|---------|-------|
-| [Lovable](https://lovable.dev) | [Terms of Service](https://lovable.dev/terms) |
-| [Supabase](https://supabase.com) | [Terms of Service](https://supabase.com/terms) |
-| [Google Cloud](https://cloud.google.com) | [Terms of Service](https://cloud.google.com/terms) |
-| [Microsoft Azure](https://azure.microsoft.com) | [Terms of Service](https://azure.microsoft.com/en-us/support/legal/) |
-| [GitHub](https://github.com) | [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
-| [Render.com](https://render.com) | [Terms of Service](https://render.com/terms) |
-
-### Full Legal Documents
-
-- [Terms of Use](https://pronghorn.red/terms)
-- [Privacy Policy](https://pronghorn.red/privacy)
+MIT License - See [LICENSE](./LICENSE) for details.
 
 ---
 
@@ -993,16 +1218,5 @@ Pronghorn integrates with the following third-party services:
 **Government of Alberta**  
 Ministry of Technology and Innovation
 
-📧 Email: [ti.deputyminister@gov.ab.ca](mailto:ti.deputyminister@gov.ab.ca)
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-<p align="center">
-  <strong>Built with ❤️ by the Government of Alberta</strong>
-</p>
+- **Website**: [https://pronghorn.red](https://pronghorn.red)
+- **Repository**: [GitHub](https://github.com/pronghorn-red/pronghorn)
