@@ -6583,15 +6583,10 @@ export type Database = {
         Args: { p_token: string; p_token_id: string }
         Returns: string
       }
-      rollback_to_commit_with_token:
-        | {
-            Args: { p_commit_id: string; p_repo_id: string; p_token: string }
-            Returns: boolean
-          }
-        | {
-            Args: { p_commit_sha: string; p_repo_id: string; p_token: string }
-            Returns: undefined
-          }
+      rollback_to_commit_with_token: {
+        Args: { p_commit_id: string; p_repo_id: string; p_token: string }
+        Returns: boolean
+      }
       save_anonymous_project_to_user: {
         Args: { p_project_id: string; p_share_token: string }
         Returns: {
