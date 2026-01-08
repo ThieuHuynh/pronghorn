@@ -753,7 +753,10 @@
       "Before setting status='completed', call get_staged_changes to verify what you've modified",
       "After each edit_lines operation, verify the result using the verification object in the response",
       "Use get_staged_changes to see what you've already staged before making duplicate edits",
-      "Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive"
+      "Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive",
+      "BATCH multiple edit_lines operations in a single response - include up to 10 edits per response",
+      "Don't wait for separate iterations when you have multiple edits - submit them together",
+      "Keep each edit_lines targeted and precise, but submit multiple operations at once for efficiency"
     ],
     
     "code_quality": [

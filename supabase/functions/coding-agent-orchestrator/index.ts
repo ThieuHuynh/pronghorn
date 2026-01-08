@@ -708,6 +708,35 @@ COMMON MISTAKES TO AVOID:
 - If adding new code WITHOUT removing existing code, ALWAYS use end_line = start_line - 1
 - When inserting at line 23, use start_line=23, end_line=22 (NOT end_line=23 which would delete line 23)
 
+OPERATION BATCHING - MULTIPLE EDITS PER RESPONSE:
+You can and SHOULD include multiple operations in a single response to work efficiently.
+
+1. BATCH MULTIPLE edit_lines OPERATIONS:
+   - If you need to make 10 changes in a file, include up to 10 edit_lines operations in ONE response
+   - Each edit_lines should still be targeted and surgical (change only the lines needed)
+   - Don't wait for separate iterations - batch related changes together
+
+2. EFFICIENCY GUIDELINES:
+   - Include up to 10 operations per response when you have many changes
+   - Group related edits in the same file together in one response
+   - Still use precise line ranges - don't over-replace code unnecessarily
+
+3. EXAMPLE - MULTIPLE OPERATIONS IN ONE RESPONSE:
+   If you need to add an import, update a function, and fix a typo in the same file:
+   {
+     "operations": [
+       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 1, "end_line": 3, "new_content": "import React from 'react';\\nimport { useState } from 'react';\\nimport { newDep } from 'new-package';" }},
+       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 25, "end_line": 27, "new_content": "  const result = processData(input);\\n  return result;" }},
+       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 42, "end_line": 42, "new_content": "  // Fixed typo in comment" }}
+     ]
+   }
+
+4. ANTI-PATTERN TO AVOID:
+   DON'T: One edit_lines per response, requiring 15 iterations for 15 changes
+   DO: Batch up to 10 edit_lines per response, completing the task in 2-3 iterations
+
+EFFICIENCY TARGET: When you have multiple edits, batch them - don't wait for separate iterations.
+
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
 You have up to 50 iterations available. USE THEM. The typical task requires 20-50 iterations to complete properly.
 - 1-5 iterations: Initial exploration, understanding requirements, planning approach
