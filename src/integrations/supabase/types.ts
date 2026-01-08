@@ -6047,60 +6047,33 @@ export type Database = {
         }
         Returns: number
       }
-      merge_collaboration_to_artifact_with_token:
-        | {
-            Args: { p_collaboration_id: string; p_token: string }
-            Returns: {
-              ai_summary: string | null
-              ai_title: string | null
-              content: string
-              created_at: string
-              created_by: string | null
-              id: string
-              image_url: string | null
-              project_id: string
-              provenance_id: string | null
-              provenance_page: number | null
-              provenance_path: string | null
-              provenance_total_pages: number | null
-              source_id: string | null
-              source_type: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "artifacts"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_close_session?: boolean
-              p_collaboration_id: string
-              p_token: string
-            }
-            Returns: {
-              artifact_id: string
-              base_content: string
-              created_at: string
-              created_by: string | null
-              current_content: string
-              id: string
-              merged_at: string | null
-              merged_to_artifact: boolean | null
-              project_id: string
-              status: string
-              title: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "artifact_collaborations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      merge_collaboration_to_artifact_with_token: {
+        Args: {
+          p_close_session?: boolean
+          p_collaboration_id: string
+          p_token: string
+        }
+        Returns: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaborations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       move_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token: string }
         Returns: {
