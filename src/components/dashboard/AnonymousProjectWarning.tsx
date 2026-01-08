@@ -57,6 +57,13 @@ export function AnonymousProjectWarning({
           </AlertDescription>
         </Alert>
 
+        <Alert variant="destructive" className="bg-destructive/10">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Note:</strong> Unclaimed projects and artifacts may be cleaned up (deleted) periodically.
+          </AlertDescription>
+        </Alert>
+
         <div className="space-y-2">
           <Label>Project Share Link</Label>
           <div className="flex gap-2">

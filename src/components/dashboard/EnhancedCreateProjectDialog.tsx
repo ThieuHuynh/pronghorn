@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Loader2, Sparkles } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, Loader2, Sparkles, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -255,6 +256,15 @@ export function EnhancedCreateProjectDialog() {
             Set up a new project with detailed metadata and optional AI-powered requirements generation
           </DialogDescription>
         </DialogHeader>
+        
+        {!user && (
+          <Alert variant="destructive" className="bg-destructive/10 mt-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Note:</strong> Unclaimed projects and artifacts may be cleaned up (deleted) periodically.
+            </AlertDescription>
+          </Alert>
+        )}
         
         <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col min-h-0">
           <div className="overflow-x-auto -mx-1 px-1 flex-shrink-0">
