@@ -78,8 +78,8 @@ export function UnifiedAgentInterface({
   const { messages: loadedMessages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
   const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
   
-  // Load project agent configuration for custom prompt sections
-  const { sections: promptSections, hasCustomConfig } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
+  // Load project agent configuration for custom prompt sections and tool descriptions
+  const { sections: promptSections, customToolDescriptions, hasCustomConfig } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
   
   // Local messages state for optimistic updates
   const [messages, setMessages] = useState<any[]>(loadedMessages);
@@ -403,6 +403,11 @@ export function UnifiedAgentInterface({
           maxIterations: agentConfig.maxIterations,
           // Pass custom prompt sections if user has configured them
           promptSections: hasCustomConfig ? promptSections : undefined,
+          // Pass custom tool descriptions if user has modified any
+          customToolDescriptions: (customToolDescriptions.file_operations && Object.keys(customToolDescriptions.file_operations).length > 0) ||
+            (customToolDescriptions.project_exploration_tools && Object.keys(customToolDescriptions.project_exploration_tools).length > 0)
+            ? customToolDescriptions
+            : undefined,
           projectContext: attachedContext ? {
             projectMetadata: attachedContext.projectMetadata || null,
             artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,

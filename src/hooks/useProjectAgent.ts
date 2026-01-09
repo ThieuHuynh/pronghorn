@@ -21,6 +21,16 @@ export interface ToolOperation {
   enabled: boolean;
 }
 
+export interface ToolParamDefinition {
+  type: string;
+  required?: boolean;
+  description: string;
+}
+
+export interface ToolParams {
+  params: Record<string, ToolParamDefinition>;
+}
+
 export interface ToolsManifest {
   id: string;
   name: string;
@@ -28,6 +38,15 @@ export interface ToolsManifest {
   description: string;
   file_operations: Record<string, ToolOperation>;
   project_exploration_tools: Record<string, ToolOperation>;
+}
+
+export interface ToolParamsManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  file_operations: Record<string, ToolParams>;
+  project_exploration_tools: Record<string, ToolParams>;
 }
 
 export interface CustomToolDescriptions {
@@ -51,7 +70,9 @@ interface UseProjectAgentReturn {
   agentDefinition: AgentDefinition | null;
   sections: AgentPromptSection[];
   toolsManifest: ToolsManifest | null;
+  toolParams: ToolParamsManifest | null;
   customToolDescriptions: CustomToolDescriptions;
+  defaultTemplate: AgentDefinition | null;
   loading: boolean;
   saving: boolean;
   hasCustomConfig: boolean;
@@ -78,6 +99,7 @@ export function useProjectAgent(
   const [agentDefinition, setAgentDefinition] = useState<AgentDefinition | null>(null);
   const [sections, setSections] = useState<AgentPromptSection[]>([]);
   const [toolsManifest, setToolsManifest] = useState<ToolsManifest | null>(null);
+  const [toolParams, setToolParams] = useState<ToolParamsManifest | null>(null);
   const [customToolDescriptions, setCustomToolDescriptions] = useState<CustomToolDescriptions>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +116,20 @@ export function useProjectAgent(
       return manifest;
     } catch (error) {
       console.error('Error loading tools manifest:', error);
+      return null;
+    }
+  }, []);
+
+  // Load tool parameters from JSON file
+  const loadToolParams = useCallback(async (): Promise<ToolParamsManifest | null> => {
+    try {
+      const response = await fetch('/data/codingAgentToolParams.json');
+      if (!response.ok) throw new Error('Failed to load tool params');
+      const params = await response.json();
+      setToolParams(params);
+      return params;
+    } catch (error) {
+      console.error('Error loading tool params:', error);
       return null;
     }
   }, []);
@@ -117,10 +153,11 @@ export function useProjectAgent(
   const loadAgentConfig = useCallback(async () => {
     setLoading(true);
     try {
-      // Load the default template and tools manifest in parallel
+      // Load the default template, tools manifest, and tool params in parallel
       const [template] = await Promise.all([
         loadDefaultTemplate(),
         loadDefaultToolsManifest(),
+        loadToolParams(),
       ]);
       
       // Try to fetch custom config from database
@@ -173,7 +210,7 @@ export function useProjectAgent(
     } finally {
       setLoading(false);
     }
-  }, [projectId, agentType, shareToken, loadDefaultTemplate, loadDefaultToolsManifest]);
+  }, [projectId, agentType, shareToken, loadDefaultTemplate, loadDefaultToolsManifest, loadToolParams]);
 
   useEffect(() => {
     if (projectId) {
@@ -328,8 +365,31 @@ export function useProjectAgent(
     return toolsManifest?.[category]?.[toolName]?.description || '';
   }, [customToolDescriptions, toolsManifest]);
 
-  // Export current definition as JSON string
+  // Export current definition as JSON string - includes FULL tools manifest with merged descriptions
   const exportDefinition = useCallback((): string => {
+    // Merge custom descriptions into a complete manifest for export
+    const effectiveManifest = toolsManifest ? {
+      ...toolsManifest,
+      file_operations: Object.fromEntries(
+        Object.entries(toolsManifest.file_operations).map(([name, tool]) => [
+          name,
+          {
+            ...tool,
+            description: customToolDescriptions.file_operations?.[name] ?? tool.description
+          }
+        ])
+      ),
+      project_exploration_tools: Object.fromEntries(
+        Object.entries(toolsManifest.project_exploration_tools).map(([name, tool]) => [
+          name,
+          {
+            ...tool,
+            description: customToolDescriptions.project_exploration_tools?.[name] ?? tool.description
+          }
+        ])
+      )
+    } : undefined;
+
     const definition: AgentDefinition = {
       id: agentDefinition?.id || 'custom-export',
       name: agentDefinition?.name || 'Custom Agent Definition',
@@ -337,10 +397,11 @@ export function useProjectAgent(
       description: agentDefinition?.description || 'Exported agent definition',
       agentType,
       sections,
+      toolsManifest: effectiveManifest,
       customToolDescriptions: Object.keys(customToolDescriptions).length > 0 ? customToolDescriptions : undefined,
     };
     return JSON.stringify(definition, null, 2);
-  }, [agentDefinition, sections, agentType, customToolDescriptions]);
+  }, [agentDefinition, sections, agentType, customToolDescriptions, toolsManifest]);
 
   // Import definition from JSON string
   const importDefinition = useCallback((json: string): boolean => {
@@ -384,7 +445,9 @@ export function useProjectAgent(
     agentDefinition,
     sections,
     toolsManifest,
+    toolParams,
     customToolDescriptions,
+    defaultTemplate,
     loading,
     saving,
     hasCustomConfig,

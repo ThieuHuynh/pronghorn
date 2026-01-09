@@ -18,6 +18,11 @@ interface AgentPromptSection {
   enabled?: boolean;
 }
 
+interface CustomToolDescriptions {
+  file_operations?: Record<string, string>;
+  project_exploration_tools?: Record<string, string>;
+}
+
 interface TaskRequest {
   projectId: string;
   repoId: string;
@@ -31,6 +36,7 @@ interface TaskRequest {
   exposeProject?: boolean;
   maxIterations?: number;
   promptSections?: AgentPromptSection[];
+  customToolDescriptions?: CustomToolDescriptions;
 }
 
 function parseAgentResponseText(rawText: string): any {
@@ -310,6 +316,7 @@ serve(async (req) => {
       exposeProject = false,
       maxIterations: requestedMaxIterations = 30,
       promptSections,
+      customToolDescriptions,
     } = requestData;
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
@@ -381,8 +388,11 @@ serve(async (req) => {
     
     console.log("Created session:", session.id);
 
-    // Load instruction manifest
-    const manifest = {
+    // Load instruction manifest - mutable so we can merge custom descriptions
+    const manifest: {
+      file_operations: Record<string, { description: string }>;
+      project_exploration_tools?: Record<string, { description: string }>;
+    } = {
       file_operations: {
         list_files: {
           description:
@@ -407,7 +417,35 @@ serve(async (req) => {
         unstage_file: { description: "Discard a specific staged change by file_path. Use when user requests reverting a file or when a change needs to be redone." },
         discard_all_staged: { description: "Discard ALL staged changes. Use with EXTREME CAUTION - only when user explicitly requests full reset." },
       },
-    } as const;
+      project_exploration_tools: {
+        project_inventory: { description: "Returns counts and brief previews for ALL project elements in one call. Use FIRST to understand project scope." },
+        project_category: { description: "Load ALL items from a specific category with full details. Categories: requirements, chat_sessions, standards, tech_stacks, artifacts, canvas_nodes, etc." },
+        project_elements: { description: "Load SPECIFIC elements by their IDs with full details. Pass array of {category, id} pairs." },
+      },
+    };
+
+    // Merge custom tool descriptions if provided by the client
+    if (customToolDescriptions) {
+      console.log("[coding-agent-orchestrator] Merging custom tool descriptions");
+      
+      // Merge file_operations custom descriptions
+      if (customToolDescriptions.file_operations) {
+        for (const [toolName, desc] of Object.entries(customToolDescriptions.file_operations)) {
+          if (manifest.file_operations[toolName]) {
+            manifest.file_operations[toolName].description = desc;
+          }
+        }
+      }
+      
+      // Merge project_exploration_tools custom descriptions
+      if (customToolDescriptions.project_exploration_tools && manifest.project_exploration_tools) {
+        for (const [toolName, desc] of Object.entries(customToolDescriptions.project_exploration_tools)) {
+          if (manifest.project_exploration_tools[toolName]) {
+            manifest.project_exploration_tools[toolName].description = desc;
+          }
+        }
+      }
+    }
 
     // Describe attached files by id and path only (let the agent read them via tools)
     let attachedFilesSection = "";

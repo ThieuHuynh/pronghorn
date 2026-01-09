@@ -61,7 +61,7 @@ import {
   FolderSearch,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { useProjectAgent, AgentPromptSection, AgentDefinition } from '@/hooks/useProjectAgent';
+import { useProjectAgent, AgentPromptSection, AgentDefinition, ToolParamsManifest } from '@/hooks/useProjectAgent';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +75,9 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     agentDefinition,
     sections,
     toolsManifest,
+    toolParams,
     customToolDescriptions,
+    defaultTemplate,
     loading,
     saving,
     hasCustomConfig,
@@ -239,6 +241,17 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
   const hasCustomToolDescriptions = Object.keys(customToolDescriptions.file_operations || {}).length > 0 ||
     Object.keys(customToolDescriptions.project_exploration_tools || {}).length > 0;
 
+  // Check if a section has been modified from its default
+  const isSectionModified = (section: AgentPromptSection): boolean => {
+    if (section.isCustom) return false; // Custom sections aren't "modified" - they're new
+    if (!defaultTemplate) return false;
+    const defaultSection = defaultTemplate.sections.find(s => s.id === section.id);
+    if (!defaultSection) return true; // New section
+    return defaultSection.content !== section.content 
+      || defaultSection.order !== section.order
+      || defaultSection.enabled !== (section.enabled ?? true);
+  };
+
   // Reset a single tool description to default
   const resetToolDescription = (category: 'file_operations' | 'project_exploration_tools', toolName: string) => {
     const defaultDesc = toolsManifest?.[category]?.[toolName]?.description || '';
@@ -374,6 +387,11 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                         {getEditableBadge(section.editable)}
                         {section.isCustom && (
                           <Badge variant="secondary" className="text-xs">Custom</Badge>
+                        )}
+                        {!section.isCustom && isSectionModified(section) && (
+                          <Badge className="text-xs bg-green-500/20 text-green-600 border-green-500/30 border">
+                            Modified
+                          </Badge>
                         )}
                         {!isEnabled && (
                           <Badge variant="outline" className="text-xs text-muted-foreground">Disabled</Badge>
@@ -528,6 +546,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                   {toolsManifest && Object.entries(toolsManifest.file_operations).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('file_operations', toolName);
                     const isModified = customToolDescriptions.file_operations?.[toolName] !== undefined;
+                    const params = toolParams?.file_operations?.[toolName]?.params;
                     
                     return (
                       <div key={toolName} className="border rounded-lg p-3 space-y-2">
@@ -536,7 +555,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                             <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
                             <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
                             {isModified && (
-                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Modified</Badge>
+                              <Badge className="text-xs bg-green-500/20 text-green-600 border-green-500/30 border">Modified</Badge>
                             )}
                           </div>
                           {isModified && (
@@ -553,6 +572,27 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                             </Button>
                           )}
                         </div>
+                        
+                        {/* Show parameters (readonly) */}
+                        {params && Object.keys(params).length > 0 && (
+                          <div className="bg-muted/50 rounded p-2 space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
+                            {Object.entries(params).map(([paramName, paramDef]) => (
+                              <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                <span className="text-muted-foreground">: {paramDef.type}</span>
+                                {paramDef.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                <span className="text-muted-foreground/70 flex-1">— {paramDef.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {params && Object.keys(params).length === 0 && (
+                          <div className="bg-muted/50 rounded p-2">
+                            <span className="text-xs text-muted-foreground italic">No parameters</span>
+                          </div>
+                        )}
+                        
                         <Textarea
                           value={currentDesc}
                           onChange={(e) => updateToolDescription('file_operations', toolName, e.target.value)}
@@ -578,6 +618,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                   {toolsManifest && Object.entries(toolsManifest.project_exploration_tools).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('project_exploration_tools', toolName);
                     const isModified = customToolDescriptions.project_exploration_tools?.[toolName] !== undefined;
+                    const params = toolParams?.project_exploration_tools?.[toolName]?.params;
                     
                     return (
                       <div key={toolName} className="border rounded-lg p-3 space-y-2">
@@ -586,7 +627,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                             <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
                             <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
                             {isModified && (
-                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Modified</Badge>
+                              <Badge className="text-xs bg-green-500/20 text-green-600 border-green-500/30 border">Modified</Badge>
                             )}
                           </div>
                           {isModified && (
@@ -602,6 +643,27 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                             </Button>
                           )}
                         </div>
+                        
+                        {/* Show parameters (readonly) */}
+                        {params && Object.keys(params).length > 0 && (
+                          <div className="bg-muted/50 rounded p-2 space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
+                            {Object.entries(params).map(([paramName, paramDef]) => (
+                              <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                <span className="text-muted-foreground">: {paramDef.type}</span>
+                                {paramDef.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                <span className="text-muted-foreground/70 flex-1">— {paramDef.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {params && Object.keys(params).length === 0 && (
+                          <div className="bg-muted/50 rounded p-2">
+                            <span className="text-xs text-muted-foreground italic">No parameters</span>
+                          </div>
+                        )}
+                        
                         <Textarea
                           value={currentDesc}
                           onChange={(e) => updateToolDescription('project_exploration_tools', toolName, e.target.value)}

@@ -1,0 +1,155 @@
+{
+  "id": "coding-agent-tool-params",
+  "name": "Coding Agent Tool Parameters",
+  "version": "1.0.0",
+  "description": "Parameter definitions for all coding agent tools - readonly reference for the UI",
+
+  "file_operations": {
+    "list_files": {
+      "params": {
+        "path_prefix": {
+          "type": "string | null",
+          "required": false,
+          "description": "Filter files by path prefix (e.g., 'src/components')"
+        }
+      }
+    },
+    "wildcard_search": {
+      "params": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Multi-term search query to find files by concept"
+        }
+      }
+    },
+    "search": {
+      "params": {
+        "keyword": {
+          "type": "string",
+          "required": true,
+          "description": "Single keyword to search in file paths and content"
+        }
+      }
+    },
+    "read_file": {
+      "params": {
+        "file_id": {
+          "type": "string",
+          "required": false,
+          "description": "UUID of file from list_files result"
+        },
+        "path": {
+          "type": "string",
+          "required": false,
+          "description": "File path for session-created files (alternative to file_id)"
+        }
+      }
+    },
+    "edit_lines": {
+      "params": {
+        "file_id": {
+          "type": "string",
+          "required": false,
+          "description": "UUID of file from list_files result"
+        },
+        "path": {
+          "type": "string",
+          "required": false,
+          "description": "File path for session-created files (alternative to file_id)"
+        },
+        "start_line": {
+          "type": "integer",
+          "required": true,
+          "description": "Starting line number (1-based, from <<N>> prefix in read_file)"
+        },
+        "end_line": {
+          "type": "integer",
+          "required": true,
+          "description": "Ending line number (inclusive)"
+        },
+        "new_content": {
+          "type": "string",
+          "required": true,
+          "description": "Replacement content for the specified line range"
+        }
+      }
+    },
+    "create_file": {
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Full path for the new file (e.g., 'src/components/NewComponent.tsx')"
+        },
+        "content": {
+          "type": "string",
+          "required": true,
+          "description": "Complete content for the new file"
+        }
+      }
+    },
+    "delete_file": {
+      "params": {
+        "file_id": {
+          "type": "string",
+          "required": true,
+          "description": "UUID of file to delete from list_files result"
+        }
+      }
+    },
+    "move_file": {
+      "params": {
+        "file_id": {
+          "type": "string",
+          "required": true,
+          "description": "UUID of file to move from list_files result"
+        },
+        "new_path": {
+          "type": "string",
+          "required": true,
+          "description": "New path for the file (handles directory moves properly)"
+        }
+      }
+    },
+    "get_staged_changes": {
+      "params": {}
+    },
+    "unstage_file": {
+      "params": {
+        "file_path": {
+          "type": "string",
+          "required": true,
+          "description": "File path to unstage (discard staged change)"
+        }
+      }
+    },
+    "discard_all_staged": {
+      "params": {}
+    }
+  },
+
+  "project_exploration_tools": {
+    "project_inventory": {
+      "params": {}
+    },
+    "project_category": {
+      "params": {
+        "category": {
+          "type": "string",
+          "required": true,
+          "description": "Category name: requirements, chat_sessions, standards, tech_stacks, artifacts, canvas_nodes, etc."
+        }
+      }
+    },
+    "project_elements": {
+      "params": {
+        "elements": {
+          "type": "array",
+          "required": true,
+          "description": "Array of {category, id} pairs to fetch specific elements"
+        }
+      }
+    }
+  }
+}
