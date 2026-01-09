@@ -61,7 +61,7 @@ import {
   FolderSearch,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { useProjectAgent, AgentPromptSection, AgentDefinition, ToolParamsManifest } from '@/hooks/useProjectAgent';
+import { useProjectAgent, AgentPromptSection, AgentDefinition, ToolParamDefinition } from '@/hooks/useProjectAgent';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +75,6 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     agentDefinition,
     sections,
     toolsManifest,
-    toolParams,
     customToolDescriptions,
     defaultTemplate,
     loading,
@@ -246,10 +245,13 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     if (section.isCustom) return false; // Custom sections aren't "modified" - they're new
     if (!defaultTemplate) return false;
     const defaultSection = defaultTemplate.sections.find(s => s.id === section.id);
-    if (!defaultSection) return true; // New section
+    if (!defaultSection) return true; // New section not in default
+    // Compare content and order - normalize enabled to boolean for comparison
+    const sectionEnabled = section.enabled ?? true;
+    const defaultEnabled = defaultSection.enabled ?? true;
     return defaultSection.content !== section.content 
       || defaultSection.order !== section.order
-      || defaultSection.enabled !== (section.enabled ?? true);
+      || defaultEnabled !== sectionEnabled;
   };
 
   // Reset a single tool description to default
@@ -546,7 +548,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                   {toolsManifest && Object.entries(toolsManifest.file_operations).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('file_operations', toolName);
                     const isModified = customToolDescriptions.file_operations?.[toolName] !== undefined;
-                    const params = toolParams?.file_operations?.[toolName]?.params;
+                    const params = tool.params;
                     
                     return (
                       <div key={toolName} className="border rounded-lg p-3 space-y-2">
@@ -577,14 +579,17 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                         {params && Object.keys(params).length > 0 && (
                           <div className="bg-muted/50 rounded p-2 space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
-                            {Object.entries(params).map(([paramName, paramDef]) => (
-                              <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
-                                <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
-                                <span className="text-muted-foreground">: {paramDef.type}</span>
-                                {paramDef.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
-                                <span className="text-muted-foreground/70 flex-1">— {paramDef.description}</span>
-                              </div>
-                            ))}
+                            {Object.entries(params).map(([paramName, paramDef]) => {
+                              const p = paramDef as ToolParamDefinition;
+                              return (
+                                <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                  <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                  <span className="text-muted-foreground">: {p.type}</span>
+                                  {p.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                  <span className="text-muted-foreground/70 flex-1">— {p.description}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                         {params && Object.keys(params).length === 0 && (
@@ -618,7 +623,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                   {toolsManifest && Object.entries(toolsManifest.project_exploration_tools).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('project_exploration_tools', toolName);
                     const isModified = customToolDescriptions.project_exploration_tools?.[toolName] !== undefined;
-                    const params = toolParams?.project_exploration_tools?.[toolName]?.params;
+                    const params = tool.params;
                     
                     return (
                       <div key={toolName} className="border rounded-lg p-3 space-y-2">
@@ -648,14 +653,17 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                         {params && Object.keys(params).length > 0 && (
                           <div className="bg-muted/50 rounded p-2 space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
-                            {Object.entries(params).map(([paramName, paramDef]) => (
-                              <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
-                                <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
-                                <span className="text-muted-foreground">: {paramDef.type}</span>
-                                {paramDef.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
-                                <span className="text-muted-foreground/70 flex-1">— {paramDef.description}</span>
-                              </div>
-                            ))}
+                            {Object.entries(params).map(([paramName, paramDef]) => {
+                              const p = paramDef as ToolParamDefinition;
+                              return (
+                                <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                  <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                  <span className="text-muted-foreground">: {p.type}</span>
+                                  {p.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                  <span className="text-muted-foreground/70 flex-1">— {p.description}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                         {params && Object.keys(params).length === 0 && (
