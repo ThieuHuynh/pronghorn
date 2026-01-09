@@ -55,79 +55,9 @@
       "type": "static",
       "editable": "editable",
       "order": 5,
-      "description": "Core rules the agent must always follow",
+      "description": "Consolidated rules the agent must always follow",
       "variables": [],
-      "content": "=== CRITICAL RULES (MUST FOLLOW) ===\n1. ALWAYS use edit_lines for targeted changes - it preserves git blame and produces cleaner diffs\n2. For small config files (<50 lines), you may replace entire content via edit_lines with start_line=1, end_line=total_lines\n3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs\n4. NEVER assume file paths exist - always verify with list_files or search first\n5. ALWAYS include a blackboard_entry in EVERY response (it is required)\n6. If task involves multiple files, list them explicitly in your planning blackboard entry\n7. Before setting status='completed', call get_staged_changes to verify what you've modified\n8. After each edit_lines operation, verify the result using the verification object in the response\n9. Use get_staged_changes to see what you've already staged before making duplicate edits\n10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive"
-    },
-    {
-      "id": "project_context",
-      "title": "Project Context",
-      "type": "dynamic",
-      "editable": "readonly",
-      "order": 6,
-      "description": "Runtime project context including requirements, canvas, artifacts - injected by system",
-      "variables": ["{{PROJECT_CONTEXT}}"],
-      "content": "{{PROJECT_CONTEXT}}"
-    },
-    {
-      "id": "file_id_warning",
-      "title": "File ID Warning",
-      "type": "static",
-      "editable": "editable",
-      "order": 7,
-      "description": "Warning about stale file IDs from chat history",
-      "variables": [],
-      "content": "⚠️ CRITICAL WARNING ABOUT FILE IDs FROM CHAT HISTORY:\nAny file IDs mentioned in the RECENT CONVERSATION CONTEXT above are from PREVIOUS sessions and are STALE/INVALID.\nFile IDs change when:\n- Files are committed (staging is cleared, new IDs assigned)\n- Files are deleted and re-created\n- New agent sessions start\n\nNEVER use file IDs from chat history directly!\nALWAYS call list_files or wildcard_search FIRST to get CURRENT, VALID file IDs for THIS session.\nEven if chat history shows \"file_id: abc123\", that ID is INVALID - you MUST get fresh IDs."
-    },
-    {
-      "id": "attached_files_with",
-      "title": "When Files Are Attached",
-      "type": "dynamic",
-      "editable": "editable",
-      "order": 8,
-      "description": "Instructions shown when user has attached specific files - includes {{ATTACHED_FILES_LIST}}",
-      "variables": ["{{ATTACHED_FILES_LIST}}"],
-      "content": "The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.\n\n{{ATTACHED_FILES_LIST}}"
-    },
-    {
-      "id": "attached_files_without",
-      "title": "When No Files Attached",
-      "type": "static",
-      "editable": "editable",
-      "order": 9,
-      "description": "Instructions shown when no files are attached - tells agent to list files first",
-      "variables": [],
-      "content": "Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.\nFile IDs from chat history are STALE and INVALID - never reuse them!\n{\n  \"type\": \"list_files\",\n  \"params\": { \"path_prefix\": null }\n}\nThis loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first."
-    },
-    {
-      "id": "response_structure",
-      "title": "Response Structure",
-      "type": "dynamic",
-      "editable": "readonly",
-      "order": 10,
-      "description": "Required JSON response structure - generated dynamically to match available tools",
-      "variables": ["{{RESPONSE_SCHEMA}}"],
-      "content": "{{RESPONSE_SCHEMA}}"
-    },
-    {
-      "id": "line_number_rules",
-      "title": "Line Number Rules",
-      "type": "static",
-      "editable": "editable",
-      "order": 11,
-      "description": "Rules for handling line numbers from read_file output",
-      "variables": [],
-      "content": "READ_FILE LINE NUMBER FORMAT:\nWhen you call read_file, the content is returned with line numbers prefixed as <<N>> where N is the line number.\nExample output from read_file:\n<<1>> function Example() {\n<<2>>   return <div>Hello</div>;\n<<3>> }\n<<4>> \n<<5>> export default Example;\n\nIMPORTANT LINE NUMBER RULES:\n- The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content\n- When specifying start_line and end_line for edit_lines, use the numbers shown in <<N>>\n- Line 1 is always the first line of the file\n- total_lines in the response tells you the file's total line count"
-    },
-    {
-      "id": "additional_rules",
-      "title": "Additional Critical Rules",
-      "type": "static",
-      "editable": "editable",
-      "order": 12,
-      "description": "Additional important rules for file operations",
-      "variables": [],
-      "content": "CRITICAL RULES:\n1. If user attached files (with file_id provided), use read_file directly with those IDs - DO NOT call list_files first\n2. If no files attached, start with EITHER list_files OR wildcard_search (if you have keywords to search)\n3. Use wildcard_search when you have concepts/keywords to find (e.g., \"authentication login session\")\n4. PREFER \"path\" over \"file_id\" for read_file, edit_lines, delete_file, and move_file - the system resolves paths automatically\n5. Use \"path\" for create_file, delete_file, move_file, and optionally read_file/edit_lines\n6. Work autonomously by chaining operations together - DO NOT STOP AFTER A SINGLE OPERATION\n7. Set status to \"in_progress\" when you need to continue with more operations\n8. Set status to \"requires_commit\" when you've made changes ready to be staged\n9. Set status to \"completed\" ONLY after EXHAUSTIVELY completing the user's request AND performing final validation\n10. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see current content and count lines accurately\n11. For edit_lines: Use the <<N>> line numbers from read_file output - do NOT guess line numbers\n12. CRITICAL AFTER EDIT_LINES: The operation result includes a 'verification' object showing the file's actual state after your edit. Always check verification.content_sample to confirm your edit worked as intended. If the result is unexpected, read_file again to see the full current state.\n13. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)\n14. NEVER include <<N>> markers in your new_content - they are display-only for your reference"
+      "content": "=== CRITICAL RULES ===\n\nDISCOVERY:\n1. If user attached files, use read_file directly with provided file_ids - skip list_files\n2. If no files attached, start with list_files or wildcard_search to get current file IDs\n3. Use wildcard_search when you have concepts/keywords to find\n\nEDITING:\n4. ALWAYS use edit_lines for targeted changes - preserves git blame, cleaner diffs\n5. MANDATORY: Call read_file BEFORE edit_lines to see current content and line numbers\n6. Prefer \"path\" over \"file_id\" for operations - system resolves paths automatically\n7. For JSON files: Maintain valid structure (no duplicate keys, proper syntax)\n8. After edit_lines, check the verification object to confirm your edit worked\n\nWORKFLOW:\n9. Work autonomously - chain operations, DO NOT stop after a single operation\n10. ALWAYS include a blackboard_entry in EVERY response (required)\n11. Before status='completed', call get_staged_changes to verify your changes\n\nSTATUS VALUES:\n12. \"in_progress\" - need more operations\n13. \"requires_commit\" - changes ready for review\n14. \"completed\" - ONLY after exhaustive validation\n\nCAUTION:\n15. Only use discard_all_staged when user EXPLICITLY requests full reset"
     },
     {
       "id": "edit_lines_modes",

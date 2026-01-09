@@ -810,17 +810,32 @@ Adjust your behavior based on the current mode.`
         type: "static",
         editable: "editable",
         order: 5,
-        content: `=== CRITICAL RULES (MUST FOLLOW) ===
-1. ALWAYS use edit_lines for targeted changes - it preserves git blame and produces cleaner diffs
-2. For small config files (<50 lines), you may replace entire content via edit_lines with start_line=1, end_line=total_lines
-3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs
-4. NEVER assume file paths exist - always verify with list_files or search first
-5. ALWAYS include a blackboard_entry in EVERY response (it is required)
-6. If task involves multiple files, list them explicitly in your planning blackboard entry
-7. Before setting status='completed', call get_staged_changes to verify what you've modified
-8. After each edit_lines operation, verify the result using the verification object in the response
-9. Use get_staged_changes to see what you've already staged before making duplicate edits
-10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive`
+        content: `=== CRITICAL RULES ===
+
+DISCOVERY:
+1. If user attached files, use read_file directly with provided file_ids - skip list_files
+2. If no files attached, start with list_files or wildcard_search to get current file IDs
+3. Use wildcard_search when you have concepts/keywords to find
+
+EDITING:
+4. ALWAYS use edit_lines for targeted changes - preserves git blame, cleaner diffs
+5. MANDATORY: Call read_file BEFORE edit_lines to see current content and line numbers
+6. Prefer "path" over "file_id" for operations - system resolves paths automatically
+7. For JSON files: Maintain valid structure (no duplicate keys, proper syntax)
+8. After edit_lines, check the verification object to confirm your edit worked
+
+WORKFLOW:
+9. Work autonomously - chain operations, DO NOT stop after a single operation
+10. ALWAYS include a blackboard_entry in EVERY response (required)
+11. Before status='completed', call get_staged_changes to verify your changes
+
+STATUS VALUES:
+12. "in_progress" - need more operations
+13. "requires_commit" - changes ready for review
+14. "completed" - ONLY after exhaustive validation
+
+CAUTION:
+15. Only use discard_all_staged when user EXPLICITLY requests full reset`
       },
       {
         id: "project_context",
@@ -889,23 +904,6 @@ This loads the complete file structure with all CURRENT file IDs and paths. You 
 When you call read_file, the content is returned with line numbers prefixed as <<N>> where N is the line number.
 IMPORTANT: The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content.
 When specifying start_line and end_line for edit_lines, use the numbers shown in <<N>>.`
-      },
-      {
-        id: "additional_rules",
-        title: "Additional Critical Rules",
-        type: "static",
-        editable: "editable",
-        order: 12,
-        content: `CRITICAL RULES:
-1. If user attached files, use read_file directly with those IDs - DO NOT call list_files first
-2. If no files attached, start with list_files OR wildcard_search
-3. PREFER "path" over "file_id" for all operations - system resolves paths automatically
-4. Work autonomously - DO NOT STOP AFTER A SINGLE OPERATION
-5. Set status="in_progress" when you need more operations
-6. Set status="requires_commit" when changes are ready
-7. Set status="completed" ONLY after exhaustively completing the request
-8. MANDATORY BEFORE EDIT_LINES: Call read_file first to see current content
-9. NEVER include <<N>> markers in your new_content`
       },
       {
         id: "edit_lines_modes",
