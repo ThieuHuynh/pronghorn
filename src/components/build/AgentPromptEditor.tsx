@@ -38,6 +38,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
   Lock,
   Pencil,
   RotateCcw,
@@ -51,8 +57,8 @@ import {
   AlertTriangle,
   ChevronUp,
   ChevronDown,
-  ToggleLeft,
-  ToggleRight,
+  Wrench,
+  FolderSearch,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useProjectAgent, AgentPromptSection, AgentDefinition } from '@/hooks/useProjectAgent';
@@ -69,6 +75,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     agentDefinition,
     sections,
     toolsManifest,
+    customToolDescriptions,
     loading,
     saving,
     hasCustomConfig,
@@ -79,6 +86,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     reorderSection,
     addCustomSection,
     removeSection,
+    updateToolDescription,
+    getEffectiveToolDescription,
     exportDefinition,
     importDefinition,
   } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
@@ -226,6 +235,18 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     );
   }
 
+  // Check if there are custom tool descriptions
+  const hasCustomToolDescriptions = Object.keys(customToolDescriptions.file_operations || {}).length > 0 ||
+    Object.keys(customToolDescriptions.project_exploration_tools || {}).length > 0;
+
+  // Reset a single tool description to default
+  const resetToolDescription = (category: 'file_operations' | 'project_exploration_tools', toolName: string) => {
+    const defaultDesc = toolsManifest?.[category]?.[toolName]?.description || '';
+    updateToolDescription(category, toolName, defaultDesc);
+    // Remove from custom descriptions by setting to undefined-like behavior
+    // Actually we need to track "reset" state - simplest is to just not include it
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -261,7 +282,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={!hasCustomConfig}>
+              <Button variant="outline" size="sm" disabled={!hasCustomConfig && !hasCustomToolDescriptions}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reset to Default
               </Button>
@@ -270,7 +291,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
               <AlertDialogHeader>
                 <AlertDialogTitle>Reset to Default Configuration?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will remove all customizations and restore the default agent prompt.
+                  This will remove all customizations including prompt sections and tool descriptions, restoring the default agent configuration.
                   This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -301,174 +322,301 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
         </div>
       </div>
 
-      {/* Sections List */}
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          <Accordion type="multiple" className="space-y-2">
-            {sortedSections.map((section, index) => {
-              const isEnabled = section.enabled ?? true;
-              const isFirst = index === 0;
-              const isLast = index === sortedSections.length - 1;
+      {/* Tabs for Sections and Tools */}
+      <Tabs defaultValue="sections" className="flex-1 flex flex-col">
+        <div className="px-4 pt-2 border-b">
+          <TabsList>
+            <TabsTrigger value="sections" className="gap-2">
+              <FileCode className="h-4 w-4" />
+              Prompt Sections
+            </TabsTrigger>
+            <TabsTrigger value="tools" className="gap-2">
+              <Wrench className="h-4 w-4" />
+              Tools Manifest
+              {hasCustomToolDescriptions && (
+                <Badge variant="secondary" className="ml-1 text-xs">Modified</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-              return (
-              <AccordionItem
-                key={section.id}
-                value={section.id}
-                className={cn(
-                  "border rounded-lg px-4",
-                  !isEnabled && "opacity-50 bg-muted/30"
-                )}
-              >
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center gap-3 text-left flex-1">
-                    {/* Enable/Disable Toggle */}
-                    <Switch
-                      checked={isEnabled}
-                      onCheckedChange={() => toggleSection(section.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-7"
-                    />
-                    <span className={cn("text-sm font-medium", !isEnabled && "line-through")}>
-                      {section.title}
-                    </span>
-                    {getEditableBadge(section.editable)}
-                    {section.isCustom && (
-                      <Badge variant="secondary" className="text-xs">Custom</Badge>
-                    )}
-                    {!isEnabled && (
-                      <Badge variant="outline" className="text-xs text-muted-foreground">Disabled</Badge>
-                    )}
-                    {section.variables && section.variables.length > 0 && (
-                      <div className="flex gap-1">
-                        {section.variables.map((v) => (
-                          <Badge key={v} variant="outline" className="text-xs font-mono">
-                            {v}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    {/* Reorder buttons */}
-                    <div className="flex gap-1 ml-auto mr-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        disabled={isFirst}
-                        onClick={() => reorderSection(section.id, 'up')}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        disabled={isLast}
-                        onClick={() => reorderSection(section.id, 'down')}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-4 pt-2">
-                    {/* Description */}
-                    <p className="text-sm text-muted-foreground">{section.description}</p>
+        {/* Sections Tab */}
+        <TabsContent value="sections" className="flex-1 m-0">
+          <ScrollArea className="h-full">
+            <div className="p-4">
+              <Accordion type="multiple" className="space-y-2">
+                {sortedSections.map((section, index) => {
+                  const isEnabled = section.enabled ?? true;
+                  const isFirst = index === 0;
+                  const isLast = index === sortedSections.length - 1;
 
-                    {/* Section metadata */}
-                    <div className="flex gap-4 text-xs text-muted-foreground">
-                      <span>ID: <code className="bg-muted px-1 rounded">{section.id}</code></span>
-                      <span>Order: {section.order}</span>
-                      <span>Type: {section.type}</span>
-                    </div>
-
-                    {/* Content Editor */}
-                    {section.editable === 'editable' ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={section.content}
-                          onChange={(e) => updateSection(section.id, { content: e.target.value })}
-                          className="font-mono text-xs min-h-[200px]"
-                          placeholder="Enter section content..."
+                  return (
+                  <AccordionItem
+                    key={section.id}
+                    value={section.id}
+                    className={cn(
+                      "border rounded-lg px-4",
+                      !isEnabled && "opacity-50 bg-muted/30"
+                    )}
+                  >
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-3 text-left flex-1">
+                        {/* Enable/Disable Toggle */}
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={() => toggleSection(section.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-7"
                         />
+                        <span className={cn("text-sm font-medium", !isEnabled && "line-through")}>
+                          {section.title}
+                        </span>
+                        {getEditableBadge(section.editable)}
+                        {section.isCustom && (
+                          <Badge variant="secondary" className="text-xs">Custom</Badge>
+                        )}
+                        {!isEnabled && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Disabled</Badge>
+                        )}
                         {section.variables && section.variables.length > 0 && (
-                          <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-amber-600 dark:text-amber-400">
-                              <strong>Warning:</strong> This section contains dynamic variables ({section.variables.join(', ')}). 
-                              Removing these variables will prevent runtime data from being injected into the prompt.
-                            </p>
+                          <div className="flex gap-1">
+                            {section.variables.map((v) => (
+                              <Badge key={v} variant="outline" className="text-xs font-mono">
+                                {v}
+                              </Badge>
+                            ))}
                           </div>
                         )}
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <pre className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto">
-                          {section.content}
-                        </pre>
-                        <div className="absolute top-2 right-2">
-                          <Badge variant="secondary" className="text-xs gap-1">
-                            <Lock className="h-3 w-3" />
-                            {section.editable === 'readonly' ? 'System-managed' : 'Dynamic'}
-                          </Badge>
+                        {/* Reorder buttons */}
+                        <div className="flex gap-1 ml-auto mr-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            disabled={isFirst}
+                            onClick={() => reorderSection(section.id, 'up')}
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            disabled={isLast}
+                            onClick={() => reorderSection(section.id, 'down')}
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    )}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-4 pt-2">
+                        {/* Description */}
+                        <p className="text-sm text-muted-foreground">{section.description}</p>
 
-                    {/* Section Actions */}
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      {section.editable === 'editable' && !section.isCustom && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            // Reset this section to default
-                            const template = await fetch('/data/codingAgentPromptTemplate.json').then(r => r.json());
-                            const defaultSection = template.sections.find((s: AgentPromptSection) => s.id === section.id);
-                            if (defaultSection) {
-                              updateSection(section.id, { content: defaultSection.content });
-                              toast.success('Section reset to default');
-                            }
-                          }}
-                        >
-                          <RotateCcw className="h-4 w-4 mr-2" />
-                          Reset Section
-                        </Button>
-                      )}
+                        {/* Section metadata */}
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                          <span>ID: <code className="bg-muted px-1 rounded">{section.id}</code></span>
+                          <span>Order: {section.order}</span>
+                          <span>Type: {section.type}</span>
+                        </div>
 
-                      {section.isCustom && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-destructive">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Remove Section
+                        {/* Content Editor */}
+                        {section.editable === 'editable' ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={section.content}
+                              onChange={(e) => updateSection(section.id, { content: e.target.value })}
+                              className="font-mono text-xs min-h-[200px]"
+                              placeholder="Enter section content..."
+                            />
+                            {section.variables && section.variables.length > 0 && (
+                              <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  <strong>Warning:</strong> This section contains dynamic variables ({section.variables.join(', ')}). 
+                                  Removing these variables will prevent runtime data from being injected into the prompt.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <pre className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto">
+                              {section.content}
+                            </pre>
+                            <div className="absolute top-2 right-2">
+                              <Badge variant="secondary" className="text-xs gap-1">
+                                <Lock className="h-3 w-3" />
+                                {section.editable === 'readonly' ? 'System-managed' : 'Dynamic'}
+                              </Badge>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Section Actions */}
+                        <div className="flex justify-between items-center pt-2 border-t">
+                          {section.editable === 'editable' && !section.isCustom && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                // Reset this section to default
+                                const template = await fetch('/data/codingAgentPromptTemplate.json').then(r => r.json());
+                                const defaultSection = template.sections.find((s: AgentPromptSection) => s.id === section.id);
+                                if (defaultSection) {
+                                  updateSection(section.id, { content: defaultSection.content });
+                                  toast.success('Section reset to default');
+                                }
+                              }}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-2" />
+                              Reset Section
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Remove Custom Section?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently remove the "{section.title}" section.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => removeSection(section.id)}>
-                                Remove
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-              );
-            })}
-          </Accordion>
-        </div>
-      </ScrollArea>
+                          )}
+
+                          {section.isCustom && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-destructive">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Remove Section
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remove Custom Section?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently remove the "{section.title}" section.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => removeSection(section.id)}>
+                                    Remove
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* Tools Tab */}
+        <TabsContent value="tools" className="flex-1 m-0">
+          <ScrollArea className="h-full">
+            <div className="p-4 space-y-6">
+              {/* File Operations */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-medium">File Operations</h4>
+                  <Badge variant="outline" className="text-xs">
+                    {Object.keys(toolsManifest?.file_operations || {}).length} tools
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {toolsManifest && Object.entries(toolsManifest.file_operations).map(([toolName, tool]) => {
+                    const currentDesc = getEffectiveToolDescription('file_operations', toolName);
+                    const isModified = customToolDescriptions.file_operations?.[toolName] !== undefined;
+                    
+                    return (
+                      <div key={toolName} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
+                            <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
+                            {isModified && (
+                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Modified</Badge>
+                            )}
+                          </div>
+                          {isModified && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // Reset by removing from custom descriptions
+                                updateToolDescription('file_operations', toolName, tool.description);
+                              }}
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <Textarea
+                          value={currentDesc}
+                          onChange={(e) => updateToolDescription('file_operations', toolName, e.target.value)}
+                          className="font-mono text-xs min-h-[60px]"
+                          placeholder="Tool description..."
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Project Exploration Tools */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FolderSearch className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-medium">Project Exploration Tools</h4>
+                  <Badge variant="outline" className="text-xs">
+                    {Object.keys(toolsManifest?.project_exploration_tools || {}).length} tools
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {toolsManifest && Object.entries(toolsManifest.project_exploration_tools).map(([toolName, tool]) => {
+                    const currentDesc = getEffectiveToolDescription('project_exploration_tools', toolName);
+                    const isModified = customToolDescriptions.project_exploration_tools?.[toolName] !== undefined;
+                    
+                    return (
+                      <div key={toolName} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
+                            <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
+                            {isModified && (
+                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Modified</Badge>
+                            )}
+                          </div>
+                          {isModified && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                updateToolDescription('project_exploration_tools', toolName, tool.description);
+                              }}
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <Textarea
+                          value={currentDesc}
+                          onChange={(e) => updateToolDescription('project_exploration_tools', toolName, e.target.value)}
+                          className="font-mono text-xs min-h-[60px]"
+                          placeholder="Tool description..."
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
 
       {/* Add Section Dialog */}
       <Dialog open={isAddSectionOpen} onOpenChange={setIsAddSectionOpen}>
