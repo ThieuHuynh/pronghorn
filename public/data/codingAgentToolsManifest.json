@@ -1,0 +1,83 @@
+{
+  "id": "coding-agent-tools",
+  "name": "Coding Agent Tools Manifest",
+  "version": "1.0.0",
+  "description": "Available file operations and tools for the coding agent",
+  "updatedAt": "2025-01-09T00:00:00Z",
+
+  "file_operations": {
+    "list_files": {
+      "description": "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure. For session-created files, IDs are kept current.",
+      "category": "discovery",
+      "enabled": true
+    },
+    "wildcard_search": {
+      "description": "Multi-term search across all files. Returns ranked results by match count. Use for finding files by concept.",
+      "category": "discovery",
+      "enabled": true
+    },
+    "search": {
+      "description": "Search file paths and content by single keyword.",
+      "category": "discovery",
+      "enabled": true
+    },
+    "read_file": {
+      "description": "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>. Can use file_id OR path parameter. For newly created files, prefer using path.",
+      "category": "read",
+      "enabled": true
+    },
+    "edit_lines": {
+      "description": "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output. Can use file_id OR path parameter. For newly created files, prefer using path.",
+      "category": "write",
+      "enabled": true
+    },
+    "create_file": {
+      "description": "Create new file and stage as add operation.",
+      "category": "write",
+      "enabled": true
+    },
+    "delete_file": {
+      "description": "Delete file and stage as delete operation.",
+      "category": "write",
+      "enabled": true
+    },
+    "move_file": {
+      "description": "Move or rename file to a new path (handles directory moves properly).",
+      "category": "write",
+      "enabled": true
+    },
+    "get_staged_changes": {
+      "description": "View all currently staged changes. Essential for avoiding duplicate edits and understanding current state before making changes.",
+      "category": "staging",
+      "enabled": true
+    },
+    "unstage_file": {
+      "description": "Discard a specific staged change by file_path. Use when user requests reverting a file or when a change needs to be redone.",
+      "category": "staging",
+      "enabled": true
+    },
+    "discard_all_staged": {
+      "description": "Discard ALL staged changes. Use with EXTREME CAUTION - only when user explicitly requests full reset.",
+      "category": "staging",
+      "enabled": true
+    }
+  },
+
+  "project_exploration_tools": {
+    "project_inventory": {
+      "description": "Returns counts and brief previews for ALL project elements in one call. Use FIRST to understand project scope.",
+      "category": "project",
+      "enabled": true
+    },
+    "project_category": {
+      "description": "Load ALL items from a specific category with full details. Categories: requirements, chat_sessions, standards, tech_stacks, artifacts, canvas_nodes, etc.",
+      "category": "project",
+      "enabled": true
+    },
+    "project_elements": {
+      "description": "Load SPECIFIC elements by their IDs with full details. Pass array of {category, id} pairs.",
+      "category": "project",
+      "enabled": true
+    }
+  }
+}

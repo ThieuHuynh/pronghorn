@@ -15,6 +15,7 @@ interface AgentPromptSection {
   content: string;
   variables?: string[];
   isCustom?: boolean;
+  enabled?: boolean;
 }
 
 interface TaskRequest {
@@ -560,12 +561,16 @@ serve(async (req) => {
       maxIterations: number = 30,
       blackboardEntries: string = ""
     ): string {
-      // Sort sections by order
-      const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+      // Filter out disabled sections, then sort by order
+      const enabledSections = sections.filter(s => s.enabled !== false);
+      const sortedSections = [...enabledSections].sort((a, b) => a.order - b.order);
+      
+      console.log(`[buildDynamicSystemPrompt] ${sections.length} total sections, ${enabledSections.length} enabled`);
       
       // Build variable substitutions
       const variables: Record<string, string> = {
         "{{FILE_OPERATIONS}}": JSON.stringify(manifest.file_operations, null, 2),
+        "{{TOOLS_MANIFEST}}": JSON.stringify(manifest, null, 2),
         "{{TASK_MODE}}": mode,
         "{{AUTO_COMMIT}}": String(autoCommit),
         "{{PROJECT_CONTEXT}}": contextSummary ? `Project Context:\n${contextSummary}` : "",
@@ -629,7 +634,7 @@ Use them to understand context and inform your file operations.` : "",
       
       for (const critVar of criticalVariables) {
         if (!allContent.includes(critVar)) {
-          console.warn(`[buildDynamicSystemPrompt] WARNING: Critical variable ${critVar} is not present in any section. The agent may lack important context.`);
+          console.warn(`[buildDynamicSystemPrompt] WARNING: Critical variable ${critVar} is not present in any enabled section. The agent may lack important context.`);
         }
       }
 

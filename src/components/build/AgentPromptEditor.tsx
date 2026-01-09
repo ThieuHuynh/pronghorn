@@ -49,9 +49,15 @@ import {
   Loader2,
   FileCode,
   AlertTriangle,
+  ChevronUp,
+  ChevronDown,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useProjectAgent, AgentPromptSection, AgentDefinition } from '@/hooks/useProjectAgent';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface AgentPromptEditorProps {
   projectId: string;
@@ -62,17 +68,23 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
   const {
     agentDefinition,
     sections,
+    toolsManifest,
     loading,
     saving,
     hasCustomConfig,
     saveAgentConfig,
     resetToDefault,
     updateSection,
+    toggleSection,
+    reorderSection,
     addCustomSection,
     removeSection,
     exportDefinition,
     importDefinition,
   } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
+
+  // Sort sections by order for display
+  const sortedSections = [...sections].sort((a, b) => a.order - b.order);
 
   const [isAddSectionOpen, setIsAddSectionOpen] = useState(false);
   const [newSection, setNewSection] = useState<Partial<AgentPromptSection>>({
@@ -293,18 +305,38 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
       <ScrollArea className="flex-1">
         <div className="p-4">
           <Accordion type="multiple" className="space-y-2">
-            {sections.map((section) => (
+            {sortedSections.map((section, index) => {
+              const isEnabled = section.enabled ?? true;
+              const isFirst = index === 0;
+              const isLast = index === sortedSections.length - 1;
+
+              return (
               <AccordionItem
                 key={section.id}
                 value={section.id}
-                className="border rounded-lg px-4"
+                className={cn(
+                  "border rounded-lg px-4",
+                  !isEnabled && "opacity-50 bg-muted/30"
+                )}
               >
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center gap-3 text-left flex-1">
-                    <span className="text-sm font-medium">{section.title}</span>
+                    {/* Enable/Disable Toggle */}
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={() => toggleSection(section.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-7"
+                    />
+                    <span className={cn("text-sm font-medium", !isEnabled && "line-through")}>
+                      {section.title}
+                    </span>
                     {getEditableBadge(section.editable)}
                     {section.isCustom && (
                       <Badge variant="secondary" className="text-xs">Custom</Badge>
+                    )}
+                    {!isEnabled && (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">Disabled</Badge>
                     )}
                     {section.variables && section.variables.length > 0 && (
                       <div className="flex gap-1">
@@ -315,6 +347,27 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                         ))}
                       </div>
                     )}
+                    {/* Reorder buttons */}
+                    <div className="flex gap-1 ml-auto mr-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={isFirst}
+                        onClick={() => reorderSection(section.id, 'up')}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={isLast}
+                        onClick={() => reorderSection(section.id, 'down')}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -411,7 +464,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                   </div>
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </div>
       </ScrollArea>

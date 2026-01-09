@@ -12,6 +12,22 @@ export interface AgentPromptSection {
   content: string;
   variables?: string[];
   isCustom?: boolean;
+  enabled?: boolean; // New: allows disabling sections
+}
+
+export interface ToolOperation {
+  description: string;
+  category: string;
+  enabled: boolean;
+}
+
+export interface ToolsManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  file_operations: Record<string, ToolOperation>;
+  project_exploration_tools: Record<string, ToolOperation>;
 }
 
 export interface AgentDefinition {
@@ -21,12 +37,14 @@ export interface AgentDefinition {
   description: string;
   agentType: string;
   sections: AgentPromptSection[];
+  toolsManifest?: ToolsManifest;
   isDefault?: boolean;
 }
 
 interface UseProjectAgentReturn {
   agentDefinition: AgentDefinition | null;
   sections: AgentPromptSection[];
+  toolsManifest: ToolsManifest | null;
   loading: boolean;
   saving: boolean;
   hasCustomConfig: boolean;
@@ -34,8 +52,11 @@ interface UseProjectAgentReturn {
   saveAgentConfig: (definition: AgentDefinition) => Promise<boolean>;
   resetToDefault: () => Promise<boolean>;
   updateSection: (sectionId: string, updates: Partial<AgentPromptSection>) => void;
+  toggleSection: (sectionId: string) => void;
+  reorderSection: (sectionId: string, direction: 'up' | 'down') => void;
   addCustomSection: (section: AgentPromptSection) => void;
   removeSection: (sectionId: string) => void;
+  updateToolsManifest: (manifest: ToolsManifest) => void;
   exportDefinition: () => string;
   importDefinition: (json: string) => boolean;
 }
@@ -47,10 +68,25 @@ export function useProjectAgent(
 ): UseProjectAgentReturn {
   const [agentDefinition, setAgentDefinition] = useState<AgentDefinition | null>(null);
   const [sections, setSections] = useState<AgentPromptSection[]>([]);
+  const [toolsManifest, setToolsManifest] = useState<ToolsManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasCustomConfig, setHasCustomConfig] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState<AgentDefinition | null>(null);
+
+  // Load the default tools manifest from JSON file
+  const loadDefaultToolsManifest = useCallback(async (): Promise<ToolsManifest | null> => {
+    try {
+      const response = await fetch('/data/codingAgentToolsManifest.json');
+      if (!response.ok) throw new Error('Failed to load tools manifest');
+      const manifest = await response.json();
+      setToolsManifest(manifest);
+      return manifest;
+    } catch (error) {
+      console.error('Error loading tools manifest:', error);
+      return null;
+    }
+  }, []);
 
   // Load the default template from JSON file
   const loadDefaultTemplate = useCallback(async (): Promise<AgentDefinition | null> => {
@@ -71,8 +107,11 @@ export function useProjectAgent(
   const loadAgentConfig = useCallback(async () => {
     setLoading(true);
     try {
-      // First, load the default template
-      const template = await loadDefaultTemplate();
+      // Load the default template and tools manifest in parallel
+      const [template] = await Promise.all([
+        loadDefaultTemplate(),
+        loadDefaultToolsManifest(),
+      ]);
       
       // Try to fetch custom config from database
       const { data, error } = await supabase.rpc('get_project_agent_with_token', {
@@ -86,7 +125,7 @@ export function useProjectAgent(
         // Fall back to default template
         if (template) {
           setAgentDefinition(template);
-          setSections(template.sections);
+          setSections(template.sections.map(s => ({ ...s, enabled: s.enabled ?? true })));
           setHasCustomConfig(false);
         }
         return;
@@ -105,12 +144,12 @@ export function useProjectAgent(
           isDefault: customConfig.is_default,
         };
         setAgentDefinition(definition);
-        setSections(definition.sections);
+        setSections(definition.sections.map(s => ({ ...s, enabled: s.enabled ?? true })));
         setHasCustomConfig(true);
       } else if (template) {
         // No custom config, use default template
         setAgentDefinition(template);
-        setSections(template.sections);
+        setSections(template.sections.map(s => ({ ...s, enabled: s.enabled ?? true })));
         setHasCustomConfig(false);
       }
     } catch (error) {
@@ -118,7 +157,7 @@ export function useProjectAgent(
     } finally {
       setLoading(false);
     }
-  }, [projectId, agentType, shareToken, loadDefaultTemplate]);
+  }, [projectId, agentType, shareToken, loadDefaultTemplate, loadDefaultToolsManifest]);
 
   useEffect(() => {
     if (projectId) {
@@ -195,9 +234,38 @@ export function useProjectAgent(
     ));
   }, []);
 
+  // Toggle section enabled/disabled
+  const toggleSection = useCallback((sectionId: string) => {
+    setSections(prev => prev.map(section =>
+      section.id === sectionId ? { ...section, enabled: !(section.enabled ?? true) } : section
+    ));
+  }, []);
+
+  // Reorder section up or down
+  const reorderSection = useCallback((sectionId: string, direction: 'up' | 'down') => {
+    setSections(prev => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const index = sorted.findIndex(s => s.id === sectionId);
+      if (index === -1) return prev;
+      
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= sorted.length) return prev;
+      
+      // Swap orders
+      const currentOrder = sorted[index].order;
+      const targetOrder = sorted[targetIndex].order;
+      
+      return prev.map(section => {
+        if (section.id === sectionId) return { ...section, order: targetOrder };
+        if (section.id === sorted[targetIndex].id) return { ...section, order: currentOrder };
+        return section;
+      });
+    });
+  }, []);
+
   // Add a custom section
   const addCustomSection = useCallback((section: AgentPromptSection) => {
-    setSections(prev => [...prev, { ...section, isCustom: true }].sort((a, b) => a.order - b.order));
+    setSections(prev => [...prev, { ...section, isCustom: true, enabled: true }].sort((a, b) => a.order - b.order));
   }, []);
 
   // Remove a section (only custom sections can be removed)
@@ -205,6 +273,11 @@ export function useProjectAgent(
     setSections(prev => prev.filter(section => 
       section.id !== sectionId || !section.isCustom
     ));
+  }, []);
+
+  // Update tools manifest
+  const updateToolsManifest = useCallback((manifest: ToolsManifest) => {
+    setToolsManifest(manifest);
   }, []);
 
   // Export current definition as JSON string
@@ -255,6 +328,7 @@ export function useProjectAgent(
   return {
     agentDefinition,
     sections,
+    toolsManifest,
     loading,
     saving,
     hasCustomConfig,
@@ -262,8 +336,11 @@ export function useProjectAgent(
     saveAgentConfig,
     resetToDefault,
     updateSection,
+    toggleSection,
+    reorderSection,
     addCustomSection,
     removeSection,
+    updateToolsManifest,
     exportDefinition,
     importDefinition,
   };
