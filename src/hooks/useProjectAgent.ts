@@ -30,6 +30,11 @@ export interface ToolsManifest {
   project_exploration_tools: Record<string, ToolOperation>;
 }
 
+export interface CustomToolDescriptions {
+  file_operations?: Record<string, string>;
+  project_exploration_tools?: Record<string, string>;
+}
+
 export interface AgentDefinition {
   id: string;
   name: string;
@@ -38,6 +43,7 @@ export interface AgentDefinition {
   agentType: string;
   sections: AgentPromptSection[];
   toolsManifest?: ToolsManifest;
+  customToolDescriptions?: CustomToolDescriptions;
   isDefault?: boolean;
 }
 
@@ -45,6 +51,7 @@ interface UseProjectAgentReturn {
   agentDefinition: AgentDefinition | null;
   sections: AgentPromptSection[];
   toolsManifest: ToolsManifest | null;
+  customToolDescriptions: CustomToolDescriptions;
   loading: boolean;
   saving: boolean;
   hasCustomConfig: boolean;
@@ -57,6 +64,8 @@ interface UseProjectAgentReturn {
   addCustomSection: (section: AgentPromptSection) => void;
   removeSection: (sectionId: string) => void;
   updateToolsManifest: (manifest: ToolsManifest) => void;
+  updateToolDescription: (category: 'file_operations' | 'project_exploration_tools', toolName: string, description: string) => void;
+  getEffectiveToolDescription: (category: 'file_operations' | 'project_exploration_tools', toolName: string) => string;
   exportDefinition: () => string;
   importDefinition: (json: string) => boolean;
 }
@@ -69,6 +78,7 @@ export function useProjectAgent(
   const [agentDefinition, setAgentDefinition] = useState<AgentDefinition | null>(null);
   const [sections, setSections] = useState<AgentPromptSection[]>([]);
   const [toolsManifest, setToolsManifest] = useState<ToolsManifest | null>(null);
+  const [customToolDescriptions, setCustomToolDescriptions] = useState<CustomToolDescriptions>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasCustomConfig, setHasCustomConfig] = useState(false);
@@ -134,17 +144,23 @@ export function useProjectAgent(
       if (data && data.length > 0) {
         // Custom config exists
         const customConfig = data[0];
+        // Extract custom tool descriptions from sections JSON if stored there
+        const sectionsData = customConfig.sections as any;
+        const storedToolDescriptions = sectionsData?._customToolDescriptions || {};
+        
         const definition: AgentDefinition = {
           id: customConfig.id,
           name: customConfig.name,
           version: customConfig.version,
           description: customConfig.description || '',
           agentType: customConfig.agent_type,
-          sections: customConfig.sections as unknown as AgentPromptSection[],
+          sections: Array.isArray(sectionsData) ? sectionsData : (sectionsData?.sections || []),
+          customToolDescriptions: storedToolDescriptions,
           isDefault: customConfig.is_default,
         };
         setAgentDefinition(definition);
         setSections(definition.sections.map(s => ({ ...s, enabled: s.enabled ?? true })));
+        setCustomToolDescriptions(storedToolDescriptions);
         setHasCustomConfig(true);
       } else if (template) {
         // No custom config, use default template
@@ -169,6 +185,12 @@ export function useProjectAgent(
   const saveAgentConfig = useCallback(async (definition: AgentDefinition): Promise<boolean> => {
     setSaving(true);
     try {
+      // Store custom tool descriptions alongside sections
+      const sectionsWithToolDescriptions = {
+        sections: definition.sections,
+        _customToolDescriptions: customToolDescriptions,
+      };
+      
       const { error } = await supabase.rpc('upsert_project_agent_with_token', {
         p_project_id: projectId,
         p_token: shareToken,
@@ -176,12 +198,12 @@ export function useProjectAgent(
         p_name: definition.name,
         p_description: definition.description,
         p_version: definition.version,
-        p_sections: definition.sections as any,
+        p_sections: sectionsWithToolDescriptions as any,
       });
 
       if (error) throw error;
 
-      setAgentDefinition(definition);
+      setAgentDefinition({ ...definition, customToolDescriptions });
       setSections(definition.sections);
       setHasCustomConfig(true);
       toast.success('Agent configuration saved');
@@ -193,7 +215,7 @@ export function useProjectAgent(
     } finally {
       setSaving(false);
     }
-  }, [projectId, agentType, shareToken]);
+  }, [projectId, agentType, shareToken, customToolDescriptions]);
 
   // Reset to default template
   const resetToDefault = useCallback(async (): Promise<boolean> => {
@@ -208,11 +230,12 @@ export function useProjectAgent(
 
       if (error) throw error;
 
-      // Reload default template
+      // Reload default template and reset tool descriptions
       const template = defaultTemplate || await loadDefaultTemplate();
       if (template) {
         setAgentDefinition(template);
         setSections(template.sections);
+        setCustomToolDescriptions({});
         setHasCustomConfig(false);
         toast.success('Reset to default configuration');
         return true;
@@ -280,6 +303,31 @@ export function useProjectAgent(
     setToolsManifest(manifest);
   }, []);
 
+  // Update a single tool description
+  const updateToolDescription = useCallback((
+    category: 'file_operations' | 'project_exploration_tools',
+    toolName: string,
+    description: string
+  ) => {
+    setCustomToolDescriptions(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        [toolName]: description,
+      },
+    }));
+  }, []);
+
+  // Get effective tool description (custom or default)
+  const getEffectiveToolDescription = useCallback((
+    category: 'file_operations' | 'project_exploration_tools',
+    toolName: string
+  ): string => {
+    const customDesc = customToolDescriptions[category]?.[toolName];
+    if (customDesc !== undefined) return customDesc;
+    return toolsManifest?.[category]?.[toolName]?.description || '';
+  }, [customToolDescriptions, toolsManifest]);
+
   // Export current definition as JSON string
   const exportDefinition = useCallback((): string => {
     const definition: AgentDefinition = {
@@ -289,9 +337,10 @@ export function useProjectAgent(
       description: agentDefinition?.description || 'Exported agent definition',
       agentType,
       sections,
+      customToolDescriptions: Object.keys(customToolDescriptions).length > 0 ? customToolDescriptions : undefined,
     };
     return JSON.stringify(definition, null, 2);
-  }, [agentDefinition, sections, agentType]);
+  }, [agentDefinition, sections, agentType, customToolDescriptions]);
 
   // Import definition from JSON string
   const importDefinition = useCallback((json: string): boolean => {
@@ -310,12 +359,18 @@ export function useProjectAgent(
         }
       }
 
-      // Apply imported definition
+      // Apply imported definition including custom tool descriptions
       setAgentDefinition({
         ...imported,
         agentType, // Ensure agent type matches
       });
       setSections(imported.sections.sort((a, b) => (a.order || 0) - (b.order || 0)));
+      
+      // Import custom tool descriptions if present
+      if (imported.customToolDescriptions) {
+        setCustomToolDescriptions(imported.customToolDescriptions);
+      }
+      
       toast.success('Agent definition imported successfully');
       return true;
     } catch (error: any) {
@@ -329,6 +384,7 @@ export function useProjectAgent(
     agentDefinition,
     sections,
     toolsManifest,
+    customToolDescriptions,
     loading,
     saving,
     hasCustomConfig,
@@ -341,6 +397,8 @@ export function useProjectAgent(
     addCustomSection,
     removeSection,
     updateToolsManifest,
+    updateToolDescription,
+    getEffectiveToolDescription,
     exportDefinition,
     importDefinition,
   };
