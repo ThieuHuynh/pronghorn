@@ -103,6 +103,7 @@ const DeploymentDialog = ({
     buildFolder: "/",
     buildCommand: "",
     runCommand: "",
+    installCommand: "npm install",
     branch: "main",
     diskEnabled: false,
     diskName: "",
@@ -149,6 +150,7 @@ const DeploymentDialog = ({
         buildFolder: deployment.build_folder,
         buildCommand: deployment.build_command || "",
         runCommand: deployment.run_command,
+        installCommand: (deployment as any).install_command || "npm install",
         branch: deployment.branch || "main",
         diskEnabled: (deployment as any).disk_enabled || false,
         diskName: (deployment as any).disk_name || "",
@@ -173,6 +175,7 @@ const DeploymentDialog = ({
           buildFolder: defaultType.buildFolder,
           buildCommand: defaultType.buildCommand,
           runCommand: defaultType.runCommand || "",
+          installCommand: defaultType.installCommand || "npm install",
           branch: "main",
           diskEnabled: false,
           diskName: "",
@@ -265,6 +268,7 @@ const DeploymentDialog = ({
         ...f,
         runCommand: typeConfig.runCommand || "",
         buildCommand: typeConfig.buildCommand,
+        installCommand: typeConfig.installCommand || "npm install",
         buildFolder: typeConfig.buildFolder,
         runFolder: typeConfig.runFolder,
       }));
@@ -494,6 +498,7 @@ const DeploymentDialog = ({
             buildFolder: defaultType.buildFolder,
             buildCommand: defaultType.buildCommand,
             runCommand: defaultType.runCommand || "",
+            installCommand: defaultType.installCommand || "npm install",
             branch: "main",
             diskEnabled: false,
             diskName: "",
@@ -703,6 +708,20 @@ const DeploymentDialog = ({
                     placeholder="dist"
                   />
                 </div>
+              </div>
+
+              {/* Install Command */}
+              <div className="grid gap-2">
+                <Label htmlFor="installCommand">Install Command</Label>
+                <Input
+                  id="installCommand"
+                  value={form.installCommand}
+                  onChange={(e) => setForm({ ...form, installCommand: e.target.value })}
+                  placeholder="npm install"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for local development; for cloud, include in Build Command
+                </p>
               </div>
 
               {/* Build Command */}
