@@ -151,8 +151,8 @@ serve(async (req) => {
     // FULL MODE: Create ZIP file with runner + .env
     const zip = new JSZip();
 
-    // 1. Create .env file with comprehensive runtime config
-    zip.file('.env', envContent);
+    // 1. Create .run file with comprehensive runtime config (avoids conflict with app's .env files)
+    zip.file('.run', envContent);
 
     // 2. Create package.json with Supabase client for real-time
     const packageJson = generatePackageJson(deployment);
@@ -166,8 +166,8 @@ serve(async (req) => {
     const readme = generateReadme(deployment, project, repo);
     zip.file('README.md', readme);
 
-    // 5. Create .env.example as template
-    zip.file('.env.example', generateEnvExample());
+    // 5. Create .run.example as template
+    zip.file('.run.example', generateEnvExample());
 
     // Generate the ZIP as base64
     const zipContent = await zip.generateAsync({ type: 'base64' });
@@ -373,7 +373,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
 function generateEnvExample(): string {
   return `# =====================================================
 # Pronghorn Runner Configuration Template
-# Copy this to .env and fill in your values
+# Copy this to .run and fill in your values
 # =====================================================
 
 # ===========================================
@@ -431,7 +431,6 @@ function generatePackageJson(deployment: any): object {
     },
     dependencies: {
       '@supabase/supabase-js': '^2.45.0',
-      'dotenv': '^16.3.1',
       'node-fetch': '^3.3.2',
       'chokidar': '^3.5.3',
       'ws': '^8.18.3',
@@ -452,7 +451,7 @@ function generateRunnerScript(deployment: any, repo: any): string {
  * Pronghorn Real-Time Local Development Runner
  * 
  * This script:
- * 1. Reads ALL configuration from .env file
+ * 1. Reads ALL configuration from .run file (avoids conflict with app's .env files)
  * 2. Connects to Supabase Realtime to watch for file changes
  * 3. Pulls files from repo_files/repo_staging directly from database
  * 4. Writes files to ./app/ folder
@@ -462,10 +461,39 @@ function generateRunnerScript(deployment: any, repo: any): string {
  * Supports: Node.js, Python, Go, Ruby, Rust, Elixir, Docker
  */
 
-require('dotenv').config();
 const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+// Custom .run file loader (same format as .env, different filename to avoid conflicts)
+function loadRunConfig(filePath = '.run') {
+  const absolutePath = path.resolve(process.cwd(), filePath);
+  if (!fs.existsSync(absolutePath)) {
+    console.error(\`[Pronghorn] Config file not found: \${absolutePath}\`);
+    console.error('[Pronghorn] Please ensure .run file exists with your configuration');
+    process.exit(1);
+  }
+  const content = fs.readFileSync(absolutePath, 'utf8');
+  for (const line of content.split('\\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^([^=]+)=(.*)$/);
+    if (!match) continue;
+    const key = match[1].trim();
+    let value = match[2].trim();
+    // Remove surrounding quotes if present
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    // Only set if not already in environment (env vars take precedence)
+    if (!(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+  console.log('[Pronghorn] Loaded configuration from .run file');
+}
+loadRunConfig();
 
 // Dynamic import for ESM modules
 let supabase = null;
@@ -1980,12 +2008,12 @@ async function main() {
   console.log('');
 
   if (!CONFIG.supabaseUrl || !CONFIG.supabaseAnonKey) {
-    console.error('[Pronghorn] Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env');
+    console.error('[Pronghorn] Missing SUPABASE_URL or SUPABASE_ANON_KEY in .run');
     process.exit(1);
   }
   
   if (!CONFIG.repoId) {
-    console.error('[Pronghorn] Missing PRONGHORN_REPO_ID in .env');
+    console.error('[Pronghorn] Missing PRONGHORN_REPO_ID in .run');
     process.exit(1);
   }
 
@@ -2074,14 +2102,14 @@ npm start
 \`\`\`bash
 git clone https://github.com/pronghorn-red/pronghorn-runner.git
 cd pronghorn-runner
-# Download your .env from Pronghorn and place it here
+# Download your .run from Pronghorn and place it here
 npm install
 npm start
 \`\`\`
 
 ## ⚙️ Configuration
 
-All configuration is in the \`.env\` file. Key settings:
+All configuration is in the \`.run\` file (same format as .env, different name to avoid conflicts). Key settings:
 
 ### Runtime Configuration
 \`\`\`env
@@ -2156,11 +2184,11 @@ ${repo ? `| Repository | https://github.com/${repo.organization}/${repo.repo} |`
 Run \`npm install\` in this directory.
 
 ### Files not syncing
-1. Check \`PRONGHORN_SHARE_TOKEN\` is set in \`.env\`
+1. Check \`PRONGHORN_SHARE_TOKEN\` is set in \`.run\`
 2. Ensure \`PRONGHORN_REPO_ID\` is correct
 
 ### Port already in use
-Change \`APP_PORT\` in your \`.env\` file.
+Change \`APP_PORT\` in your \`.run\` file.
 
 ---
 Generated by Pronghorn.RED - Real-Time Development Platform
