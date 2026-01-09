@@ -541,6 +541,84 @@ let knownStagedFiles = new Map();
 let stagingSyncTimer = null;
 const STAGING_DEBOUNCE_MS = 150;
 
+// .runignore patterns (loaded at startup)
+let runIgnorePatterns = [];
+
+// ============================================
+// .runignore FILE SUPPORT
+// ============================================
+
+function loadRunIgnore(filePath = '.runignore') {
+  const absolutePath = path.resolve(process.cwd(), filePath);
+  if (!fs.existsSync(absolutePath)) {
+    console.log('[Pronghorn] No .runignore file found, using defaults only');
+    return [];
+  }
+  
+  const patterns = [];
+  const content = fs.readFileSync(absolutePath, 'utf8');
+  
+  for (const line of content.split('\\n')) {
+    const trimmed = line.trim();
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    patterns.push(trimmed);
+  }
+  
+  console.log(\`[Pronghorn] Loaded \${patterns.length} patterns from .runignore\`);
+  return patterns;
+}
+
+// Convert .runignore patterns to glob patterns for chokidar
+function convertToGlobPatterns(patterns) {
+  return patterns.map(pattern => {
+    // If pattern starts with /, it's relative to APP_DIR
+    if (pattern.startsWith('/')) {
+      return \`**\${pattern}/**\`;
+    }
+    // If pattern ends with /, it's a directory
+    if (pattern.endsWith('/')) {
+      return \`**\${pattern}**\`;
+    }
+    // Otherwise, match anywhere
+    return \`**/\${pattern}\`;
+  });
+}
+
+// Check if a file path should be ignored
+function isPathIgnored(relativePath) {
+  if (!relativePath) return false;
+  
+  // Normalize to forward slashes
+  const normalized = relativePath.replace(/\\\\/g, '/');
+  
+  for (const pattern of runIgnorePatterns) {
+    // Simple pattern matching
+    const cleanPattern = pattern.replace(/^\\//, '').replace(/\\/$/, '');
+    
+    // Exact match
+    if (normalized === cleanPattern) return true;
+    
+    // Directory match (pattern matches start of path)
+    if (normalized.startsWith(cleanPattern + '/')) return true;
+    
+    // Pattern is within path
+    if (normalized.includes('/' + cleanPattern + '/')) return true;
+    if (normalized.includes('/' + cleanPattern)) return true;
+    
+    // Glob-style matching with *
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\\*/g, '.*').replace(/\\//g, '\\\\/') + '$');
+      if (regex.test(normalized)) return true;
+    }
+  }
+  
+  return false;
+}
+
+// Initialize runignore patterns
+runIgnorePatterns = loadRunIgnore();
+
 // ============================================
 // SUPABASE CLIENT INITIALIZATION
 // ============================================
@@ -666,7 +744,7 @@ async function fetchAllFiles() {
       console.error('[Pronghorn] Error fetching repo files:', filesError.message);
     } else if (repoFiles) {
       repoFiles.forEach(f => {
-        if (!f.is_binary) {
+        if (!f.is_binary && !isPathIgnored(f.path)) {
           files.push({ path: f.path, content: f.content, source: 'files' });
         }
       });
@@ -684,6 +762,9 @@ async function fetchAllFiles() {
       console.error('[Pronghorn] Error fetching staging:', stagingError.message);
     } else if (stagedFiles) {
       stagedFiles.forEach(f => {
+        // Skip ignored paths
+        if (isPathIgnored(f.file_path)) return;
+        
         if (f.operation_type === 'delete') {
           // Mark for deletion
           const idx = files.findIndex(existing => existing.path === f.file_path);
@@ -878,6 +959,12 @@ async function syncStagingToLocal() {
     
     // Process all staged files
     for (const staged of (stagedFiles || [])) {
+      // Skip ignored paths from .runignore
+      if (isPathIgnored(staged.file_path)) {
+        console.log(\`[Pronghorn] Skipping ignored path: \${staged.file_path}\`);
+        continue;
+      }
+      
       currentStagedPaths.add(staged.file_path);
       const fullPath = path.join(APP_DIR, staged.file_path);
       const dirPath = path.dirname(fullPath);
@@ -1178,18 +1265,27 @@ async function setupLocalFileWatcher() {
   
   const chokidar = require('chokidar');
   
+  // Build ignored patterns array: defaults + .runignore patterns
+  const defaultIgnored = [
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/.cache/**',
+    '**/coverage/**',
+    '**/__pycache__/**',
+    '**/target/**',
+    '**/*.log',
+  ];
+  
+  // Add .runignore patterns converted to glob format
+  const customIgnored = convertToGlobPatterns(runIgnorePatterns);
+  const allIgnored = [...defaultIgnored, ...customIgnored];
+  
+  console.log(\`[Pronghorn] File watcher ignoring \${allIgnored.length} patterns\`);
+  
   localFileWatcher = chokidar.watch(APP_DIR, {
-    ignored: [
-      '**/node_modules/**',
-      '**/.git/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/.cache/**',
-      '**/coverage/**',
-      '**/__pycache__/**',
-      '**/target/**',
-      '**/*.log',
-    ],
+    ignored: allIgnored,
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: {
@@ -1201,6 +1297,7 @@ async function setupLocalFileWatcher() {
   localFileWatcher.on('add', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
     if (isBinaryFile(fullPath)) return;
+    if (isPathIgnored(relativePath)) return; // Check .runignore
     const content = fs.readFileSync(fullPath, 'utf8');
     await pushLocalChangeToCloud(relativePath, 'add', content);
   });
@@ -1208,12 +1305,14 @@ async function setupLocalFileWatcher() {
   localFileWatcher.on('change', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
     if (isBinaryFile(fullPath)) return;
+    if (isPathIgnored(relativePath)) return; // Check .runignore
     const content = fs.readFileSync(fullPath, 'utf8');
     await pushLocalChangeToCloud(relativePath, 'edit', content);
   });
   
   localFileWatcher.on('unlink', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
+    if (isPathIgnored(relativePath)) return; // Check .runignore
     await pushLocalChangeToCloud(relativePath, 'delete', null);
   });
   
@@ -2154,6 +2253,22 @@ INSTALL_COMMAND=npm install
 1. Watches \`./app/\` for file changes
 2. Automatically pushes edits to Pronghorn staging
 3. Binary files are skipped
+
+### .runignore (Ignore File Sync)
+Create a \`.runignore\` file to exclude paths from sync (same syntax as .gitignore):
+
+\`\`\`
+# Example .runignore
+background/logs/
+*.log
+.cache/
+temp/
+\`\`\`
+
+This prevents files matching these patterns from:
+- Being synced FROM cloud TO local
+- Being pushed FROM local TO cloud
+- Causing continuous sync loops (e.g., log files)
 
 ### Project Data Export (Enabled by Default)
 When \`SYNC_PROJECT_DATA=true\`:
