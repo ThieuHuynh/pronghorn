@@ -50,6 +50,16 @@ interface GeneratedSlide {
   imagePrompt?: string;
 }
 
+// NEW: Slide outline for incremental generation
+interface SlideOutline {
+  order: number;
+  layoutId: string;
+  title: string;
+  purpose: string;
+  imagePrompt?: string;
+  keyContent: string[];
+}
+
 // Generate unique ID
 function generateId(): string {
   return crypto.randomUUID();
@@ -168,91 +178,293 @@ async function generateSlideImage(
   }
 }
 
-// Grok structured output schema for presentation slides
-function getGrokSlideSchema() {
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: "presentation_slides",
-      strict: true,
-      schema: {
-        type: "object",
-        properties: {
-          slides: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                order: { type: "integer" },
-                layoutId: { type: "string" },
-                title: { type: "string" },
-                subtitle: { type: "string" },
-                content: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      regionId: { type: "string" },
-                      type: { type: "string" },
-                      data: { type: "object" },
-                    },
-                    required: ["regionId", "type", "data"],
-                  },
-                },
-                notes: { type: "string" },
-              },
-              required: ["id", "order", "layoutId", "title", "content"],
-            },
-          },
-        },
-        required: ["slides"],
-      },
-    },
+// Get layout regions for a specific layout
+function getLayoutRegions(layoutId: string): string {
+  const layoutRegions: Record<string, string> = {
+    "title-cover": "background(image), title(heading), subtitle(text), date(text)",
+    "section-divider": "section-number(heading), title(heading), subtitle(text)",
+    "title-content": "title(heading), content(richtext)",
+    "two-column": "title(heading), left-content(richtext), right-content(richtext)",
+    "image-left": "title(heading), image(image), content(richtext)",
+    "image-right": "title(heading), content(richtext), image(image)",
+    "stats-grid": "title(heading), stat-1(stat), stat-2(stat), stat-3(stat), stat-4(stat)",
+    "bullets": "title(heading), bullets(bullets)",
+    "quote": "quote(text), attribution(text)",
+    "architecture": "title(heading), diagram(image)",
+    "comparison": "title(heading), left-header(heading), right-header(heading), left-content(bullets), right-content(bullets)",
+    "timeline": "title(heading), timeline(timeline)",
+    "icon-grid": "title(heading), subtitle(text), grid(icon-grid)",
+    "table": "title(heading), table(table)",
+    "chart-full": "title(heading), chart(chart)",
   };
+  return layoutRegions[layoutId] || "title(heading), content(richtext)";
 }
 
-// Claude tool for structured slide output
-function getClaudeSlideTool() {
-  return {
-    name: "generate_slides",
-    description: "Generate presentation slides with structured content. You MUST use this tool to return slides.",
-    input_schema: {
-      type: "object",
-      properties: {
-        slides: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string", description: "Unique slide ID" },
-              order: { type: "integer", description: "Slide order (1-based)" },
-              layoutId: {
-                type: "string",
-                enum: ["title-cover", "section-divider", "title-content", "two-column", "image-left", "image-right", "stats-grid", "chart-full", "table", "bullets", "quote", "architecture", "comparison", "timeline", "icon-grid"],
-              },
-              title: { type: "string" },
-              subtitle: { type: "string" },
-              content: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    regionId: { type: "string" },
-                    type: { type: "string", enum: ["heading", "text", "bullets", "image", "stat", "chart", "table", "timeline", "icon-grid", "richtext"] },
-                    data: { type: "object" },
-                  },
-                  required: ["regionId", "type", "data"],
-                },
-              },
-              notes: { type: "string" },
-            },
-            required: ["id", "order", "layoutId", "title", "content"],
-          },
+// Get relevant blackboard data for a specific slide
+function getRelevantDataForSlide(
+  outline: SlideOutline,
+  blackboard: BlackboardEntry[],
+  collectedData: Record<string, any>
+): string {
+  const lowerPurpose = outline.purpose.toLowerCase();
+  const lowerTitle = outline.title.toLowerCase();
+  
+  // Find related blackboard entries
+  const relevantEntries = blackboard.filter(e => {
+    const lowerContent = e.content.toLowerCase();
+    return (
+      outline.keyContent.some(kc => lowerContent.includes(kc.toLowerCase())) ||
+      lowerContent.includes(lowerTitle) ||
+      lowerContent.includes(lowerPurpose)
+    );
+  });
+
+  const parts: string[] = [];
+  
+  // Add relevant blackboard entries
+  if (relevantEntries.length > 0) {
+    parts.push("RELATED INSIGHTS:");
+    parts.push(...relevantEntries.slice(0, 5).map(e => `- [${e.category}] ${e.content}`));
+  }
+
+  // Add specific data based on slide purpose
+  if (lowerPurpose.includes("requirement") || lowerTitle.includes("requirement")) {
+    const reqs = (collectedData.requirements || []).filter((r: any) => !r.parent_id).slice(0, 8);
+    if (reqs.length > 0) {
+      parts.push("\nKEY REQUIREMENTS:");
+      parts.push(...reqs.map((r: any) => `- ${r.code || ""} ${r.title}: ${(r.content || "").slice(0, 100)}`));
+    }
+  }
+
+  if (lowerPurpose.includes("architecture") || lowerTitle.includes("architecture")) {
+    const nodes = (collectedData.canvas?.nodes || []).slice(0, 10);
+    if (nodes.length > 0) {
+      parts.push("\nARCHITECTURE COMPONENTS:");
+      parts.push(...nodes.map((n: any) => `- ${n.type}: ${n.data?.label || n.data?.title || "Unnamed"}`));
+    }
+  }
+
+  if (lowerPurpose.includes("status") || lowerPurpose.includes("metric") || lowerTitle.includes("status")) {
+    parts.push("\nPROJECT METRICS:");
+    parts.push(`- Requirements: ${collectedData.requirements?.length || 0}`);
+    parts.push(`- Architecture Components: ${collectedData.canvas?.nodes?.length || 0}`);
+    parts.push(`- Code Files: ${collectedData.repoStructure?.files?.length || 0}`);
+    parts.push(`- Specifications: ${collectedData.specifications?.length || 0}`);
+    parts.push(`- Deployments: ${collectedData.deployments?.length || 0}`);
+  }
+
+  return parts.join("\n") || "Use the slide purpose and key content to create relevant material.";
+}
+
+// Generate slide outline (fast, low tokens)
+async function generateSlideOutline(
+  blackboard: BlackboardEntry[],
+  targetSlides: number,
+  collectedData: Record<string, any>,
+  mode: string,
+  apiKey: string,
+  initialPrompt?: string
+): Promise<SlideOutline[]> {
+  const projectName = collectedData.settings?.name || "Project";
+  const projectDesc = collectedData.settings?.description || "";
+  
+  const reqCount = collectedData.requirements?.length || 0;
+  const nodeCount = collectedData.canvas?.nodes?.length || 0;
+  const fileCount = collectedData.repoStructure?.files?.length || 0;
+  
+  // Build concise blackboard summary
+  const insightSummary = blackboard
+    .filter(e => e.category === "insight" || e.category === "narrative" || e.category === "analysis")
+    .slice(0, 15)
+    .map(e => `- ${e.content}`)
+    .join("\n");
+
+  const outlinePrompt = `Create a slide outline for a ${mode} presentation about "${projectName}".
+
+PROJECT: ${projectName}
+DESCRIPTION: ${projectDesc}
+STATS: ${reqCount} requirements, ${nodeCount} architecture components, ${fileCount} code files
+
+KEY INSIGHTS:
+${insightSummary}
+
+${initialPrompt ? `USER FOCUS: ${initialPrompt}\n` : ""}
+
+Generate exactly ${targetSlides} slide outlines as a JSON array. Each slide should have:
+- order: slide number (1 to ${targetSlides})
+- layoutId: one of [title-cover, section-divider, title-content, two-column, image-left, image-right, stats-grid, bullets, quote, architecture, comparison, timeline, icon-grid]
+- title: compelling slide title
+- purpose: 1-sentence description of what this slide communicates
+- keyContent: array of 2-4 key points to include
+- imagePrompt: (optional) for image layouts, describe the visual
+
+REQUIRED STRUCTURE:
+1. Cover slide (title-cover)
+2. Executive Summary (quote or title-content)
+3. Overview/Goals (bullets or image-right)
+4-7. Core content slides about requirements, architecture, status
+8-9. Challenges and opportunities
+10. Next steps/roadmap (timeline)
+
+For detailed mode, add section dividers between major topics.
+
+Use image layouts (image-left, image-right, architecture) for at least 30% of slides.
+
+Return ONLY a JSON array, no markdown fences, no explanation.`;
+
+  console.log("Generating slide outline with Gemini...");
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: "You are a presentation structure expert. Return only valid JSON arrays with no markdown." }],
         },
-      },
-      required: ["slides"],
-    },
+        contents: [{ role: "user", parts: [{ text: outlinePrompt }] }],
+        generationConfig: {
+          maxOutputTokens: 3000,
+          temperature: 0.5,
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Outline generation failed:", response.status, errorText);
+    throw new Error(`Outline generation failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const parsed = parseAgentResponseText(text);
+
+  if (!Array.isArray(parsed)) {
+    console.error("Outline is not an array:", parsed);
+    throw new Error("Invalid outline format");
+  }
+
+  console.log(`✅ Generated outline with ${parsed.length} slides`);
+  return parsed as SlideOutline[];
+}
+
+// Generate a single slide from outline (fast, targeted)
+async function generateSingleSlide(
+  outline: SlideOutline,
+  blackboard: BlackboardEntry[],
+  collectedData: Record<string, any>,
+  allOutlines: SlideOutline[],
+  apiKey: string
+): Promise<GeneratedSlide> {
+  const contextData = getRelevantDataForSlide(outline, blackboard, collectedData);
+  const projectName = collectedData.settings?.name || "Project";
+
+  const slidePrompt = `Generate slide ${outline.order}/${allOutlines.length} for "${projectName}".
+
+SLIDE SPEC:
+- Title: "${outline.title}"
+- Layout: ${outline.layoutId}
+- Purpose: ${outline.purpose}
+- Key points: ${outline.keyContent.join("; ")}
+${outline.imagePrompt ? `- Image: ${outline.imagePrompt}` : ""}
+
+CONTEXT (prev slides): ${allOutlines.slice(0, outline.order - 1).map(o => `${o.order}. ${o.title}`).join(" | ")}
+
+LAYOUT REGIONS: ${getLayoutRegions(outline.layoutId)}
+
+${contextData}
+
+Generate a complete slide JSON object with:
+- id: "${generateId()}"
+- order: ${outline.order}
+- layoutId: "${outline.layoutId}"
+- title: "${outline.title}"
+- content: array of content blocks (regionId, type, data)
+- notes: 2-3 sentence speaker notes
+${outline.imagePrompt ? `- imagePrompt: "${outline.imagePrompt}"` : ""}
+
+CONTENT BLOCK TYPES (use MARKDOWN, never HTML):
+- "heading": { text: string, level: 1|2|3 }
+- "text": { text: string } - use **bold** and *italic*
+- "richtext": { text: string } - full markdown
+- "bullets": { items: [{ title: string, description: string }] }
+- "stat": { value: string, label: string }
+- "timeline": { steps: [{ title: string, description: string }] }
+- "icon-grid": { items: [{ icon: string, title: string, description: string }] }
+- "image": { url: "", alt: string }
+
+CRITICAL: Use exact regionIds from layout. For bullets use {regionId:"bullets"}, for stats use {regionId:"stat-1"}, etc.
+FORBIDDEN: <b>, <ul>, <li>, <p>, <br>, any HTML tags
+
+Return ONLY the JSON object for this single slide.`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: "You generate professional presentation slides as JSON. Return only valid JSON objects, no markdown fences." }],
+        },
+        contents: [{ role: "user", parts: [{ text: slidePrompt }] }],
+        generationConfig: {
+          maxOutputTokens: 1500,
+          temperature: 0.7,
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Slide ${outline.order} generation failed:`, response.status, errorText);
+    throw new Error(`Slide generation failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const parsed = parseAgentResponseText(text);
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid slide format");
+  }
+
+  // Ensure required fields
+  const slide: GeneratedSlide = {
+    id: parsed.id || generateId(),
+    order: outline.order,
+    layoutId: outline.layoutId,
+    title: parsed.title || outline.title,
+    content: Array.isArray(parsed.content) ? parsed.content : [],
+    notes: parsed.notes || outline.purpose,
+    imagePrompt: outline.imagePrompt || parsed.imagePrompt,
+  };
+
+  if (parsed.subtitle) slide.subtitle = parsed.subtitle;
+
+  return slide;
+}
+
+// Create fallback slide from outline
+function createFallbackSlide(outline: SlideOutline): GeneratedSlide {
+  return {
+    id: generateId(),
+    order: outline.order,
+    layoutId: outline.layoutId,
+    title: outline.title,
+    content: [{
+      regionId: "content",
+      type: "richtext",
+      data: { text: outline.keyContent.map(kc => `**${kc}**`).join("\n\n") }
+    }],
+    notes: outline.purpose,
+    imagePrompt: outline.imagePrompt,
   };
 }
 
@@ -269,6 +481,7 @@ serve(async (req) => {
         const authHeader = req.headers.get("authorization");
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+        const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
 
         const supabase = createClient(supabaseUrl, supabaseKey, {
           global: {
@@ -290,38 +503,8 @@ serve(async (req) => {
           p_status: "generating",
         });
 
-        // Get project settings for model selection
-        const { data: project, error: projectError } = await supabase.rpc("get_project_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken,
-        });
-
-        if (projectError) throw projectError;
-
-        const selectedModel = project.selected_model || "gemini-2.5-flash";
-        const maxTokens = project.max_tokens || 32768;
-
-        console.log(`Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
-
-        // Select API key based on model
-        let apiKey: string;
-        let apiEndpoint: string;
-
-        if (selectedModel.startsWith("gemini")) {
-          apiKey = Deno.env.get("GEMINI_API_KEY")!;
-          apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
-        } else if (selectedModel.startsWith("claude")) {
-          apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
-          apiEndpoint = "https://api.anthropic.com/v1/messages";
-        } else if (selectedModel.startsWith("grok")) {
-          apiKey = Deno.env.get("XAI_API_KEY")!;
-          apiEndpoint = "https://api.x.ai/v1/chat/completions";
-        } else {
-          throw new Error(`Unsupported model: ${selectedModel}`);
-        }
-
-        if (!apiKey) {
-          throw new Error(`API key not configured for model: ${selectedModel}`);
+        if (!geminiKey) {
+          throw new Error("GEMINI_API_KEY is not configured");
         }
 
         const blackboard: BlackboardEntry[] = [];
@@ -436,47 +619,28 @@ serve(async (req) => {
                 data: { topLevel: topLevel.length, nested: nested.length, decompositionRatio },
               }));
 
-              // Analyze by category/priority if available
-              const categories: Record<string, number> = {};
-              const priorities: Record<string, number> = {};
-              topLevel.forEach((r: any) => {
-                if (r.category) categories[r.category] = (categories[r.category] || 0) + 1;
-                if (r.priority) priorities[r.priority] = (priorities[r.priority] || 0) + 1;
-              });
-
-              if (Object.keys(categories).length > 0) {
-                entries.push(await addToBlackboard({
-                  source: "read_requirements",
-                  category: "insight",
-                  content: `Requirements span ${Object.keys(categories).length} categories: ${Object.entries(categories).map(([k, v]) => `${k} (${v})`).join(", ")}. This distribution reveals project focus areas.`,
-                  data: { categories },
-                }));
-              }
-
               // Extract key requirements for narrative
-              const keyReqs = topLevel.slice(0, 8).map((r: any) => ({
-                title: r.title,
+              const keyReqs = topLevel.slice(0, 6).map((r: { code?: string; title?: string; content?: string }) => ({
                 code: r.code,
-                content: r.content?.slice(0, 200),
+                title: r.title,
+                content: (r.content || "").slice(0, 200),
               }));
 
               entries.push(await addToBlackboard({
                 source: "read_requirements",
                 category: "narrative",
-                content: `Key requirements to highlight: ${keyReqs.map((r: any) => r.code ? `${r.code}: ${r.title}` : r.title).join("; ")}. These form the core value proposition.`,
+                content: `Key requirements to highlight: ${keyReqs.map((r: any) => `${r.code}: ${r.title}`).join("; ")}. These form the core value proposition.`,
                 data: { keyRequirements: keyReqs },
               }));
 
-              // Detailed content analysis for each major requirement
-              for (const req of topLevel.slice(0, 5)) {
-                if (req.content && req.content.length > 50) {
-                  entries.push(await addToBlackboard({
-                    source: "read_requirements",
-                    category: "insight",
-                    content: `${req.code || req.title}: ${req.content.slice(0, 300)}${req.content.length > 300 ? "..." : ""}`,
-                    data: { requirementId: req.id, title: req.title },
-                  }));
-                }
+              // Add insight for each key requirement
+              for (const req of keyReqs.slice(0, 5)) {
+                entries.push(await addToBlackboard({
+                  source: "read_requirements",
+                  category: "insight",
+                  content: `${req.code}: ${req.content || req.title}`,
+                  data: { requirementId: req.code, title: req.title },
+                }));
               }
             }
 
@@ -486,9 +650,9 @@ serve(async (req) => {
           }
         };
 
-        // Tool: Read Artifacts with deep analysis
+        // Tool: Read Artifacts
         const readArtifacts = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_artifacts", message: "Analyzing artifacts and documentation..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_artifacts", message: "Scanning project artifacts..." })));
 
           try {
             const { data: artifacts, error } = await supabase.rpc("get_artifacts_with_token", {
@@ -504,51 +668,36 @@ serve(async (req) => {
             entries.push(await addToBlackboard({
               source: "read_artifacts",
               category: "observation",
-              content: `Documentation inventory: ${arts.length} artifacts. ${arts.length === 0 ? "No supporting documentation found - presentation must synthesize from other sources." : "Rich documentation provides narrative material."}`,
+              content: `Documentation inventory: ${arts.length} artifacts. ${arts.length === 0 ? "No artifacts uploaded yet." : "Rich documentation provides narrative material."}`,
               data: { count: arts.length },
             }));
 
             if (arts.length > 0) {
-              const withImages = arts.filter((a: any) => a.image_url);
-              const withSummaries = arts.filter((a: any) => a.ai_summary);
-              const withTitles = arts.filter((a: any) => a.ai_title);
+              const withImages = arts.filter((a: any) => a.image_url).length;
+              const withSummaries = arts.filter((a: any) => a.ai_summary).length;
+              const titled = arts.filter((a: any) => a.ai_title).length;
 
               entries.push(await addToBlackboard({
                 source: "read_artifacts",
                 category: "observation",
-                content: `Artifact composition: ${withImages.length} include images (visual assets for slides), ${withSummaries.length} have AI summaries (pre-analyzed content), ${withTitles.length} have titles.`,
-                data: { images: withImages.length, summaries: withSummaries.length, titled: withTitles.length },
+                content: `Artifact composition: ${withImages} include images (visual assets for slides), ${withSummaries} have AI summaries (pre-analyzed content), ${titled} have titles.`,
+                data: { images: withImages, summaries: withSummaries, titled },
               }));
 
-              // Collect image URLs for potential use
-              if (withImages.length > 0) {
-                const imageAssets = withImages.slice(0, 10).map((a: any) => ({
-                  url: a.image_url,
-                  title: a.ai_title || "Untitled",
-                }));
-                entries.push(await addToBlackboard({
-                  source: "read_artifacts",
-                  category: "decision",
-                  content: `Available visual assets for presentation: ${imageAssets.map((i: any) => i.title).join(", ")}. These can enhance slide visual impact.`,
-                  data: { imageAssets },
-                }));
-              }
-
-              // Analyze content themes
-              for (const art of arts.slice(0, 5)) {
+              // Extract key artifacts for slide content
+              for (const art of arts.slice(0, 3)) {
                 if (art.ai_summary) {
                   entries.push(await addToBlackboard({
                     source: "read_artifacts",
                     category: "insight",
-                    content: `${art.ai_title || "Document"}: ${art.ai_summary}`,
+                    content: `${art.ai_title || "Untitled artifact"}: ${art.ai_summary}`,
                     data: { artifactId: art.id, title: art.ai_title },
                   }));
-                } else if (art.content && art.content.length > 100) {
-                  const excerpt = art.content.slice(0, 400);
+                } else if (art.content) {
                   entries.push(await addToBlackboard({
                     source: "read_artifacts",
                     category: "observation",
-                    content: `${art.ai_title || "Untitled artifact"}: ${excerpt}${art.content.length > 400 ? "..." : ""}`,
+                    content: `${art.ai_title || "Untitled artifact"}: ${art.content.slice(0, 300)}...`,
                     data: { artifactId: art.id },
                   }));
                 }
@@ -561,9 +710,36 @@ serve(async (req) => {
           }
         };
 
-        // Tool: Read Canvas with deep architectural analysis
+        // Tool: Read Specifications
+        const readSpecifications = async (): Promise<ToolResult> => {
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_specifications", message: "Reviewing generated specifications..." })));
+
+          try {
+            const { data: specs, error } = await supabase.rpc("get_specifications_with_token", {
+              p_project_id: projectId,
+              p_token: shareToken,
+            });
+
+            if (error) throw error;
+            collectedData.specifications = specs || [];
+            const entries: BlackboardEntry[] = [];
+
+            entries.push(await addToBlackboard({
+              source: "read_specifications",
+              category: "observation",
+              content: `${(specs || []).length} generated specification(s) available. ${(specs || []).length === 0 ? "No formal specs generated yet." : "Formal specifications available for reference."}`,
+              data: { count: (specs || []).length },
+            }));
+
+            return { tool: "read_specifications", success: true, data: specs, blackboardEntries: entries };
+          } catch (error: any) {
+            return { tool: "read_specifications", success: false, error: error.message, blackboardEntries: [] };
+          }
+        };
+
+        // Tool: Read Canvas with architecture analysis
         const readCanvas = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_canvas", message: "Analyzing system architecture..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_canvas", message: "Analyzing architecture canvas..." })));
 
           try {
             const { data: nodes, error: nodesError } = await supabase.rpc("get_canvas_nodes_with_token", {
@@ -577,222 +753,114 @@ serve(async (req) => {
             });
 
             if (nodesError) throw nodesError;
-            if (edgesError) throw edgesError;
-
             collectedData.canvas = { nodes: nodes || [], edges: edges || [] };
             const entries: BlackboardEntry[] = [];
+
             const nodeList = nodes || [];
             const edgeList = edges || [];
 
             entries.push(await addToBlackboard({
               source: "read_canvas",
               category: "observation",
-              content: `Architecture canvas contains ${nodeList.length} components and ${edgeList.length} connections. ${nodeList.length === 0 ? "No architecture diagram exists - technical overview will be limited." : "Visual architecture available for presentation."}`,
+              content: `Architecture canvas contains ${nodeList.length} components and ${edgeList.length} connections. ${nodeList.length === 0 ? "No architecture defined yet." : "Visual architecture available for presentation."}`,
               data: { nodes: nodeList.length, edges: edgeList.length },
             }));
 
             if (nodeList.length > 0) {
-              // Analyze component types
-              const typeGroups: Record<string, any[]> = {};
+              // Analyze node types
+              const nodeTypes: Record<string, number> = {};
               nodeList.forEach((n: any) => {
-                const type = n.type || "unknown";
-                if (!typeGroups[type]) typeGroups[type] = [];
-                typeGroups[type].push(n);
+                nodeTypes[n.type] = (nodeTypes[n.type] || 0) + 1;
               });
-
-              const typeSummary = Object.entries(typeGroups)
-                .map(([t, items]) => `${items.length} ${t}${items.length > 1 ? "s" : ""}`)
-                .join(", ");
 
               entries.push(await addToBlackboard({
                 source: "read_canvas",
                 category: "analysis",
-                content: `Architecture composition: ${typeSummary}. This reveals the system's structural paradigm.`,
-                data: { nodeTypes: Object.fromEntries(Object.entries(typeGroups).map(([k, v]) => [k, v.length])) },
+                content: `Architecture composition: ${Object.entries(nodeTypes).map(([t, c]) => `${c} ${t}`).join(", ")}. This reveals the system's structural paradigm.`,
+                data: { nodeTypes },
               }));
 
-              // Analyze connectivity patterns
-              if (edgeList.length > 0) {
-                const connectivity = edgeList.length / nodeList.length;
-                const inDegree: Record<string, number> = {};
-                const outDegree: Record<string, number> = {};
+              // Connectivity analysis
+              const connectivity = edgeList.length / Math.max(nodeList.length, 1);
+              entries.push(await addToBlackboard({
+                source: "read_canvas",
+                category: "insight",
+                content: `Connectivity analysis: ${connectivity.toFixed(2)} connections per component. ${connectivity > 2 ? "Highly interconnected system." : connectivity > 1 ? "Moderate coupling indicates balanced architecture." : "Loosely coupled components suggest microservices or modular design."}`,
+                data: { connectivity },
+              }));
 
-                edgeList.forEach((e: any) => {
-                  outDegree[e.source_id] = (outDegree[e.source_id] || 0) + 1;
-                  inDegree[e.target_id] = (inDegree[e.target_id] || 0) + 1;
-                });
-
-                const maxInDegree = Math.max(...Object.values(inDegree), 0);
-                const maxOutDegree = Math.max(...Object.values(outDegree), 0);
-
-                entries.push(await addToBlackboard({
-                  source: "read_canvas",
-                  category: "insight",
-                  content: `Connectivity analysis: ${connectivity.toFixed(2)} connections per component. ${connectivity > 2 ? "Highly interconnected system suggests complex integration." : connectivity > 1 ? "Moderate coupling indicates balanced architecture." : "Loosely coupled - may indicate modular design or incomplete modeling."}`,
-                  data: { connectivity, maxInDegree, maxOutDegree },
-                }));
-              }
-
-              // Extract component details for narrative
-              const componentDetails = nodeList.slice(0, 10).map((n: any) => ({
+              // Extract key components for slides
+              const keyComponents = nodeList.slice(0, 10).map((n: any) => ({
                 type: n.type,
                 label: n.data?.label || n.data?.title || "Unnamed",
-                description: n.data?.description || n.data?.content?.slice(0, 100),
+                description: n.data?.description || "",
               }));
 
               entries.push(await addToBlackboard({
                 source: "read_canvas",
                 category: "narrative",
-                content: `Key architectural components: ${componentDetails.map((c: any) => `${c.label} (${c.type})`).join(", ")}. These form the system's backbone.`,
-                data: { components: componentDetails },
+                content: `Key architectural components: ${keyComponents.map((c: any) => `${c.label} (${c.type})`).join(", ")}. These form the system's backbone.`,
+                data: { components: keyComponents },
               }));
             }
 
-            return { tool: "read_canvas", success: true, data: { nodes, edges }, blackboardEntries: entries };
+            return { tool: "read_canvas", success: true, data: collectedData.canvas, blackboardEntries: entries };
           } catch (error: any) {
             return { tool: "read_canvas", success: false, error: error.message, blackboardEntries: [] };
           }
         };
 
-        // Tool: Read Specifications
-        const readSpecifications = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_specifications", message: "Reviewing technical specifications..." })));
-
-          try {
-            const { data: specs, error } = await supabase.rpc("get_project_specifications_with_token", {
-              p_project_id: projectId,
-              p_token: shareToken,
-            });
-
-            if (error) throw error;
-            collectedData.specifications = specs || [];
-            const entries: BlackboardEntry[] = [];
-            const specList = specs || [];
-
-            entries.push(await addToBlackboard({
-              source: "read_specifications",
-              category: "observation",
-              content: `${specList.length} generated specification(s) available. ${specList.length === 0 ? "No formal specs generated yet." : "Technical depth available for detailed slides."}`,
-              data: { count: specList.length },
-            }));
-
-            if (specList.length > 0) {
-              const specTypes = specList.map((s: any) => s.agent_title).filter(Boolean);
-              entries.push(await addToBlackboard({
-                source: "read_specifications",
-                category: "insight",
-                content: `Specification coverage: ${specTypes.join(", ")}. These provide technical depth for architecture and implementation sections.`,
-                data: { specTypes },
-              }));
-
-              // Extract key content from specifications
-              for (const spec of specList.slice(0, 3)) {
-                if (spec.generated_spec) {
-                  const excerpt = spec.generated_spec.slice(0, 500);
-                  entries.push(await addToBlackboard({
-                    source: "read_specifications",
-                    category: "narrative",
-                    content: `${spec.agent_title || "Specification"} excerpt: ${excerpt}${spec.generated_spec.length > 500 ? "..." : ""}`,
-                    data: { specId: spec.id },
-                  }));
-                }
-              }
-            }
-
-            return { tool: "read_specifications", success: true, data: specs, blackboardEntries: entries };
-          } catch (error: any) {
-            return { tool: "read_specifications", success: false, error: error.message, blackboardEntries: [] };
-          }
-        };
-
-        // Tool: Read Repository Structure
+        // Tool: Read Repo Structure
         const readRepoStructure = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_repo_structure", message: "Analyzing codebase structure..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_repo", message: "Scanning code repositories..." })));
 
           try {
-            const { data: repos, error: reposError } = await supabase.rpc("get_project_repos_with_token", {
+            const { data: repos, error: reposError } = await supabase.rpc("get_repos_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
 
             if (reposError) throw reposError;
 
-            const entries: BlackboardEntry[] = [];
-            let allFiles: any[] = [];
-
-            for (const repo of (repos || [])) {
+            const allFiles: any[] = [];
+            for (const repo of repos || []) {
               const { data: files } = await supabase.rpc("get_repo_files_with_token", {
                 p_repo_id: repo.id,
                 p_token: shareToken,
               });
-              if (files) {
-                allFiles = allFiles.concat(files.map((f: any) => ({ ...f, repo: repo.repo })));
-              }
+              if (files) allFiles.push(...files);
             }
 
             collectedData.repoStructure = { repos: repos || [], files: allFiles };
+            const entries: BlackboardEntry[] = [];
 
             entries.push(await addToBlackboard({
               source: "read_repo_structure",
               category: "observation",
-              content: `Codebase inventory: ${repos?.length || 0} repositories containing ${allFiles.length} files. ${allFiles.length === 0 ? "No code committed yet - project in planning phase." : "Active development with trackable progress."}`,
-              data: { repoCount: repos?.length || 0, fileCount: allFiles.length },
+              content: `Codebase inventory: ${(repos || []).length} repositories containing ${allFiles.length} files. ${allFiles.length === 0 ? "No code files yet - project is in planning phase." : "Active development with trackable progress."}`,
+              data: { repoCount: (repos || []).length, fileCount: allFiles.length },
             }));
 
             if (allFiles.length > 0) {
-              // Analyze directory structure
-              const dirs = new Set(allFiles.map((f: any) => f.path.split("/").slice(0, -1).join("/")));
+              // Analyze file types
               const extensions: Record<string, number> = {};
+              const directories = new Set<string>();
               allFiles.forEach((f: any) => {
-                const ext = f.path.split(".").pop() || "no-ext";
+                const ext = f.path?.split(".").pop() || "unknown";
                 extensions[ext] = (extensions[ext] || 0) + 1;
+                const dir = f.path?.split("/").slice(0, -1).join("/");
+                if (dir) directories.add(dir);
               });
-
-              const sortedExts = Object.entries(extensions)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5);
 
               entries.push(await addToBlackboard({
                 source: "read_repo_structure",
                 category: "analysis",
-                content: `Code organization: ${dirs.size} directories. Primary languages/formats: ${sortedExts.map(([e, c]) => `${e} (${c} files)`).join(", ")}. This indicates technology choices and project scope.`,
-                data: { directories: dirs.size, extensions },
-              }));
-
-              // Framework detection
-              const hasPackageJson = allFiles.some((f: any) => f.path === "package.json");
-              const hasRequirements = allFiles.some((f: any) => f.path === "requirements.txt");
-              const hasSrc = allFiles.some((f: any) => f.path.startsWith("src/"));
-              const hasComponents = allFiles.some((f: any) => f.path.includes("/components/"));
-              const hasTests = allFiles.some((f: any) => f.path.includes("test") || f.path.includes("spec"));
-
-              const techIndicators = [
-                hasPackageJson && "Node.js/JavaScript",
-                hasRequirements && "Python",
-                hasComponents && "Component-based UI",
-                hasTests && "Test coverage",
-              ].filter(Boolean);
-
-              entries.push(await addToBlackboard({
-                source: "read_repo_structure",
-                category: "insight",
-                content: `Technology stack indicators: ${techIndicators.join(", ") || "Technology stack not clearly identifiable from file structure"}. ${hasSrc ? "Standard src/ organization." : ""} ${hasTests ? "Testing infrastructure in place." : "No visible test infrastructure."}`,
-                data: { hasPackageJson, hasRequirements, hasSrc, hasComponents, hasTests },
-              }));
-
-              // Lines of code estimate
-              const codeFiles = allFiles.filter((f: any) => 
-                ["ts", "tsx", "js", "jsx", "py", "java", "go", "rs", "cpp", "c", "cs"].includes(f.path.split(".").pop() || "")
-              );
-              entries.push(await addToBlackboard({
-                source: "read_repo_structure",
-                category: "estimate",
-                content: `Source code files: ${codeFiles.length} code files detected across ${sortedExts[0]?.[0] || "various"} and related languages. Implementation effort is ${codeFiles.length < 20 ? "early stage" : codeFiles.length < 100 ? "moderate" : "substantial"}.`,
-                data: { codeFileCount: codeFiles.length },
+                content: `Code organization: ${directories.size} directories. Primary languages/formats: ${Object.entries(extensions).slice(0, 5).map(([e, c]) => `${e} (${c} files)`).join(", ")}. This indicates technology choices and project scope.`,
+                data: { extensions, directories: directories.size },
               }));
             }
 
-            return { tool: "read_repo_structure", success: true, data: { repos, files: allFiles }, blackboardEntries: entries };
+            return { tool: "read_repo_structure", success: true, data: collectedData.repoStructure, blackboardEntries: entries };
           } catch (error: any) {
             return { tool: "read_repo_structure", success: false, error: error.message, blackboardEntries: [] };
           }
@@ -800,10 +868,10 @@ serve(async (req) => {
 
         // Tool: Read Databases
         const readDatabases = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_databases", message: "Analyzing database architecture..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_databases", message: "Checking database configurations..." })));
 
           try {
-            const { data: databases, error } = await supabase.rpc("get_project_databases_with_token", {
+            const { data: databases, error } = await supabase.rpc("get_databases_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
@@ -811,26 +879,13 @@ serve(async (req) => {
             if (error) throw error;
             collectedData.databases = databases || [];
             const entries: BlackboardEntry[] = [];
-            const dbs = databases || [];
 
             entries.push(await addToBlackboard({
               source: "read_databases",
               category: "observation",
-              content: `Database infrastructure: ${dbs.length} database(s) configured. ${dbs.length === 0 ? "No database provisioned - data persistence strategy unclear." : "Data tier established."}`,
-              data: { count: dbs.length },
+              content: `Database infrastructure: ${(databases || []).length} database(s) configured. ${(databases || []).length === 0 ? "No databases configured yet." : "Data layer established."}`,
+              data: { count: (databases || []).length },
             }));
-
-            if (dbs.length > 0) {
-              const providers = [...new Set(dbs.map((d: any) => d.provider))];
-              const statuses = dbs.map((d: any) => ({ name: d.name, status: d.status, provider: d.provider }));
-
-              entries.push(await addToBlackboard({
-                source: "read_databases",
-                category: "insight",
-                content: `Database providers: ${providers.join(", ")}. Status breakdown: ${statuses.map((s: any) => `${s.name} (${s.provider}): ${s.status}`).join("; ")}. ${statuses.some((s: any) => s.status === "active" || s.status === "running") ? "Active databases support runtime operations." : "Database deployment may be pending."}`,
-                data: { providers, statuses },
-              }));
-            }
 
             return { tool: "read_databases", success: true, data: databases, blackboardEntries: entries };
           } catch (error: any) {
@@ -838,12 +893,12 @@ serve(async (req) => {
           }
         };
 
-        // Tool: Read External Connections
+        // Tool: Read Connections
         const readConnections = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_connections", message: "Checking external integrations..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_connections", message: "Reviewing external connections..." })));
 
           try {
-            const { data: connections, error } = await supabase.rpc("get_db_connections_with_token", {
+            const { data: connections, error } = await supabase.rpc("get_database_connections_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
@@ -851,24 +906,13 @@ serve(async (req) => {
             if (error) throw error;
             collectedData.connections = connections || [];
             const entries: BlackboardEntry[] = [];
-            const conns = connections || [];
 
             entries.push(await addToBlackboard({
               source: "read_connections",
               category: "observation",
-              content: `External integrations: ${conns.length} connection(s). ${conns.length === 0 ? "No external data sources connected." : "Third-party data integrations configured."}`,
-              data: { count: conns.length },
+              content: `External integrations: ${(connections || []).length} connection(s). ${(connections || []).length === 0 ? "No external data sources connected." : "Integration points established."}`,
+              data: { count: (connections || []).length },
             }));
-
-            if (conns.length > 0) {
-              const connectionNames = conns.map((c: any) => c.name);
-              entries.push(await addToBlackboard({
-                source: "read_connections",
-                category: "insight",
-                content: `Connected systems: ${connectionNames.join(", ")}. These integrations extend the project's data ecosystem.`,
-                data: { connectionNames },
-              }));
-            }
 
             return { tool: "read_connections", success: true, data: connections, blackboardEntries: entries };
           } catch (error: any) {
@@ -878,7 +922,7 @@ serve(async (req) => {
 
         // Tool: Read Deployments
         const readDeployments = async (): Promise<ToolResult> => {
-          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_deployments", message: "Reviewing deployment status..." })));
+          controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_deployments", message: "Checking deployment status..." })));
 
           try {
             const { data: deployments, error } = await supabase.rpc("get_deployments_with_token", {
@@ -894,31 +938,18 @@ serve(async (req) => {
             entries.push(await addToBlackboard({
               source: "read_deployments",
               category: "observation",
-              content: `Deployment configurations: ${deps.length}. ${deps.length === 0 ? "No deployments configured - project not yet production-ready." : "Deployment infrastructure established."}`,
+              content: `Deployment configurations: ${deps.length}. ${deps.length === 0 ? "No deployments configured - project not yet production-ready." : "Deployment pipeline established."}`,
               data: { count: deps.length },
             }));
 
             if (deps.length > 0) {
               const live = deps.filter((d: any) => d.status === "deployed" || d.status === "live" || d.status === "running");
-              const platforms = [...new Set(deps.map((d: any) => d.platform))];
-              const environments = [...new Set(deps.map((d: any) => d.environment))];
-
               entries.push(await addToBlackboard({
                 source: "read_deployments",
                 category: "insight",
-                content: `Deployment landscape: ${live.length}/${deps.length} active deployments across ${platforms.join(", ")}. Environments: ${environments.join(", ")}. ${live.length > 0 ? "Production presence established." : "Deployments configured but not yet live."}`,
-                data: { liveCount: live.length, platforms, environments },
+                content: `${live.length}/${deps.length} deployments are live. ${live.length > 0 ? "Production presence established." : "Deployments configured but not yet live."}`,
+                data: { liveCount: live.length },
               }));
-
-              const liveUrls = deps.filter((d: any) => d.url && (d.status === "deployed" || d.status === "live"));
-              if (liveUrls.length > 0) {
-                entries.push(await addToBlackboard({
-                  source: "read_deployments",
-                  category: "decision",
-                  content: `Live URLs for demonstration: ${liveUrls.map((d: any) => `${d.name}: ${d.url}`).join("; ")}. These can be referenced in presentation materials.`,
-                  data: { liveUrls: liveUrls.map((d: any) => ({ name: d.name, url: d.url })) },
-                }));
-              }
             }
 
             return { tool: "read_deployments", success: true, data: deployments, blackboardEntries: entries };
@@ -941,7 +972,7 @@ serve(async (req) => {
         toolResults.push(await readDeployments());
 
         // ============ SYNTHESIS PHASE ============
-        controller.enqueue(encoder.encode(sseMessage("status", { phase: "synthesis", message: "Synthesizing insights and building narrative..." })));
+        controller.enqueue(encoder.encode(sseMessage("status", { phase: "synthesis", message: "Synthesizing insights..." })));
 
         const reqCount = collectedData.requirements?.length || 0;
         const nodeCount = collectedData.canvas?.nodes?.length || 0;
@@ -964,417 +995,179 @@ serve(async (req) => {
         await addToBlackboard({
           source: "synthesis",
           category: "estimate",
-          content: `Project maturity assessment: ${completionScore}% complete. ${completionScore < 30 ? "Early stage - focus on vision and roadmap." : completionScore < 60 ? "Mid-development - balance current state with future plans." : completionScore < 85 ? "Advanced - emphasize achievements and remaining work." : "Near-complete - highlight results and impact."}`,
+          content: `Project maturity assessment: ${completionScore}% complete. ${completionScore < 30 ? "Early stage - focus on vision and roadmap." : completionScore < 60 ? "Mid-development - balance current state with future plans." : "Advanced - emphasize achievements and remaining work."}`,
           data: {
             completionScore,
             breakdown: { requirements: reqCount, architecture: nodeCount, code: fileCount, specs: specCount, artifacts: artifactCount, databases: dbCount, deployments: deployCount },
           },
         });
 
-        // Generate executive summary
         const projectName = collectedData.settings?.name || "Project";
-        const projectDesc = collectedData.settings?.description || "";
         await addToBlackboard({
           source: "synthesis",
           category: "narrative",
-          content: `Executive Summary (BLUF): ${projectName} ${projectDesc ? `- ${projectDesc}` : ""}. Current status: ${completionScore}% complete with ${reqCount} requirements defined, ${nodeCount} architectural components designed, and ${fileCount} code files implemented.${deployCount > 0 ? ` ${deployCount} deployment(s) configured.` : ""}`,
+          content: `Executive Summary (BLUF): ${projectName}. Current status: ${completionScore}% complete with ${reqCount} requirements defined, ${nodeCount} architectural components designed, and ${fileCount} code files implemented.`,
           data: { type: "bluf" },
         });
 
-        // ============ SLIDE GENERATION WITH LLM ============
-        controller.enqueue(encoder.encode(sseMessage("status", { phase: "generating_slides", message: "Generating rich slide content with AI..." })));
+        // ============ CHECKPOINT: Save blackboard before slide generation ============
+        await supabase.rpc("update_presentation_with_token", {
+          p_presentation_id: presentationId,
+          p_token: shareToken,
+          p_blackboard: blackboard,
+          p_status: "generating_slides",
+        });
 
-        // Prepare comprehensive blackboard summary
-        const blackboardSummary = blackboard.map(e => `[${e.category.toUpperCase()}/${e.source}] ${e.content}`).join("\n\n");
+        // ============ INCREMENTAL SLIDE GENERATION ============
+        controller.enqueue(encoder.encode(sseMessage("status", { 
+          phase: "planning", 
+          message: "Planning slide structure..." 
+        })));
 
-        // Get image URLs from artifacts
-        const availableImages = (collectedData.artifacts || [])
-          .filter((a: any) => a.image_url)
-          .slice(0, 10)
-          .map((a: any) => ({ url: a.image_url, title: a.ai_title || "Image" }));
-
-        const slideGenerationPrompt = `You are creating a professional ${mode} presentation with approximately ${targetSlides} slides.
-
-## PROJECT DATA
-Project Name: ${collectedData.settings?.name || "Untitled Project"}
-Description: ${collectedData.settings?.description || "No description provided"}
-Organization: ${collectedData.settings?.organization || "N/A"}
-
-### Statistics
-- Requirements: ${reqCount} total
-- Architecture Components: ${nodeCount}
-- Code Files: ${fileCount}
-- Specifications: ${specCount}
-- Artifacts: ${artifactCount}
-- Databases: ${dbCount}
-- Deployments: ${deployCount}
-- Completion Estimate: ${completionScore}%
-
-### Key Requirements (if available)
-${(collectedData.requirements || []).filter((r: any) => !r.parent_id).slice(0, 10).map((r: any) => `- ${r.code || ""} ${r.title}: ${(r.content || "").slice(0, 150)}`).join("\n")}
-
-### Architecture Components
-${(collectedData.canvas?.nodes || []).slice(0, 15).map((n: any) => `- ${n.type}: ${n.data?.label || n.data?.title || "Unnamed"}`).join("\n")}
-
-### Available Images for Slides
-${availableImages.map((i: any) => `- ${i.title}: ${i.url}`).join("\n") || "No images available"}
-
-## BLACKBOARD INSIGHTS (Your Analysis)
-${blackboardSummary}
-
-${initialPrompt ? `## USER'S CUSTOM FOCUS\n${initialPrompt}\n` : ""}
-
-## INSTRUCTIONS
-Generate a ${mode === "concise" ? "10-15" : "20-30"} slide presentation following the structure below. Each slide MUST have:
-- id: unique UUID string
-- order: slide number (1-based)
-- layoutId: one of the available layouts
-- title: compelling, descriptive title
-- subtitle: optional supporting text
-- content: array of content blocks with regionId, type, and data
-- notes: speaker notes explaining key points
-
-### Available Layouts and Their Region IDs
-CRITICAL: You MUST use the EXACT regionId listed for each layout. Do NOT use "main" or any other generic ID.
-
-- "title-cover": regions=[background(image), title(heading), subtitle(text), date(text)]
-- "section-divider": regions=[section-number(heading), title(heading), subtitle(text)]
-- "title-content": regions=[title(heading), content(text/bullets/richtext)]
-- "two-column": regions=[title(heading), left-content(richtext), right-content(richtext)]
-- "image-left": regions=[title(heading), image(image), content(richtext)]
-- "image-right": regions=[title(heading), content(richtext), image(image)]
-- "stats-grid": regions=[title(heading), stat-1(stat), stat-2(stat), stat-3(stat), stat-4(stat)]
-- "bullets": regions=[title(heading), bullets(bullets)]
-- "quote": regions=[quote(text), attribution(text)]
-- "architecture": regions=[title(heading), diagram(image)]
-- "comparison": regions=[title(heading), left-header(heading), right-header(heading), left-content(bullets), right-content(bullets)]
-- "timeline": regions=[title(heading), timeline(timeline)]
-- "icon-grid": regions=[title(heading), subtitle(text), grid(icon-grid)]
-
-### Region ID Examples
-For "bullets" layout: { regionId: "bullets", type: "bullets", data: {...} }
-For "stats-grid" layout: { regionId: "stat-1", type: "stat", data: {...} }, { regionId: "stat-2", ... }
-For "title-content" layout: { regionId: "content", type: "richtext", data: {...} }
-For "timeline" layout: { regionId: "timeline", type: "timeline", data: {...} }
-For "icon-grid" layout: { regionId: "grid", type: "icon-grid", data: {...} }
-
-### Content Block Types (ALL text MUST use MARKDOWN, NEVER HTML tags)
-CRITICAL: NEVER use HTML tags like <b>, <ul>, <li>, </b>, <strong>, <p>, <br>, etc.
-Use ONLY markdown: **bold**, *italic*. For lists use "bullets" type.
-
-- "heading": { text: string (markdown OK), level: 1|2|3 }
-- "text": { text: string (use **bold** and *italic*) }
-- "richtext": { text: string (full markdown) }
-- "bullets": { items: [{ title: string, description: string, icon?: string }] }
-- "stat": { value: string, label: string, change?: string }
-- "image": { url: string, alt: string }
-- "timeline": { steps: [{ title: string, description: string }] }
-- "icon-grid": { items: [{ icon: string, title: string, description: string }] }
-
-FORBIDDEN: <b>, </b>, <i>, <ul>, <li>, <p>, <br>, <strong>, <em>, <div>, <span>
-
-### IMAGE GENERATION (IMPORTANT!)
-For visual impact, use image-capable layouts and include an "imagePrompt" field at the SLIDE level:
-- "image-left": Large image on left, content on right
-- "image-right": Content on left, large image on right  
-- "architecture": System diagram visualization
-- "title-cover": Full background image for cover slides
-
-When using these layouts, add an "imagePrompt" field to the slide object describing what image to generate:
-
-Example slide with image:
-{
-  "id": "uuid-here",
-  "order": 2,
-  "layoutId": "image-right",
-  "title": "Our Technology Stack",
-  "imagePrompt": "Modern tech stack visualization with interconnected nodes representing cloud services, APIs, and databases. Blue gradient, abstract geometric, professional.",
-  "content": [
-    { "regionId": "content", "type": "richtext", "data": { "text": "Our platform leverages..." } }
-  ],
-  "notes": "Discuss the technical architecture..."
-}
-
-IMPORTANT: 
-- At least 30% of slides should use image layouts (image-left, image-right, architecture, or title-cover)
-- Write descriptive imagePrompt fields that will generate professional visuals
-- Image prompts should be 1-2 sentences describing an abstract, professional visual
-
-### Required Slide Sequence
-1. COVER: Title slide with project name, tagline, date (layoutId: "title-cover", include imagePrompt for abstract background)
-2. EXECUTIVE SUMMARY: Bottom-line-up-front key takeaways
-3. OVERVIEW: Project purpose, scope, objectives (consider image-right layout)
-4. REQUIREMENTS: Key requirements summary with bullets
-5. ARCHITECTURE: System design with components (layoutId: "architecture" with imagePrompt for diagram)
-6. TECHNOLOGY: Tech stack with icon grid
-7. STATUS: Current metrics with stats grid
-8. CHALLENGES: Risks and blockers
-9. OPPORTUNITIES: Growth areas (consider image-left layout)
-10. NEXT STEPS: Roadmap with timeline
-
-For detailed mode, add section dividers and expand each topic.
-
-### Content Guidelines
-- Each bullet should have BOTH title AND description (2-3 sentences)
-- Stats should show real numbers from the project
-- Use available image URLs where appropriate
-- Speaker notes should be 2-3 sentences explaining what to emphasize
-- Make content specific to THIS project, not generic
-
-Return ONLY a JSON object with a "slides" array. No markdown, no explanation.`;
-
-        // Call LLM based on selected model
-        let llmResponse: Response;
-        let slidesJson: GeneratedSlide[] = [];
-
+        let slideOutline: SlideOutline[];
         try {
-          if (selectedModel.startsWith("gemini")) {
-            console.log("Calling Gemini API for slide generation...");
-            llmResponse = await fetch(`${apiEndpoint}?key=${apiKey}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                systemInstruction: {
-                  parts: [{ text: "You are a professional presentation designer. Generate structured JSON slide content with rich, detailed information. Always respond with valid JSON only." }],
-                },
-                contents: [{ role: "user", parts: [{ text: slideGenerationPrompt }] }],
-                generationConfig: {
-                  maxOutputTokens: maxTokens,
-                  temperature: 0.7,
-                  responseMimeType: "application/json",
-                },
-              }),
-            });
-          } else if (selectedModel.startsWith("claude")) {
-            console.log("Calling Claude API with strict tool use...");
-            llmResponse = await fetch(apiEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01",
-                "anthropic-beta": "structured-outputs-2025-11-13",
-              },
-              body: JSON.stringify({
-                model: selectedModel,
-                max_tokens: maxTokens,
-                system: "You are a professional presentation designer. Generate structured slide content with rich, detailed information.",
-                messages: [{ role: "user", content: slideGenerationPrompt }],
-                tools: [getClaudeSlideTool()],
-                tool_choice: { type: "tool", name: "generate_slides" },
-              }),
-            });
-          } else if (selectedModel.startsWith("grok")) {
-            console.log("Calling Grok API with structured output...");
-            llmResponse = await fetch(apiEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model: selectedModel,
-                messages: [
-                  { role: "system", content: "You are a professional presentation designer. Generate structured JSON slide content with rich, detailed information." },
-                  { role: "user", content: slideGenerationPrompt },
-                ],
-                max_tokens: maxTokens,
-                temperature: 0.7,
-                response_format: getGrokSlideSchema(),
-              }),
-            });
-          } else {
-            throw new Error(`Unsupported model: ${selectedModel}`);
-          }
-
-          if (!llmResponse.ok) {
-            const errorText = await llmResponse.text();
-            console.error("LLM API error:", llmResponse.status, errorText);
-            throw new Error(`LLM API error: ${llmResponse.status} - ${errorText}`);
-          }
-
-          const llmData = await llmResponse.json();
-          console.log("LLM response received");
-
-          // Parse response based on model
-          let parsedResult: any;
-
-          if (selectedModel.startsWith("gemini")) {
-            const text = llmData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            parsedResult = parseAgentResponseText(text);
-          } else if (selectedModel.startsWith("claude")) {
-            const toolUseBlock = llmData.content?.find((block: any) => block.type === "tool_use");
-            if (toolUseBlock?.input) {
-              parsedResult = toolUseBlock.input;
-              console.log("Claude tool use response parsed directly");
-            } else {
-              const textBlock = llmData.content?.find((block: any) => block.type === "text");
-              const text = textBlock?.text || JSON.stringify(llmData.content);
-              parsedResult = parseAgentResponseText(text);
-            }
-          } else if (selectedModel.startsWith("grok")) {
-            const text = llmData.choices?.[0]?.message?.content || "";
-            parsedResult = parseAgentResponseText(text);
-          }
-
-          // Extract slides array
-          if (Array.isArray(parsedResult)) {
-            slidesJson = parsedResult;
-          } else if (parsedResult?.slides && Array.isArray(parsedResult.slides)) {
-            slidesJson = parsedResult.slides;
-          } else {
-            console.error("Failed to extract slides from LLM response:", parsedResult);
-            throw new Error("Invalid slides format from LLM");
-          }
-
-          console.log(`Generated ${slidesJson.length} slides`);
-
-          // ============ IMAGE GENERATION PHASE ============
-          // Find slides with imagePrompt and generate images for them
-          const slidesNeedingImages = slidesJson.filter(
-            (s: any) => s.imagePrompt && !s.imageUrl
+          slideOutline = await generateSlideOutline(
+            blackboard,
+            targetSlides,
+            collectedData,
+            mode,
+            geminiKey,
+            initialPrompt
           );
-
-          if (slidesNeedingImages.length > 0) {
-            controller.enqueue(encoder.encode(sseMessage("status", { 
-              phase: "generating_images", 
-              message: `Generating images for ${slidesNeedingImages.length} slides...` 
-            })));
-
-            let imagesGenerated = 0;
-            const maxImages = Math.min(slidesNeedingImages.length, 5); // Limit to 5 images to avoid timeout
-
-            for (let i = 0; i < maxImages; i++) {
-              const slide = slidesNeedingImages[i];
-              
-              controller.enqueue(encoder.encode(sseMessage("status", { 
-                phase: "generating_images", 
-                message: `Generating image ${i + 1}/${maxImages}: "${slide.title}"...` 
-              })));
-
-              const imageUrl = await generateSlideImage(
-                slide.imagePrompt!,
-                supabaseUrl,
-                supabaseKey
-              );
-
-              if (imageUrl) {
-                // Update the slide with the generated image
-                const slideIndex = slidesJson.findIndex((s: any) => s.id === slide.id);
-                if (slideIndex !== -1) {
-                  slidesJson[slideIndex].imageUrl = imageUrl;
-
-                  // Also add to content array for the image region if not already present
-                  const imageLayouts: Record<string, string> = {
-                    "image-left": "image",
-                    "image-right": "image",
-                    "architecture": "diagram",
-                    "title-cover": "background",
-                  };
-                  
-                  const imageRegion = imageLayouts[slide.layoutId];
-                  if (imageRegion) {
-                    const hasImageContent = slidesJson[slideIndex].content?.some(
-                      (c: any) => c.regionId === imageRegion && c.type === "image"
-                    );
-                    
-                    if (!hasImageContent) {
-                      slidesJson[slideIndex].content = slidesJson[slideIndex].content || [];
-                      slidesJson[slideIndex].content.push({
-                        regionId: imageRegion,
-                        type: "image",
-                        data: { url: imageUrl, alt: slide.imagePrompt }
-                      });
-                    }
-                  }
-                }
-                imagesGenerated++;
-              }
-            }
-
-            await addToBlackboard({
-              source: "image_generation",
-              category: "observation",
-              content: `Generated ${imagesGenerated} images for ${slidesNeedingImages.length} image-capable slides (limited to ${maxImages} to avoid timeout).`,
-              data: { generated: imagesGenerated, requested: slidesNeedingImages.length, maxAllowed: maxImages }
-            });
-
-            console.log(`✅ Generated ${imagesGenerated}/${maxImages} slide images`);
-          }
-
-        } catch (llmError: any) {
-          console.error("LLM slide generation failed:", llmError);
-
-          // Fallback to basic slides
-          slidesJson = [
-            {
-              id: generateId(),
-              order: 1,
-              layoutId: "title-cover",
-              title: collectedData.settings?.name || "Project Presentation",
-              subtitle: collectedData.settings?.description || "Generated presentation",
-              content: [
-                { regionId: "title", type: "heading", data: { text: collectedData.settings?.name || "Project Presentation", level: 1 } },
-                { regionId: "subtitle", type: "text", data: { text: collectedData.settings?.description || "" } },
-                { regionId: "date", type: "text", data: { text: new Date().toLocaleDateString() } },
-              ],
-              notes: "Welcome slide - introduce the project and set context",
-            },
-            {
-              id: generateId(),
-              order: 2,
-              layoutId: "quote",
-              title: "Executive Summary",
-              content: [
-                { regionId: "quote", type: "text", data: { text: `Project ${completionScore}% complete with ${reqCount} requirements, ${nodeCount} architecture components, and ${fileCount} code files.` } },
-              ],
-              notes: "Bottom-line-up-front summary for executives",
-            },
-            {
-              id: generateId(),
-              order: 3,
-              layoutId: "stats-grid",
-              title: "Project Status",
-              content: [
-                { regionId: "stat-1", type: "stat", data: { value: String(reqCount), label: "Requirements" } },
-                { regionId: "stat-2", type: "stat", data: { value: String(nodeCount), label: "Components" } },
-                { regionId: "stat-3", type: "stat", data: { value: String(fileCount), label: "Code Files" } },
-                { regionId: "stat-4", type: "stat", data: { value: `${completionScore}%`, label: "Complete" } },
-              ],
-              notes: "Key metrics at a glance",
-            },
-            {
-              id: generateId(),
-              order: 4,
-              layoutId: "bullets",
-              title: "Key Insights",
-              content: [
-                {
-                  regionId: "bullets",
-                  type: "bullets",
-                  data: {
-                    items: blackboard
-                      .filter(e => e.category === "insight" || e.category === "narrative")
-                      .slice(0, 6)
-                      .map(e => ({ title: e.source, description: e.content })),
-                  },
-                },
-              ],
-              notes: "Highlights from blackboard analysis",
-            },
+        } catch (outlineError: any) {
+          console.error("Outline generation failed:", outlineError);
+          // Create basic outline fallback
+          slideOutline = [
+            { order: 1, layoutId: "title-cover", title: projectName, purpose: "Cover slide", keyContent: [projectName] },
+            { order: 2, layoutId: "quote", title: "Executive Summary", purpose: "Key takeaways", keyContent: [`${completionScore}% complete`, `${reqCount} requirements`] },
+            { order: 3, layoutId: "stats-grid", title: "Project Status", purpose: "Current metrics", keyContent: ["Requirements", "Architecture", "Code", "Progress"] },
+            { order: 4, layoutId: "bullets", title: "Key Insights", purpose: "Highlights from analysis", keyContent: blackboard.filter(e => e.category === "insight").slice(0, 4).map(e => e.content.slice(0, 50)) },
           ];
-
-          await addToBlackboard({
-            source: "synthesis",
-            category: "decision",
-            content: `LLM slide generation failed (${llmError.message}). Generated ${slidesJson.length} fallback slides with key data.`,
-            data: { error: llmError.message, fallbackSlideCount: slidesJson.length },
-          });
         }
 
-        // Stream each generated slide
-        for (const slide of slidesJson) {
-          controller.enqueue(encoder.encode(sseMessage("slide", slide)));
+        controller.enqueue(encoder.encode(sseMessage("status", { 
+          phase: "generating_slides", 
+          message: `Generating ${slideOutline.length} slides...`,
+          total: slideOutline.length,
+          current: 0
+        })));
+
+        // Generate each slide individually
+        const slidesJson: GeneratedSlide[] = [];
+
+        for (let i = 0; i < slideOutline.length; i++) {
+          const outline = slideOutline[i];
+
+          controller.enqueue(encoder.encode(sseMessage("status", { 
+            phase: "generating_slides", 
+            message: `Generating slide ${i + 1}/${slideOutline.length}: "${outline.title}"`,
+            current: i + 1,
+            total: slideOutline.length
+          })));
+
+          try {
+            const fullSlide = await generateSingleSlide(
+              outline,
+              blackboard,
+              collectedData,
+              slideOutline,
+              geminiKey
+            );
+
+            slidesJson.push(fullSlide);
+
+            // Stream the slide to client immediately
+            controller.enqueue(encoder.encode(sseMessage("slide", fullSlide)));
+
+            // Checkpoint save every 3 slides
+            if ((i + 1) % 3 === 0 || i === slideOutline.length - 1) {
+              await supabase.rpc("update_presentation_with_token", {
+                p_presentation_id: presentationId,
+                p_token: shareToken,
+                p_slides: slidesJson,
+                p_status: "generating",
+              });
+            }
+
+          } catch (slideError: any) {
+            console.error(`Failed to generate slide ${i + 1}:`, slideError);
+
+            // Create fallback slide from outline
+            const fallbackSlide = createFallbackSlide(outline);
+            slidesJson.push(fallbackSlide);
+            controller.enqueue(encoder.encode(sseMessage("slide", fallbackSlide)));
+          }
+        }
+
+        console.log(`✅ Generated ${slidesJson.length} slides incrementally`);
+
+        // ============ IMAGE GENERATION PHASE ============
+        const slidesNeedingImages = slidesJson.filter(
+          (s: any) => s.imagePrompt && !s.imageUrl
+        );
+
+        if (slidesNeedingImages.length > 0) {
+          controller.enqueue(encoder.encode(sseMessage("status", { 
+            phase: "generating_images", 
+            message: `Generating images for ${Math.min(slidesNeedingImages.length, 5)} slides...` 
+          })));
+
+          let imagesGenerated = 0;
+          const maxImages = Math.min(slidesNeedingImages.length, 5);
+
+          for (let i = 0; i < maxImages; i++) {
+            const slide = slidesNeedingImages[i];
+
+            controller.enqueue(encoder.encode(sseMessage("status", { 
+              phase: "generating_images", 
+              message: `Generating image ${i + 1}/${maxImages}: "${slide.title}"...` 
+            })));
+
+            const imageUrl = await generateSlideImage(
+              slide.imagePrompt!,
+              supabaseUrl,
+              supabaseKey
+            );
+
+            if (imageUrl) {
+              const slideIndex = slidesJson.findIndex((s: any) => s.id === slide.id);
+              if (slideIndex !== -1) {
+                slidesJson[slideIndex].imageUrl = imageUrl;
+
+                // Add to content array for image region
+                const imageLayouts: Record<string, string> = {
+                  "image-left": "image",
+                  "image-right": "image",
+                  "architecture": "diagram",
+                  "title-cover": "background",
+                };
+
+                const imageRegion = imageLayouts[slide.layoutId];
+                if (imageRegion) {
+                  const hasImageContent = slidesJson[slideIndex].content?.some(
+                    (c: any) => c.regionId === imageRegion && c.type === "image"
+                  );
+
+                  if (!hasImageContent) {
+                    slidesJson[slideIndex].content = slidesJson[slideIndex].content || [];
+                    slidesJson[slideIndex].content.push({
+                      regionId: imageRegion,
+                      type: "image",
+                      data: { url: imageUrl, alt: slide.imagePrompt }
+                    });
+                  }
+                }
+              }
+              imagesGenerated++;
+            }
+          }
+
+          await addToBlackboard({
+            source: "image_generation",
+            category: "observation",
+            content: `Generated ${imagesGenerated} images for ${slidesNeedingImages.length} image-capable slides.`,
+            data: { generated: imagesGenerated, requested: slidesNeedingImages.length }
+          });
         }
 
         // ============ SAVE FINAL PRESENTATION ============
@@ -1382,7 +1175,7 @@ Return ONLY a JSON object with a "slides" array. No markdown, no explanation.`;
 
         const metadata = {
           generatedAt: new Date().toISOString(),
-          model: selectedModel,
+          model: "gemini-2.5-flash",
           mode,
           targetSlides,
           actualSlides: slidesJson.length,
@@ -1403,6 +1196,7 @@ Return ONLY a JSON object with a "slides" array. No markdown, no explanation.`;
           p_presentation_id: presentationId,
           p_token: shareToken,
           p_slides: slidesJson,
+          p_blackboard: blackboard,
           p_metadata: metadata,
           p_status: "completed",
         });
@@ -1411,7 +1205,7 @@ Return ONLY a JSON object with a "slides" array. No markdown, no explanation.`;
           presentationId,
           slideCount: slidesJson.length,
           blackboardCount: blackboard.length,
-          model: selectedModel,
+          model: "gemini-2.5-flash",
         })));
 
         controller.close();
