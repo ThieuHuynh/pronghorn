@@ -14,10 +14,12 @@ interface FontScaleControlProps {
 export function FontScaleControl({
   value,
   onChange,
-  min = 0.7,
-  max = 1.5,
+  min = 0.2,
+  max = 2.0,
   step = 0.05,
 }: FontScaleControlProps) {
+  // Clamp value to valid range
+  const clampedValue = Math.max(min, Math.min(max, value));
   const percentage = Math.round(value * 100);
   
   const handleIncrement = () => {

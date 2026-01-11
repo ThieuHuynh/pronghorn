@@ -256,7 +256,65 @@ function getRelevantDataForSlide(
   return parts.join("\n") || "Use the slide purpose and key content to create relevant material.";
 }
 
-// Generate slide outline (fast, low tokens)
+// Build structured story arc based on target slides
+function buildStoryStructure(targetSlides: number, mode: string): { section: string; slideCount: number; layouts: string[]; purpose: string }[] {
+  // Define the narrative structure
+  const sections = [
+    { section: "Opening", purpose: "Set the stage and capture attention", minSlides: 2, maxSlides: 3 },
+    { section: "Context & Problem", purpose: "Explain why this project exists", minSlides: 1, maxSlides: 3 },
+    { section: "Solution Overview", purpose: "High-level what we're building", minSlides: 1, maxSlides: 2 },
+    { section: "Requirements Deep Dive", purpose: "Key functional requirements", minSlides: 2, maxSlides: 4 },
+    { section: "Architecture", purpose: "Technical design and components", minSlides: 1, maxSlides: 3 },
+    { section: "Implementation Status", purpose: "Current progress and metrics", minSlides: 1, maxSlides: 2 },
+    { section: "Risks & Challenges", purpose: "What could go wrong and mitigations", minSlides: 1, maxSlides: 2 },
+    { section: "Next Steps", purpose: "Roadmap and call to action", minSlides: 1, maxSlides: 2 },
+  ];
+
+  // Distribute slides across sections
+  const result: { section: string; slideCount: number; layouts: string[]; purpose: string }[] = [];
+  let remainingSlides = targetSlides;
+  const minTotal = sections.reduce((sum, s) => sum + s.minSlides, 0);
+  
+  // First pass: assign minimum slides
+  for (const sec of sections) {
+    const count = Math.min(sec.minSlides, remainingSlides);
+    result.push({ section: sec.section, slideCount: count, layouts: [], purpose: sec.purpose });
+    remainingSlides -= count;
+  }
+
+  // Second pass: distribute remaining slides proportionally
+  while (remainingSlides > 0) {
+    for (let i = 0; i < result.length && remainingSlides > 0; i++) {
+      const maxForSection = sections[i].maxSlides;
+      if (result[i].slideCount < maxForSection) {
+        result[i].slideCount++;
+        remainingSlides--;
+      }
+    }
+    // Prevent infinite loop
+    if (remainingSlides === targetSlides) break;
+  }
+
+  // Assign recommended layouts per section
+  const layoutSuggestions: Record<string, string[]> = {
+    "Opening": ["title-cover", "quote"],
+    "Context & Problem": ["title-content", "image-right", "bullets"],
+    "Solution Overview": ["image-left", "title-content", "stats-grid"],
+    "Requirements Deep Dive": ["bullets", "two-column", "icon-grid", "comparison"],
+    "Architecture": ["architecture", "image-left", "title-content"],
+    "Implementation Status": ["stats-grid", "timeline", "bullets"],
+    "Risks & Challenges": ["two-column", "bullets", "comparison"],
+    "Next Steps": ["timeline", "bullets", "quote"],
+  };
+
+  for (const r of result) {
+    r.layouts = layoutSuggestions[r.section] || ["title-content", "bullets"];
+  }
+
+  return result.filter(s => s.slideCount > 0);
+}
+
+// Generate slide outline (fast, low tokens) - ENFORCES EXACT SLIDE COUNT
 async function generateSlideOutline(
   blackboard: BlackboardEntry[],
   targetSlides: number,
@@ -272,47 +330,63 @@ async function generateSlideOutline(
   const nodeCount = collectedData.canvas?.nodes?.length || 0;
   const fileCount = collectedData.repoStructure?.files?.length || 0;
   
-  // Build concise blackboard summary
-  const insightSummary = blackboard
-    .filter(e => e.category === "insight" || e.category === "narrative" || e.category === "analysis")
-    .slice(0, 15)
-    .map(e => `- ${e.content}`)
-    .join("\n");
+  // Build the story structure
+  const storyStructure = buildStoryStructure(targetSlides, mode);
+  
+  // Build structured blackboard summary by category
+  const narrativeEntries = blackboard.filter(e => e.category === "narrative").slice(0, 5);
+  const insightEntries = blackboard.filter(e => e.category === "insight").slice(0, 10);
+  const analysisEntries = blackboard.filter(e => e.category === "analysis").slice(0, 5);
+  const estimateEntries = blackboard.filter(e => e.category === "estimate").slice(0, 3);
+  
+  const blackboardSummary = `
+NARRATIVE HOOKS:
+${narrativeEntries.map(e => `- ${e.content}`).join("\n") || "- No narratives collected"}
 
-  const outlinePrompt = `Create a slide outline for a ${mode} presentation about "${projectName}".
+KEY INSIGHTS:
+${insightEntries.map(e => `- ${e.content}`).join("\n") || "- No insights collected"}
+
+ANALYSIS:
+${analysisEntries.map(e => `- ${e.content}`).join("\n") || "- No analysis collected"}
+
+STATUS ESTIMATES:
+${estimateEntries.map(e => `- ${e.content}`).join("\n") || "- No estimates"}`;
+
+  // Build the section breakdown instruction
+  const sectionInstructions = storyStructure.map((s, idx) => {
+    const startSlide = storyStructure.slice(0, idx).reduce((sum, x) => sum + x.slideCount, 0) + 1;
+    const endSlide = startSlide + s.slideCount - 1;
+    const slideRange = startSlide === endSlide ? `Slide ${startSlide}` : `Slides ${startSlide}-${endSlide}`;
+    return `${slideRange}: "${s.section}" (${s.slideCount} slides) - ${s.purpose}. Use layouts: ${s.layouts.join(", ")}`;
+  }).join("\n");
+
+  const outlinePrompt = `You are creating a ${mode} presentation about "${projectName}" with EXACTLY ${targetSlides} slides.
 
 PROJECT: ${projectName}
 DESCRIPTION: ${projectDesc}
 STATS: ${reqCount} requirements, ${nodeCount} architecture components, ${fileCount} code files
+${initialPrompt ? `\nUSER FOCUS: ${initialPrompt}` : ""}
 
-KEY INSIGHTS:
-${insightSummary}
+BLACKBOARD (collected insights from project data):
+${blackboardSummary}
 
-${initialPrompt ? `USER FOCUS: ${initialPrompt}\n` : ""}
+REQUIRED SLIDE STRUCTURE (YOU MUST FOLLOW THIS EXACTLY):
+${sectionInstructions}
 
-Generate exactly ${targetSlides} slide outlines as a JSON array. Each slide should have:
-- order: slide number (1 to ${targetSlides})
-- layoutId: one of [title-cover, section-divider, title-content, two-column, image-left, image-right, stats-grid, bullets, quote, architecture, comparison, timeline, icon-grid]
-- title: compelling slide title
-- purpose: 1-sentence description of what this slide communicates
-- keyContent: array of 2-4 key points to include
-- imagePrompt: (optional) for image layouts, describe the visual
+CRITICAL RULES:
+1. Generate EXACTLY ${targetSlides} slides, numbered 1 to ${targetSlides}
+2. Follow the section breakdown above precisely
+3. Each slide must have: order, layoutId, title, purpose, keyContent (2-4 points)
+4. For image layouts (image-left, image-right, architecture), include imagePrompt
+5. Use data from the blackboard to make each slide specific and compelling
+6. Titles should be action-oriented and specific, not generic
+7. The slides must tell a COHESIVE STORY from start to finish
 
-REQUIRED STRUCTURE:
-1. Cover slide (title-cover)
-2. Executive Summary (quote or title-content)
-3. Overview/Goals (bullets or image-right)
-4-7. Core content slides about requirements, architecture, status
-8-9. Challenges and opportunities
-10. Next steps/roadmap (timeline)
+AVAILABLE LAYOUTS: title-cover, section-divider, title-content, two-column, image-left, image-right, stats-grid, bullets, quote, architecture, comparison, timeline, icon-grid
 
-For detailed mode, add section dividers between major topics.
+Return a JSON array with EXACTLY ${targetSlides} slide outlines. NO MARKDOWN, ONLY JSON.`;
 
-Use image layouts (image-left, image-right, architecture) for at least 30% of slides.
-
-Return ONLY a JSON array, no markdown fences, no explanation.`;
-
-  console.log("Generating slide outline with Gemini...");
+  console.log(`Generating slide outline for ${targetSlides} slides with Gemini...`);
   
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -321,12 +395,12 @@ Return ONLY a JSON array, no markdown fences, no explanation.`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: "You are a presentation structure expert. Return only valid JSON arrays with no markdown." }],
+          parts: [{ text: `You are a presentation structure expert. You MUST return EXACTLY ${targetSlides} slides in a JSON array. Do not return more or fewer slides. Each slide tells part of a cohesive story.` }],
         },
         contents: [{ role: "user", parts: [{ text: outlinePrompt }] }],
         generationConfig: {
-          maxOutputTokens: 3000,
-          temperature: 0.5,
+          maxOutputTokens: 4000,
+          temperature: 0.4,
           responseMimeType: "application/json",
         },
       }),
@@ -341,18 +415,59 @@ Return ONLY a JSON array, no markdown fences, no explanation.`;
 
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const parsed = parseAgentResponseText(text);
+  let parsed = parseAgentResponseText(text);
 
   if (!Array.isArray(parsed)) {
     console.error("Outline is not an array:", parsed);
     throw new Error("Invalid outline format");
   }
 
-  console.log(`✅ Generated outline with ${parsed.length} slides`);
+  // ENFORCE EXACT SLIDE COUNT
+  if (parsed.length < targetSlides) {
+    console.warn(`LLM returned ${parsed.length} slides, need ${targetSlides}. Padding...`);
+    // Pad with additional slides
+    const existingTitles = new Set(parsed.map((s: SlideOutline) => s.title));
+    const paddingLayouts = ["bullets", "title-content", "image-right", "stats-grid"];
+    const paddingTopics = [
+      { title: "Additional Insights", purpose: "Further observations from the project data", keyContent: ["Project insights", "Key observations"] },
+      { title: "Technical Details", purpose: "More technical context", keyContent: ["Implementation details", "Technical considerations"] },
+      { title: "Stakeholder Benefits", purpose: "Value proposition for stakeholders", keyContent: ["Business value", "User benefits"] },
+      { title: "Quality Assurance", purpose: "Testing and validation approach", keyContent: ["Testing strategy", "Quality metrics"] },
+      { title: "Team & Resources", purpose: "Team composition and resources", keyContent: ["Team structure", "Resource allocation"] },
+      { title: "Future Vision", purpose: "Long-term vision and goals", keyContent: ["Long-term goals", "Future enhancements"] },
+    ];
+    
+    while (parsed.length < targetSlides) {
+      const idx = parsed.length;
+      const paddingIdx = idx % paddingTopics.length;
+      let topic = paddingTopics[paddingIdx];
+      // Avoid duplicate titles
+      if (existingTitles.has(topic.title)) {
+        topic = { ...topic, title: `${topic.title} (${idx})` };
+      }
+      existingTitles.add(topic.title);
+      
+      parsed.push({
+        order: idx + 1,
+        layoutId: paddingLayouts[idx % paddingLayouts.length],
+        title: topic.title,
+        purpose: topic.purpose,
+        keyContent: topic.keyContent,
+      });
+    }
+  } else if (parsed.length > targetSlides) {
+    console.warn(`LLM returned ${parsed.length} slides, truncating to ${targetSlides}`);
+    parsed = parsed.slice(0, targetSlides);
+  }
+
+  // Ensure order is correct
+  parsed = parsed.map((s: SlideOutline, i: number) => ({ ...s, order: i + 1 }));
+
+  console.log(`✅ Generated outline with exactly ${parsed.length} slides`);
   return parsed as SlideOutline[];
 }
 
-// Generate a single slide from outline (fast, targeted)
+// Generate a single slide from outline with full context
 async function generateSingleSlide(
   outline: SlideOutline,
   blackboard: BlackboardEntry[],
@@ -362,45 +477,80 @@ async function generateSingleSlide(
 ): Promise<GeneratedSlide> {
   const contextData = getRelevantDataForSlide(outline, blackboard, collectedData);
   const projectName = collectedData.settings?.name || "Project";
+  const projectDesc = collectedData.settings?.description || "";
+
+  // Build story context - where is this slide in the narrative?
+  const prevSlides = allOutlines.slice(0, outline.order - 1);
+  const nextSlides = allOutlines.slice(outline.order);
+  const storyPosition = outline.order === 1 ? "opening" : 
+    outline.order === allOutlines.length ? "closing" : 
+    outline.order <= 3 ? "introduction" : 
+    outline.order >= allOutlines.length - 2 ? "conclusion" : "body";
+
+  // Get related blackboard entries for this specific slide
+  const relatedInsights = blackboard
+    .filter(e => {
+      const content = e.content.toLowerCase();
+      return outline.keyContent.some(kc => content.includes(kc.toLowerCase())) ||
+             content.includes(outline.title.toLowerCase()) ||
+             content.includes(outline.purpose.toLowerCase());
+    })
+    .slice(0, 5)
+    .map(e => `[${e.category}] ${e.content}`)
+    .join("\n");
 
   const slidePrompt = `Generate slide ${outline.order}/${allOutlines.length} for "${projectName}".
 
-SLIDE SPEC:
+PROJECT CONTEXT:
+- Name: ${projectName}
+- Description: ${projectDesc}
+- This is the ${storyPosition} of the presentation
+
+SLIDE TO GENERATE:
+- Order: ${outline.order}
 - Title: "${outline.title}"
 - Layout: ${outline.layoutId}
 - Purpose: ${outline.purpose}
-- Key points: ${outline.keyContent.join("; ")}
-${outline.imagePrompt ? `- Image: ${outline.imagePrompt}` : ""}
+- Key points to cover: ${outline.keyContent.join("; ")}
+${outline.imagePrompt ? `- Image to generate: ${outline.imagePrompt}` : ""}
 
-CONTEXT (prev slides): ${allOutlines.slice(0, outline.order - 1).map(o => `${o.order}. ${o.title}`).join(" | ")}
+STORY FLOW:
+${prevSlides.length > 0 ? `Previous slides: ${prevSlides.map(o => `${o.order}. ${o.title}`).join(" → ")}` : "This is the first slide."}
+${nextSlides.length > 0 ? `\nNext slides: ${nextSlides.slice(0, 3).map(o => `${o.order}. ${o.title}`).join(" → ")}` : "This is the final slide."}
 
-LAYOUT REGIONS: ${getLayoutRegions(outline.layoutId)}
+RELATED PROJECT DATA:
+${relatedInsights || "Use the key points to create compelling content."}
 
 ${contextData}
 
-Generate a complete slide JSON object with:
-- id: "${generateId()}"
-- order: ${outline.order}
-- layoutId: "${outline.layoutId}"
-- title: "${outline.title}"
-- content: array of content blocks (regionId, type, data)
-- notes: 2-3 sentence speaker notes
-${outline.imagePrompt ? `- imagePrompt: "${outline.imagePrompt}"` : ""}
+LAYOUT REGIONS FOR "${outline.layoutId}":
+${getLayoutRegions(outline.layoutId)}
 
-CONTENT BLOCK TYPES (use MARKDOWN, never HTML):
-- "heading": { text: string, level: 1|2|3 }
-- "text": { text: string } - use **bold** and *italic*
-- "richtext": { text: string } - full markdown
-- "bullets": { items: [{ title: string, description: string }] }
-- "stat": { value: string, label: string }
-- "timeline": { steps: [{ title: string, description: string }] }
-- "icon-grid": { items: [{ icon: string, title: string, description: string }] }
-- "image": { url: "", alt: string }
+CONTENT GENERATION RULES:
+1. Create content that flows naturally from the previous slide and leads into the next
+2. Be SPECIFIC - use actual data, names, numbers from the project
+3. For bullets: use { items: [{ title: "...", description: "..." }, ...] }
+4. For stats: use { value: "number", label: "metric name" }
+5. For timeline: use { steps: [{ title: "...", description: "..." }, ...] }
+6. For icon-grid: use { items: [{ icon: "emoji", title: "...", description: "..." }, ...] }
+7. Use **bold** for emphasis, *italic* for terms
+8. NEVER use HTML tags (<b>, <p>, <ul>, <li>, etc.)
+9. Speaker notes should explain what to emphasize verbally
 
-CRITICAL: Use exact regionIds from layout. For bullets use {regionId:"bullets"}, for stats use {regionId:"stat-1"}, etc.
-FORBIDDEN: <b>, <ul>, <li>, <p>, <br>, any HTML tags
+Return a single JSON object:
+{
+  "id": "${generateId()}",
+  "order": ${outline.order},
+  "layoutId": "${outline.layoutId}",
+  "title": "${outline.title}",
+  "content": [
+    { "regionId": "...", "type": "...", "data": {...} }
+  ],
+  "notes": "2-3 sentence speaker notes"${outline.imagePrompt ? `,
+  "imagePrompt": "${outline.imagePrompt}"` : ""}
+}
 
-Return ONLY the JSON object for this single slide.`;
+ONLY RETURN THE JSON OBJECT, NO EXPLANATION.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -409,12 +559,12 @@ Return ONLY the JSON object for this single slide.`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: "You generate professional presentation slides as JSON. Return only valid JSON objects, no markdown fences." }],
+          parts: [{ text: `You generate professional presentation slides as JSON. Each slide must be specific to the project data provided, not generic. Return only valid JSON objects, no markdown fences.` }],
         },
         contents: [{ role: "user", parts: [{ text: slidePrompt }] }],
         generationConfig: {
-          maxOutputTokens: 1500,
-          temperature: 0.7,
+          maxOutputTokens: 2000,
+          temperature: 0.6,
           responseMimeType: "application/json",
         },
       }),
