@@ -148,6 +148,15 @@
       ]
     },
     {
+      "id": "image-full",
+      "name": "Full Image",
+      "description": "Full-bleed image with no text overlay",
+      "category": "media",
+      "regions": [
+        { "id": "image", "type": "image", "x": 0, "y": 0, "width": 100, "height": 100, "objectFit": "contain" }
+      ]
+    },
+    {
       "id": "timeline",
       "name": "Timeline",
       "description": "Horizontal timeline or process flow",

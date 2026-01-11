@@ -179,6 +179,7 @@ function getLayoutRegions(layoutId: string): string {
     "two-column": "title(heading), left-content(richtext), right-content(richtext)",
     "image-left": "title(heading), image(image), content(richtext)",
     "image-right": "title(heading), content(richtext), image(image)",
+    "image-full": "image(image) - Full screen image, no text",
     "stats-grid": "title(heading), stat-1(stat), stat-2(stat), stat-3(stat), stat-4(stat)",
     "bullets": "title(heading), bullets(bullets)",
     "quote": "quote(text), attribution(text)",
@@ -204,6 +205,7 @@ interface SlideSpec {
   purpose: string;
   suggestedTitle: string;
   requiresImage: boolean;
+  dataSources: string[]; // Which data sources are most relevant for this slide
 }
 
 function createSlideStructure(
@@ -212,11 +214,12 @@ function createSlideStructure(
   projectName: string,
   blackboard: BlackboardEntry[]
 ): SlideSpec[] {
-  // Define section templates with layout sequences
+  // Define section templates with layout sequences and data sources
   const sectionTemplates = [
     { 
       section: "Opening", 
       minSlides: 2,
+      dataSources: ["settings", "synthesis"],
       slides: [
         { layout: "title-cover", purpose: "Cover slide with project title", titleTemplate: "{project}", requiresImage: true },
         { layout: "quote", purpose: "Executive summary - key message", titleTemplate: "Executive Summary", requiresImage: false },
@@ -225,6 +228,7 @@ function createSlideStructure(
     { 
       section: "Context", 
       minSlides: 1,
+      dataSources: ["settings", "artifacts", "synthesis"],
       slides: [
         { layout: "bullets", purpose: "Problem statement and context", titleTemplate: "The Challenge", requiresImage: false },
         { layout: "image-right", purpose: "Current state visualization", titleTemplate: "Current State", requiresImage: true },
@@ -234,6 +238,7 @@ function createSlideStructure(
     { 
       section: "Solution", 
       minSlides: 1,
+      dataSources: ["requirements", "canvas", "synthesis"],
       slides: [
         { layout: "image-left", purpose: "Solution overview", titleTemplate: "Our Solution", requiresImage: true },
         { layout: "icon-grid", purpose: "Key capabilities", titleTemplate: "Key Capabilities", requiresImage: false },
@@ -242,6 +247,7 @@ function createSlideStructure(
     { 
       section: "Requirements", 
       minSlides: 2,
+      dataSources: ["requirements"],
       slides: [
         { layout: "bullets", purpose: "Primary requirements overview", titleTemplate: "Core Requirements", requiresImage: false },
         { layout: "two-column", purpose: "Functional vs non-functional", titleTemplate: "Functional Requirements", requiresImage: false },
@@ -252,6 +258,7 @@ function createSlideStructure(
     { 
       section: "Architecture", 
       minSlides: 1,
+      dataSources: ["canvas"],
       slides: [
         { layout: "architecture", purpose: "System architecture diagram", titleTemplate: "System Architecture", requiresImage: true },
         { layout: "image-left", purpose: "Component details", titleTemplate: "Key Components", requiresImage: true },
@@ -261,6 +268,7 @@ function createSlideStructure(
     { 
       section: "Status", 
       minSlides: 1,
+      dataSources: ["synthesis", "deployments", "repoStructure"],
       slides: [
         { layout: "stats-grid", purpose: "Current progress metrics", titleTemplate: "Project Status", requiresImage: false },
         { layout: "timeline", purpose: "Milestones achieved", titleTemplate: "Progress Timeline", requiresImage: false },
@@ -269,6 +277,7 @@ function createSlideStructure(
     { 
       section: "Risks", 
       minSlides: 1,
+      dataSources: ["synthesis", "requirements"],
       slides: [
         { layout: "two-column", purpose: "Risks and mitigations", titleTemplate: "Risks & Mitigations", requiresImage: false },
         { layout: "bullets", purpose: "Challenges identified", titleTemplate: "Key Challenges", requiresImage: false },
@@ -277,6 +286,7 @@ function createSlideStructure(
     { 
       section: "Next Steps", 
       minSlides: 1,
+      dataSources: ["synthesis", "deployments"],
       slides: [
         { layout: "timeline", purpose: "Roadmap and next steps", titleTemplate: "Roadmap", requiresImage: false },
         { layout: "quote", purpose: "Call to action", titleTemplate: "Call to Action", requiresImage: false },
@@ -340,6 +350,7 @@ function createSlideStructure(
         purpose: slideTemplate.purpose,
         suggestedTitle: title,
         requiresImage: slideTemplate.requiresImage,
+        dataSources: section.dataSources || ["synthesis"],
       });
       
       if (slideOrder > targetSlides) break;
@@ -358,6 +369,7 @@ function createSlideStructure(
       purpose: "Additional project information",
       suggestedTitle: `Additional Details ${idx - totalMinSlides + 1}`,
       requiresImage: false,
+      dataSources: ["synthesis"],
     });
   }
   
@@ -828,7 +840,7 @@ serve(async (req) => {
           }
         };
 
-        // Tool: Read Requirements with deep analysis
+        // Tool: Read Requirements with ENHANCED deep analysis
         const readRequirements = async (): Promise<ToolResult> => {
           controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_requirements", message: "Analyzing requirements in depth..." })));
 
@@ -843,49 +855,72 @@ serve(async (req) => {
             const entries: BlackboardEntry[] = [];
             const reqs = requirements || [];
 
+            if (reqs.length === 0) {
+              entries.push(await addToBlackboard({
+                source: "read_requirements",
+                category: "observation",
+                content: "**No formal requirements documented** - presentation should focus on vision and roadmap rather than detailed requirements. This is common for early-stage projects.",
+                data: { count: 0 },
+              }));
+              return { tool: "read_requirements", success: true, data: requirements, blackboardEntries: entries };
+            }
+
+            const topLevel = reqs.filter((r: any) => !r.parent_id);
+            const nested = reqs.filter((r: any) => r.parent_id);
+            const decompositionRatio = nested.length / Math.max(topLevel.length, 1);
+
             entries.push(await addToBlackboard({
               source: "read_requirements",
               category: "observation",
-              content: `Requirements corpus contains ${reqs.length} items. ${reqs.length === 0 ? "No formal requirements documented - presentation will need to focus on vision and roadmap." : `Comprehensive requirements provide solid foundation for detailed analysis.`}`,
-              data: { count: reqs.length },
+              content: `**Requirements corpus**: ${reqs.length} total items (${topLevel.length} top-level, ${nested.length} decomposed). ${decompositionRatio > 3 ? "Well-decomposed requirements indicate mature planning." : decompositionRatio > 1 ? "Moderate decomposition suggests ongoing refinement." : "Flat structure may indicate high-level scope."}`,
+              data: { count: reqs.length, topLevel: topLevel.length, nested: nested.length, decompositionRatio },
             }));
 
-            if (reqs.length > 0) {
-              const topLevel = reqs.filter((r: any) => !r.parent_id);
-              const nested = reqs.filter((r: any) => r.parent_id);
-              const decompositionRatio = nested.length / Math.max(topLevel.length, 1);
+            // Analyze completeness - how many have descriptions
+            const withContent = reqs.filter((r: any) => r.content && r.content.length > 20).length;
+            const completeness = (withContent / reqs.length * 100).toFixed(0);
+            
+            entries.push(await addToBlackboard({
+              source: "read_requirements",
+              category: "analysis",
+              content: `**Requirement completeness**: ${completeness}% have detailed descriptions (${withContent}/${reqs.length}). ${parseInt(completeness) > 70 ? "Requirements are well-documented." : parseInt(completeness) > 40 ? "Requirements have moderate detail." : "Requirements need more elaboration."}`,
+              data: { withContent, completeness: parseInt(completeness) },
+            }));
 
+            // Priority analysis
+            const byPriority: Record<string, any[]> = {};
+            reqs.forEach((r: any) => {
+              const priority = r.priority || 'unset';
+              if (!byPriority[priority]) byPriority[priority] = [];
+              byPriority[priority].push(r);
+            });
+
+            const priorityBreakdown = Object.entries(byPriority).map(([p, items]) => `${p}: ${items.length}`).join(', ');
+            entries.push(await addToBlackboard({
+              source: "read_requirements",
+              category: "analysis",
+              content: `**Priority distribution**: ${priorityBreakdown}. ${byPriority['high']?.length > 0 ? `${byPriority['high'].length} high-priority items define the MVP scope.` : 'No explicit priority set - consider prioritization.'}`,
+              data: { byPriority: Object.fromEntries(Object.entries(byPriority).map(([k, v]) => [k, v.length])) },
+            }));
+
+            // Extract key requirements with FULL content for narrative
+            const keyReqs = topLevel.slice(0, 8);
+            for (const req of keyReqs.slice(0, 5)) {
               entries.push(await addToBlackboard({
                 source: "read_requirements",
-                category: "analysis",
-                content: `Requirements structure analysis: ${topLevel.length} top-level requirements with ${nested.length} child items. Decomposition ratio: ${decompositionRatio.toFixed(1)}x. ${decompositionRatio > 3 ? "Well-decomposed requirements indicate mature planning." : decompositionRatio > 1 ? "Moderate decomposition suggests ongoing refinement." : "Flat structure may benefit from further breakdown."}`,
-                data: { topLevel: topLevel.length, nested: nested.length, decompositionRatio },
+                category: "insight",
+                content: `**${req.code || 'REQ'}**: ${req.title}${req.content ? ` - ${req.content.slice(0, 300)}` : ''}`,
+                data: { requirementId: req.id, code: req.code, title: req.title, priority: req.priority },
               }));
-
-              // Extract key requirements for narrative
-              const keyReqs = topLevel.slice(0, 6).map((r: { code?: string; title?: string; content?: string }) => ({
-                code: r.code,
-                title: r.title,
-                content: (r.content || "").slice(0, 200),
-              }));
-
-              entries.push(await addToBlackboard({
-                source: "read_requirements",
-                category: "narrative",
-                content: `Key requirements to highlight: ${keyReqs.map((r: any) => `${r.code}: ${r.title}`).join("; ")}. These form the core value proposition.`,
-                data: { keyRequirements: keyReqs },
-              }));
-
-              // Add insight for each key requirement
-              for (const req of keyReqs.slice(0, 5)) {
-                entries.push(await addToBlackboard({
-                  source: "read_requirements",
-                  category: "insight",
-                  content: `${req.code}: ${req.content || req.title}`,
-                  data: { requirementId: req.code, title: req.title },
-                }));
-              }
             }
+
+            // Narrative summary
+            entries.push(await addToBlackboard({
+              source: "read_requirements",
+              category: "narrative",
+              content: `**Key requirements for slides**: ${keyReqs.map((r: any) => `${r.code || 'REQ'}: ${r.title}`).join("; ")}. These form the core value proposition and should be highlighted in requirements slides.`,
+              data: { keyRequirements: keyReqs.map((r: any) => ({ code: r.code, title: r.title })) },
+            }));
 
             return { tool: "read_requirements", success: true, data: requirements, blackboardEntries: entries };
           } catch (error: any) {
@@ -980,7 +1015,7 @@ serve(async (req) => {
           }
         };
 
-        // Tool: Read Canvas with architecture analysis
+        // Tool: Read Canvas with ENHANCED architecture analysis
         const readCanvas = async (): Promise<ToolResult> => {
           controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_canvas", message: "Analyzing architecture canvas..." })));
 
@@ -1002,48 +1037,105 @@ serve(async (req) => {
             const nodeList = nodes || [];
             const edgeList = edges || [];
 
+            if (nodeList.length === 0) {
+              entries.push(await addToBlackboard({
+                source: "read_canvas",
+                category: "observation",
+                content: "No architecture defined yet. This is an early-stage project - architecture slides should focus on vision and planned structure rather than current implementation.",
+                data: { nodes: 0, edges: 0 },
+              }));
+              return { tool: "read_canvas", success: true, data: collectedData.canvas, blackboardEntries: entries };
+            }
+
+            // Group nodes by type with descriptions
+            const nodesByType: Record<string, {label: string, description: string}[]> = {};
+            nodeList.forEach((n: any) => {
+              const type = n.type || 'component';
+              if (!nodesByType[type]) nodesByType[type] = [];
+              nodesByType[type].push({
+                label: n.data?.label || n.data?.title || 'Unnamed',
+                description: n.data?.description || ''
+              });
+            });
+
+            // Determine architecture style
+            const archTypes = Object.keys(nodesByType);
+            const hasDatabase = archTypes.some(t => t.includes('DATABASE') || t.includes('TABLE') || t.includes('SCHEMA'));
+            const hasAPI = archTypes.some(t => t.includes('API') || t.includes('SERVICE') || t.includes('CONTROLLER'));
+            const hasFrontend = archTypes.some(t => t.includes('PAGE') || t.includes('COMPONENT') || t.includes('WEB'));
+            const hasExternal = archTypes.some(t => t.includes('EXTERNAL'));
+            
+            let archStyle = "custom architecture";
+            if (hasDatabase && hasAPI && hasFrontend) {
+              archStyle = "full-stack architecture with frontend, API layer, and database";
+            } else if (hasAPI && hasDatabase) {
+              archStyle = "backend-focused architecture with API and data layers";
+            } else if (hasFrontend && hasAPI) {
+              archStyle = "client-server architecture with frontend and API integration";
+            } else if (hasFrontend) {
+              archStyle = "frontend-focused architecture";
+            }
+            if (hasExternal) archStyle += " with external service integrations";
+
             entries.push(await addToBlackboard({
               source: "read_canvas",
               category: "observation",
-              content: `Architecture canvas contains ${nodeList.length} components and ${edgeList.length} connections. ${nodeList.length === 0 ? "No architecture defined yet." : "Visual architecture available for presentation."}`,
-              data: { nodes: nodeList.length, edges: edgeList.length },
+              content: `System employs a **${archStyle}**. ${nodeList.length} components organized into ${archTypes.length} categories: ${archTypes.slice(0, 6).join(', ')}${archTypes.length > 6 ? ` (+${archTypes.length - 6} more)` : ''}.`,
+              data: { nodeCount: nodeList.length, edgeCount: edgeList.length, types: archTypes, archStyle },
             }));
 
-            if (nodeList.length > 0) {
-              // Analyze node types
-              const nodeTypes: Record<string, number> = {};
-              nodeList.forEach((n: any) => {
-                nodeTypes[n.type] = (nodeTypes[n.type] || 0) + 1;
-              });
-
-              entries.push(await addToBlackboard({
-                source: "read_canvas",
-                category: "analysis",
-                content: `Architecture composition: ${Object.entries(nodeTypes).map(([t, c]) => `${c} ${t}`).join(", ")}. This reveals the system's structural paradigm.`,
-                data: { nodeTypes },
-              }));
-
-              // Connectivity analysis
-              const connectivity = edgeList.length / Math.max(nodeList.length, 1);
+            // Detailed component analysis by category - top 4 categories
+            for (const [type, components] of Object.entries(nodesByType).slice(0, 4)) {
+              const compNames = components.slice(0, 4).map(c => c.label).join(', ');
+              const compDescs = components.filter(c => c.description).slice(0, 2);
+              
+              let insight = `**${type}** layer (${components.length}): ${compNames}${components.length > 4 ? ` (+${components.length - 4} more)` : ''}.`;
+              if (compDescs.length > 0) {
+                insight += ` Key functionality: ${compDescs[0].description.slice(0, 200)}`;
+              }
+              
               entries.push(await addToBlackboard({
                 source: "read_canvas",
                 category: "insight",
-                content: `Connectivity analysis: ${connectivity.toFixed(2)} connections per component. ${connectivity > 2 ? "Highly interconnected system." : connectivity > 1 ? "Moderate coupling indicates balanced architecture." : "Loosely coupled components suggest microservices or modular design."}`,
-                data: { connectivity },
+                content: insight,
+                data: { type, count: components.length, components: components.slice(0, 6) },
               }));
+            }
 
-              // Extract key components for slides
-              const keyComponents = nodeList.slice(0, 10).map((n: any) => ({
-                type: n.type,
-                label: n.data?.label || n.data?.title || "Unnamed",
-                description: n.data?.description || "",
-              }));
+            // Connectivity and coupling analysis
+            const connectivity = edgeList.length / Math.max(nodeList.length, 1);
+            let couplingAnalysis = "";
+            if (connectivity > 2.5) {
+              couplingAnalysis = "**Highly interconnected** - suggests tightly integrated system or rich domain model. Emphasize system coherence and integration benefits.";
+            } else if (connectivity > 1.2) {
+              couplingAnalysis = "**Moderate coupling** - balanced trade-offs between integration and modularity. Architecture appears maintainable and well-structured.";
+            } else if (connectivity > 0.5) {
+              couplingAnalysis = "**Loosely coupled** - microservices or modular design pattern. Emphasize scalability and independent deployment capabilities.";
+            } else {
+              couplingAnalysis = "**Very loose coupling** - may indicate early architecture or intentionally decoupled components. Focus on integration strategy.";
+            }
 
+            entries.push(await addToBlackboard({
+              source: "read_canvas",
+              category: "analysis",
+              content: `Connectivity: ${connectivity.toFixed(1)} connections per component. ${couplingAnalysis}`,
+              data: { connectivity },
+            }));
+
+            // Identify key integration hubs (high connectivity nodes)
+            const nodeConnectivity: {node: any, connections: number}[] = nodeList.map((n: any) => {
+              const incoming = edgeList.filter((e: any) => e.target_id === n.id || e.target === n.id).length;
+              const outgoing = edgeList.filter((e: any) => e.source_id === n.id || e.source === n.id).length;
+              return { node: n, connections: incoming + outgoing };
+            }).sort((a: {node: any, connections: number}, b: {node: any, connections: number}) => b.connections - a.connections);
+
+            const hubs = nodeConnectivity.filter(nc => nc.connections >= 3).slice(0, 4);
+            if (hubs.length > 0) {
               entries.push(await addToBlackboard({
                 source: "read_canvas",
                 category: "narrative",
-                content: `Key architectural components: ${keyComponents.map((c: any) => `${c.label} (${c.type})`).join(", ")}. These form the system's backbone.`,
-                data: { components: keyComponents },
+                content: `**Core integration hubs**: ${hubs.map(h => `${h.node.data?.label || h.node.type} (${h.connections} connections)`).join(', ')}. These components are central to the system and should be featured prominently in architecture slides.`,
+                data: { hubs: hubs.map(h => ({ id: h.node.id, label: h.node.data?.label, connections: h.connections })) },
               }));
             }
 

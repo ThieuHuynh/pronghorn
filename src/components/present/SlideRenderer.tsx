@@ -245,7 +245,8 @@ export function SlideRenderer({
 
   const imgUrl = getImageUrl();
   const isSectionDivider = layoutId === "section-divider";
-  const isFullBleed = ["title-cover", "section-divider"].includes(layoutId);
+  const isImageFull = layoutId === "image-full";
+  const isFullBleed = ["title-cover", "section-divider", "image-full"].includes(layoutId);
 
   // === RENDER HELPERS WITH FIXED PIXEL SIZES ===
   const renderTitle = (centered = false) => (
@@ -522,6 +523,44 @@ export function SlideRenderer({
     position: 'relative',
   };
 
+  // Full-bleed image layout (no text overlay)
+  if (isImageFull) {
+    return (
+      <div className={`font-raleway ${className}`} style={containerStyle}>
+        {imgUrl ? (
+          <img 
+            src={imgUrl} 
+            alt={title || "Full screen image"} 
+            className="absolute inset-0 w-full h-full object-contain"
+            style={{ background: themeColors.background }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div 
+            className="absolute inset-0 flex items-center justify-center cursor-pointer hover:bg-muted/10 transition-colors"
+            onClick={onAddImageClick}
+            style={{ background: themeColors.background }}
+          >
+            <div className="text-center">
+              <ImageIcon 
+                style={{ 
+                  width: fs.iconBox * 1.5,
+                  height: fs.iconBox * 1.5,
+                  marginBottom: sp.gap,
+                  opacity: 0.5,
+                  color: themeColors.muted,
+                }} 
+              />
+              <p style={{ fontSize: fs.body, color: themeColors.muted, opacity: 0.7 }}>
+                Click to add full-screen image
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Title cover / Section divider
   if (isFullBleed) {
     return (
@@ -540,7 +579,7 @@ export function SlideRenderer({
             />
           </div>
         )}
-        {isFullBleed && !isSectionDivider && !imgUrl && (
+        {!isSectionDivider && !imgUrl && (
           <div 
             className="absolute inset-0 z-0"
             style={{ background: themeColors.titleGradient }}

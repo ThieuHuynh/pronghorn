@@ -36,6 +36,7 @@ const presentationLayoutsData = {
     { id: "two-column", name: "Two Columns", description: "Side-by-side content", category: "content", regions: [] },
     { id: "image-left", name: "Image Left", description: "Image on left with content", category: "media", regions: [] },
     { id: "image-right", name: "Image Right", description: "Content with image on right", category: "media", regions: [] },
+    { id: "image-full", name: "Full Image", description: "Full-bleed image no overlay", category: "media", regions: [] },
     { id: "stats-grid", name: "Statistics Grid", description: "4-cell metrics grid", category: "data", regions: [] },
     { id: "bullets", name: "Bullet Points", description: "Clean bullet list", category: "content", regions: [] },
     { id: "quote", name: "Quote", description: "Prominent quote", category: "accent", regions: [] },
@@ -946,32 +947,90 @@ export default function Present() {
               {/* Editor Tab */}
               <TabsContent value="editor" className="flex-1 overflow-hidden mt-0">
                 {isGenerating ? (
-                  <div className="p-6">
+                  <div className="p-6 space-y-4">
+                    {/* Status bar */}
                     <div className="flex items-center gap-3 mb-4">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       <span className="font-medium">{generationStatus}</span>
+                      {workingSlides && workingSlides.length > 0 && (
+                        <Badge variant="outline" className="ml-auto">
+                          {workingSlides.filter(s => s.content?.length > 0).length} / {workingSlides.length} slides
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Blackboard (left side) */}
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Blackboard (Live)</h4>
+                        <h4 className="text-sm font-medium mb-2">Agent Blackboard (Live)</h4>
                         <ScrollArea className="h-[400px] border rounded-lg p-3 bg-muted/30">
-                          {liveBlackboard.map((entry, i) => (
-                            <div key={entry.id || i} className="mb-3 p-2 bg-background rounded border">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Badge variant="outline" className="text-xs">{entry.source}</Badge>
-                                <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
-                              </div>
-                              <p className="text-sm">{entry.content}</p>
+                          {liveBlackboard.length === 0 ? (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                              <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                              Collecting project data...
                             </div>
-                          ))}
+                          ) : (
+                            liveBlackboard.map((entry, i) => (
+                              <div key={entry.id || i} className="mb-3 p-2 bg-background rounded border">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className="text-xs">{entry.source}</Badge>
+                                  <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
+                                </div>
+                                <p className="text-sm">{entry.content}</p>
+                              </div>
+                            ))
+                          )}
                         </ScrollArea>
                       </div>
-                      <div className="flex items-center justify-center bg-muted/20 rounded-lg border-2 border-dashed">
-                        <div className="text-center p-8">
-                          <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-3 animate-pulse" />
-                          <p className="text-muted-foreground">Generating slides...</p>
-                        </div>
+                      
+                      {/* Live slide preview grid (right side) */}
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Slides (Generating)</h4>
+                        <ScrollArea className="h-[400px] border rounded-lg p-2 bg-muted/10">
+                          {workingSlides && workingSlides.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-2">
+                              {workingSlides.map((slide, idx) => (
+                                <div 
+                                  key={slide.id || idx} 
+                                  className={`relative border rounded overflow-hidden aspect-video ${
+                                    slide.content?.length > 0 
+                                      ? "border-green-500/50 bg-background" 
+                                      : "border-muted opacity-60 bg-muted/20"
+                                  }`}
+                                >
+                                  {slide.content?.length > 0 ? (
+                                    <SlideCanvas designWidth={960} designHeight={540}>
+                                      <SlideRenderer 
+                                        slide={slide} 
+                                        theme={currentTheme}
+                                        fontScale={1}
+                                      />
+                                    </SlideCanvas>
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 truncate">
+                                    {idx + 1}. {slide.title}
+                                  </div>
+                                  {slide.content?.length > 0 && (
+                                    <div className="absolute top-1 right-1">
+                                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                              <div className="text-center p-8">
+                                <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-3 animate-pulse" />
+                                <p>Building slide structure...</p>
+                              </div>
+                            </div>
+                          )}
+                        </ScrollArea>
                       </div>
                     </div>
                   </div>
