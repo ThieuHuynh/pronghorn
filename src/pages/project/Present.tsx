@@ -329,11 +329,13 @@ export default function Present() {
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
-        for (const line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
           if (line.startsWith("event: ")) {
             const event = line.slice(7);
-            const dataLine = lines[lines.indexOf(line) + 1];
+            const dataLine = lines[i + 1];
             if (dataLine?.startsWith("data: ")) {
+              i++; // Skip the data line in next iteration
               try {
                 const data = JSON.parse(dataLine.slice(6));
                 
@@ -341,6 +343,9 @@ export default function Present() {
                   setGenerationStatus(data.message);
                 } else if (event === "blackboard") {
                   setLiveBlackboard(prev => [...prev, data]);
+                } else if (event === "slide") {
+                  // Real-time slide streaming
+                  toast.info(`Generated: ${data.title}`);
                 } else if (event === "complete") {
                   toast.success(`Generated ${data.slideCount} slides`);
                 } else if (event === "error") {
