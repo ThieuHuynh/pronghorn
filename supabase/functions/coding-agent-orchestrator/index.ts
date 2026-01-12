@@ -767,10 +767,13 @@ serve(async (req) => {
           conversationHistory.push({ role: "user", content: msg.content });
         } else if (msg.role === 'assistant' || msg.role === 'agent') {
           conversationHistory.push({ role: "assistant", content: msg.content });
+        } else if (msg.role === 'system' && msg.metadata?.type === 'operation_results') {
+          // Include operation results as user context so LLM sees them
+          conversationHistory.push({ role: "user", content: msg.content });
         }
       }
     }
-    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation (including task)`);
+    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation (including task and operation results)`);
   } else {
     // For new sessions, start with task description
     conversationHistory.push({ role: "user", content: `Task: ${taskDescription || ""}` });
@@ -1897,13 +1900,13 @@ serve(async (req) => {
           return summary;
         });
 
-        // Log operation results as user message so next iteration has context
+        // Log operation results as SYSTEM message (not shown in chat) so next iteration has context
         await supabase.rpc("insert_agent_message_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
-          p_role: "user",
-          p_content: `Operation summaries:\n${JSON.stringify(summarizedResults, null, 2)}`,
-          p_metadata: { type: "operation_results", iteration },
+          p_role: "system",
+          p_content: `Operation results:\n${JSON.stringify(summarizedResults, null, 2)}`,
+          p_metadata: { type: "operation_results", iteration, hidden: true },
         });
 
         // Determine final status for this iteration

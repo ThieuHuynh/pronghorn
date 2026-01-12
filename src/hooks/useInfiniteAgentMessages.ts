@@ -33,7 +33,16 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
       if (error) throw error;
       
-      setMessages((data as AgentMessage[]) || []);
+      // Filter out internal system messages (operation results, hidden messages)
+      const filteredData = ((data as AgentMessage[]) || []).filter(msg => {
+        // Hide system messages and messages with hidden metadata
+        if (msg.role === 'system') return false;
+        if (msg.metadata?.hidden) return false;
+        if (msg.metadata?.type === 'operation_results') return false;
+        return true;
+      });
+      
+      setMessages(filteredData);
       setHasMore((data || []).length === LIMIT);
       setOffset(LIMIT);
     } catch (error) {
@@ -107,7 +116,13 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
       if (error) throw error;
       
-      const newMessages = (data as AgentMessage[]) || [];
+      // Filter out internal system messages (operation results, hidden messages)
+      const newMessages = ((data as AgentMessage[]) || []).filter(msg => {
+        if (msg.role === 'system') return false;
+        if (msg.metadata?.hidden) return false;
+        if (msg.metadata?.type === 'operation_results') return false;
+        return true;
+      });
       setMessages((prev) => [...prev, ...newMessages]);
       setHasMore(newMessages.length === LIMIT);
       setOffset((prev) => prev + LIMIT);
