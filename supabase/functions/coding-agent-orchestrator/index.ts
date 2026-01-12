@@ -68,7 +68,6 @@ function parseAgentResponseText(rawText: string): any {
   console.log("Parsing agent response, length:", rawText.length);
   console.log("Raw preview:", rawText.slice(0, 300) + (rawText.length > 300 ? "..." : ""));
 
-  // Helper to try parsing safely
   const tryParse = (jsonStr: string, method: string): any | null => {
     try {
       const parsed = JSON.parse(jsonStr);
@@ -80,11 +79,9 @@ function parseAgentResponseText(rawText: string): any {
     }
   };
 
-  // Method 1: Direct parse (clean JSON)
   let result = tryParse(text, "direct parse");
   if (result) return result;
 
-  // Method 2: Extract from LAST ```json fence
   const lastFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```[\s\S]*$/i);
   if (lastFenceMatch?.[1]) {
     const extracted = lastFenceMatch[1].trim();
@@ -96,7 +93,6 @@ function parseAgentResponseText(rawText: string): any {
     if (result) return result;
   }
 
-  // Method 3: Find ALL code blocks and try each one (in reverse order)
   const allFences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)];
   for (let i = allFences.length - 1; i >= 0; i--) {
     const content = allFences[i][1].trim();
@@ -106,17 +102,13 @@ function parseAgentResponseText(rawText: string): any {
     }
   }
 
-  // Method 4: Brace matching on ORIGINAL text (most resilient)
   const firstBrace = originalText.indexOf("{");
   const lastBrace = originalText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     const candidate = originalText.slice(firstBrace, lastBrace + 1);
-
-    // Try raw first (preserves formatting)
     result = tryParse(candidate, "brace extraction (raw)");
     if (result) return result;
 
-    // Try with whitespace normalization
     const cleaned = candidate
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
@@ -125,14 +117,12 @@ function parseAgentResponseText(rawText: string): any {
     if (result) return result;
   }
 
-  // Method 5: Heuristic object match (last resort)
   const heuristicMatch = originalText.match(/(\{(?:[^{}]|"(?:\\.|[^"\\])*")*\})/);
   if (heuristicMatch) {
     result = tryParse(heuristicMatch[1], "heuristic object match");
     if (result) return result;
   }
 
-  // Final fallback
   console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
   return {
     reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
@@ -142,11 +132,9 @@ function parseAgentResponseText(rawText: string): any {
   };
 }
 
-// Generate tool list text from manifest for prompt
 function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean): string {
   const lines: string[] = [];
   
-  // File Operations
   lines.push("## FILE OPERATIONS\n");
   lines.push("You work by executing available tools to manipulate files in the project repository. Each tool has specific parameters you must provide. You can call one or more tools at a time. Always call as many tools as practical for each iteration.\n");
   for (const [name, tool] of Object.entries(manifest.file_operations)) {
@@ -163,7 +151,6 @@ function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean):
     lines.push("");
   }
   
-  // Project Exploration Tools (only if exposed)
   if (exposeProject) {
     lines.push("\n## PROJECT EXPLORATION TOOLS (READ-ONLY)\n");
     lines.push("In addition to the repository files, you have READ-ONLY access to explore the entire project via these additional tools:\n");
@@ -190,7 +177,6 @@ function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean):
   return lines.join("\n");
 }
 
-// Generate response schema text for prompt
 function generateResponseSchemaText(manifest: ToolsManifest, exposeProject: boolean): string {
   const allToolNames = [
     ...Object.keys(manifest.file_operations),
@@ -216,21 +202,18 @@ function generateResponseSchemaText(manifest: ToolsManifest, exposeProject: bool
 Available operation types: ${allToolNames.join(", ")}`;
 }
 
-// Generate Grok/xAI structured output schema dynamically from manifest
 function generateGrokSchema(manifest: ToolsManifest, exposeProject: boolean) {
   const allToolNames = [
     ...Object.keys(manifest.file_operations),
     ...(exposeProject ? Object.keys(manifest.project_exploration_tools) : [])
   ];
   
-  // Build params properties from manifest
   const paramsProperties: Record<string, any> = {};
   const allTools = { ...manifest.file_operations, ...(exposeProject ? manifest.project_exploration_tools : {}) };
   
   for (const tool of Object.values(allTools)) {
     for (const [paramName, param] of Object.entries(tool.params)) {
       if (!paramsProperties[paramName]) {
-        // Convert type string to JSON schema type
         let jsonType: any = "string";
         if (param.type.includes("null")) {
           jsonType = ["string", "null"];
@@ -296,14 +279,12 @@ function generateGrokSchema(manifest: ToolsManifest, exposeProject: boolean) {
   };
 }
 
-// Generate Claude/Anthropic tool schema dynamically from manifest
 function generateClaudeSchema(manifest: ToolsManifest, exposeProject: boolean) {
   const allToolNames = [
     ...Object.keys(manifest.file_operations),
     ...(exposeProject ? Object.keys(manifest.project_exploration_tools) : [])
   ];
   
-  // Build params properties from manifest
   const paramsProperties: Record<string, any> = {};
   const allTools = { ...manifest.file_operations, ...(exposeProject ? manifest.project_exploration_tools : {}) };
   
@@ -375,7 +356,6 @@ function generateClaudeSchema(manifest: ToolsManifest, exposeProject: boolean) {
   };
 }
 
-// SSE event types for streaming progress to client
 type SSEEventType = 
   | 'session_created'
   | 'iteration_start'
@@ -387,16 +367,15 @@ type SSEEventType =
   | 'task_complete'
   | 'error';
 
-// NOTE: streamLLMResponse helper was removed - streaming is now inlined
-// directly in each LLM provider block to enable true real-time SSE forwarding
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // CRITICAL: Parse request BEFORE creating the stream
-  // This ensures we have access to requestData inside start()
+  // ============================================================
+  // PHASE 1: ALL SETUP BEFORE STREAM (matches chat-stream-gemini pattern)
+  // ============================================================
+  
   let requestData: TaskRequest;
   try {
     requestData = await req.json();
@@ -411,17 +390,526 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Create SSE stream with ALL processing inside start()
+  // Create Supabase client BEFORE stream
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: {
+      headers: authHeader ? { Authorization: authHeader } : {},
+    },
+  });
+
+  const shareToken = requestData.shareToken;
+  const {
+    projectId,
+    repoId,
+    taskDescription,
+    attachedFiles,
+    projectContext,
+    mode,
+    autoCommit = false,
+    chatHistory,
+    exposeProject = false,
+    maxIterations: requestedMaxIterations = 100,
+    promptSections,
+    customToolDescriptions,
+  } = requestData;
+
+  console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
+
+  // Validate project access BEFORE stream
+  let project: any;
+  try {
+    const { data, error: projectError } = await supabase.rpc("get_project_with_token", {
+      p_project_id: projectId,
+      p_token: shareToken,
+    });
+    if (projectError) throw projectError;
+    project = data;
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ error: "Project access denied or not found" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const selectedModel = project.selected_model || "gemini-2.5-flash";
+  const maxTokens = project.max_tokens || 32768;
+
+  // Select API key based on model BEFORE stream
+  let apiKey: string;
+  let apiEndpoint: string;
+  let modelName: string;
+
+  if (selectedModel.startsWith("gemini")) {
+    apiKey = Deno.env.get("GEMINI_API_KEY")!;
+    apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?key=${apiKey}&alt=sse`;
+    modelName = selectedModel;
+  } else if (selectedModel.startsWith("claude")) {
+    apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+    apiEndpoint = "https://api.anthropic.com/v1/messages";
+    modelName = selectedModel;
+  } else if (selectedModel.startsWith("grok")) {
+    apiKey = Deno.env.get("XAI_API_KEY")!;
+    apiEndpoint = "https://api.x.ai/v1/chat/completions";
+    modelName = selectedModel;
+  } else {
+    return new Response(
+      JSON.stringify({ error: `Unsupported model: ${selectedModel}` }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: `API key not configured for model: ${selectedModel}` }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Create agent session BEFORE stream
+  let session: any;
+  try {
+    const { data, error: sessionError } = await supabase.rpc("create_agent_session_with_token", {
+      p_project_id: projectId,
+      p_mode: mode,
+      p_task_description: taskDescription,
+      p_token: shareToken,
+    });
+    if (sessionError) throw sessionError;
+    if (!data) throw new Error("Failed to create session");
+    session = data;
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ error: `Failed to create session: ${e instanceof Error ? e.message : String(e)}` }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const sessionId = session.id;
+  console.log("Created session:", sessionId);
+
+  // Log user's task as first message BEFORE stream
+  await supabase.rpc("insert_agent_message_with_token", {
+    p_session_id: sessionId,
+    p_token: shareToken,
+    p_role: "user",
+    p_content: taskDescription,
+    p_metadata: { attachedFiles, projectContext },
+  });
+
+  // Broadcast to notify subscribers
+  await supabase.channel(`agent-messages-project-${projectId}`).send({
+    type: 'broadcast',
+    event: 'agent_message_refresh',
+    payload: { sessionId, iteration: 0 }
+  });
+
+  // Build manifest BEFORE stream
+  const manifest: ToolsManifest = {
+    id: "coding-agent-tools",
+    name: "Coding Agent Tools Manifest",
+    version: "1.1.0",
+    description: "Unified tool definitions",
+    file_operations: {
+      list_files: { description: "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure.", category: "discovery", enabled: true, params: { path_prefix: { type: "string | null", required: false, description: "Filter files by path prefix" } } },
+      wildcard_search: { description: "Multi-term search across all files. Returns ranked results by match count.", category: "discovery", enabled: true, params: { query: { type: "string", required: true, description: "Multi-term search query" } } },
+      search: { description: "Search file paths and content by single keyword.", category: "discovery", enabled: true, params: { keyword: { type: "string", required: true, description: "Single keyword to search" } } },
+      read_file: { description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>.", category: "read", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path (alternative to file_id)" } } },
+      edit_lines: { description: "Edit specific line range in a file and stage the change.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path" }, start_line: { type: "integer", required: true, description: "Starting line number (1-based)" }, end_line: { type: "integer", required: true, description: "Ending line number (inclusive)" }, new_content: { type: "string", required: true, description: "Replacement content" } } },
+      create_file: { description: "Create new file and stage as add operation.", category: "write", enabled: true, params: { path: { type: "string", required: true, description: "Full path for new file" }, content: { type: "string", required: true, description: "File content" } } },
+      delete_file: { description: "Delete file and stage as delete operation.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path" } } },
+      move_file: { description: "Move or rename file to a new path.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "Current file path" }, new_path: { type: "string", required: true, description: "New path" } } },
+      get_staged_changes: { description: "View all currently staged changes.", category: "staging", enabled: true, params: {} },
+      unstage_file: { description: "Discard a specific staged change by file_path.", category: "staging", enabled: true, params: { file_path: { type: "string", required: true, description: "File path to unstage" } } },
+      discard_all_staged: { description: "Discard ALL staged changes. Use with EXTREME CAUTION.", category: "staging", enabled: true, params: {} },
+    },
+    project_exploration_tools: {
+      project_inventory: { description: "Returns counts and brief previews for ALL project elements in one call.", category: "project", enabled: true, params: {} },
+      project_category: { description: "Load ALL items from a specific category with full details.", category: "project", enabled: true, params: { category: { type: "string", required: true, description: "Category name" } } },
+      project_elements: { description: "Load SPECIFIC elements by their IDs with full details.", category: "project", enabled: true, params: { elements: { type: "array", required: true, description: "Array of {category, id} pairs" } } },
+    },
+  };
+
+  // Merge custom tool descriptions if provided
+  if (customToolDescriptions) {
+    console.log("[coding-agent-orchestrator] Merging custom tool descriptions");
+    if (customToolDescriptions.file_operations) {
+      for (const [toolName, desc] of Object.entries(customToolDescriptions.file_operations)) {
+        if (manifest.file_operations[toolName]) {
+          manifest.file_operations[toolName].description = desc;
+        }
+      }
+    }
+    if (customToolDescriptions.project_exploration_tools && manifest.project_exploration_tools) {
+      for (const [toolName, desc] of Object.entries(customToolDescriptions.project_exploration_tools)) {
+        if (manifest.project_exploration_tools[toolName]) {
+          manifest.project_exploration_tools[toolName].description = desc;
+        }
+      }
+    }
+  }
+
+  // Build attached files section
+  let attachedFilesSection = "";
+  if (attachedFiles && attachedFiles.length > 0) {
+    const attachedList = attachedFiles.map((f) => `- ${f.path} (file_id: ${f.id})`).join("\n");
+    attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: The file_id values are PROVIDED ABOVE. Use read_file directly with these IDs - DO NOT call list_files first. Only use list_files if NO files are attached and you need to search. For attached files, immediately use read_file with the provided file_id.`;
+  }
+
+  // Build context summary
+  let contextSummary = "";
+  if (projectContext) {
+    const parts: string[] = [];
+
+    if (projectContext.projectMetadata) {
+      const meta = projectContext.projectMetadata as any;
+      parts.push(
+        `Project: ${meta.name}\n` +
+          (meta.description ? `Description: ${meta.description}\n` : "") +
+          (meta.organization ? `Organization: ${meta.organization}\n` : "") +
+          (meta.scope ? `Scope: ${meta.scope}\n` : ""),
+      );
+    }
+
+    if (projectContext.artifacts?.length > 0) {
+      const artifacts = projectContext.artifacts as any[];
+      const preview = artifacts
+        .slice(0, 5)
+        .map((a, index) => {
+          const title = a.ai_title || a.title || `Artifact ${index + 1}`;
+          const summary = a.ai_summary || (a.content ? String(a.content).slice(0, 160) : "");
+          return `- ${title}: ${summary}`;
+        })
+        .join("\n");
+      parts.push(`Artifacts (${artifacts.length} total, showing up to 5):\n${preview}`);
+    }
+
+    if (projectContext.requirements?.length > 0) {
+      const reqs = projectContext.requirements as any[];
+      const preview = reqs
+        .slice(0, 10)
+        .map((r) => {
+          const code = r.code ? `${r.code} - ` : "";
+          const contentSnippet = r.content ? String(r.content).slice(0, 160) : "";
+          return `- ${code}${r.title}: ${contentSnippet}`;
+        })
+        .join("\n");
+      parts.push(`Requirements (${reqs.length} total, showing up to 10):\n${preview}`);
+    }
+
+    if (projectContext.standards?.length > 0) {
+      const stds = projectContext.standards as any[];
+      const preview = stds
+        .slice(0, 10)
+        .map((s) => {
+          const code = s.code ? `${s.code} - ` : "";
+          const desc = s.description ? String(s.description).slice(0, 160) : "";
+          return `- ${code}${s.title}: ${desc}`;
+        })
+        .join("\n");
+      parts.push(`Standards (${stds.length} total, showing up to 10):\n${preview}`);
+    }
+
+    if (projectContext.techStacks?.length > 0) {
+      const stacks = projectContext.techStacks as any[];
+      const preview = stacks
+        .slice(0, 10)
+        .map((t) => {
+          const type = t.type ? ` [${t.type}]` : "";
+          const desc = t.description ? String(t.description).slice(0, 120) : "";
+          return `- ${t.name}${type}: ${desc}`;
+        })
+        .join("\n");
+      parts.push(`Tech Stacks (${stacks.length} total, showing up to 10):\n${preview}`);
+    }
+
+    if (projectContext.canvasNodes?.length > 0) {
+      const nodes = projectContext.canvasNodes as any[];
+      const preview = nodes
+        .slice(0, 20)
+        .map((n) => {
+          const data = (n.data || {}) as any;
+          const type = data.type || n.type || "node";
+          const label = data.label || data.title || data.name || n.id;
+          return `- [${type}] ${label}`;
+        })
+        .join("\n");
+      parts.push(`Canvas Nodes (${nodes.length} total, showing up to 20):\n${preview}`);
+    }
+
+    if (projectContext.canvasEdges?.length > 0) {
+      const edges = projectContext.canvasEdges as any[];
+      const preview = edges
+        .slice(0, 20)
+        .map((e) => `- ${e.source_id} -> ${e.target_id}${e.label ? ` (${e.label})` : ""}`)
+        .join("\n");
+      parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
+    }
+
+    if (projectContext.files?.length > 0) {
+      const files = projectContext.files as any[];
+      const allFilesContent = files.map((f: any) => 
+        `### FILE: ${f.path}\n\`\`\`\n${f.content || ''}\n\`\`\``
+      ).join("\n\n");
+      parts.push(`Repository Files (${files.length} attached by user - FULL CONTENT):\n\n${allFilesContent}`);
+    }
+
+    if (projectContext.databases?.length > 0) {
+      const dbs = projectContext.databases as any[];
+      const dbItems = dbs.map((d: any) => {
+        let itemStr = `### ${d.type.toUpperCase()}: ${d.schemaName}.${d.name}`;
+        if (d.definition) {
+          itemStr += `\n\`\`\`sql\n${d.definition}\n\`\`\``;
+        }
+        if (d.columns?.length) {
+          const colDetails = d.columns.map((c: any) => {
+            let col = `  - ${c.name}: ${c.type}`;
+            if (c.isPrimaryKey) col += ' [PK]';
+            if (c.isForeignKey) col += ` [FK -> ${c.foreignKeyRef}]`;
+            if (!c.nullable) col += ' NOT NULL';
+            if (c.default) col += ` DEFAULT ${c.default}`;
+            return col;
+          }).join('\n');
+          itemStr += `\nColumns:\n${colDetails}`;
+        }
+        if (d.indexes?.length) {
+          const idxDetails = d.indexes.map((i: any) => `  - ${i.name}: ${i.definition}`).join('\n');
+          itemStr += `\nIndexes:\n${idxDetails}`;
+        }
+        if (d.sql_content) itemStr += `\n\`\`\`sql\n${d.sql_content}\n\`\`\``;
+        if (d.sampleData?.length) itemStr += `\nSample data: ${d.sampleData.length} rows\n${JSON.stringify(d.sampleData.slice(0, 3), null, 2)}`;
+        return itemStr;
+      }).join("\n\n");
+      parts.push(`DATABASE SCHEMAS (${dbs.length} items attached):\n\n${dbItems}`);
+    }
+
+    contextSummary = parts.join("\n\n");
+  }
+
+  // Build chat history section
+  let chatHistorySection = "";
+  if (chatHistory && chatHistory.trim()) {
+    chatHistorySection = `\n\n📜 RECENT CONVERSATION CONTEXT:\n${chatHistory}\n--- END CONVERSATION CONTEXT ---`;
+  }
+
+  // Default prompt sections
+  const defaultPromptSections: AgentPromptSection[] = [
+    {
+      id: "role",
+      title: "Agent Role",
+      type: "static",
+      editable: "editable",
+      order: 1,
+      content: `You are a senior software engineer with expert knowledge across all programming languages, frameworks, and best practices.
+
+Your task is: {{TASK_MODE}}
+Auto-commit mode: {{AUTO_COMMIT}}
+
+{{PROJECT_CONTEXT}}`
+    },
+    {
+      id: "chat_context",
+      title: "Chat Context",
+      type: "dynamic",
+      editable: "readonly",
+      order: 2,
+      content: "{{CHAT_HISTORY}}"
+    },
+    {
+      id: "attached_files_with",
+      title: "Attached Files (With Files)",
+      type: "dynamic",
+      editable: "readonly",
+      order: 3,
+      content: "{{ATTACHED_FILES_LIST}}"
+    },
+    {
+      id: "attached_files_without",
+      title: "Attached Files (Without Files)",
+      type: "dynamic",
+      editable: "readonly",
+      order: 3,
+      content: "No files are attached. Use list_files first to explore the project structure, then read relevant files."
+    },
+    {
+      id: "available_tools",
+      title: "Available Tools",
+      type: "dynamic",
+      editable: "readonly",
+      order: 5,
+      content: "{{TOOLS_LIST}}"
+    },
+    {
+      id: "response_format",
+      title: "Response Format",
+      type: "dynamic",
+      editable: "readonly",
+      order: 6,
+      content: "{{RESPONSE_SCHEMA}}"
+    },
+    {
+      id: "blackboard_section",
+      title: "Blackboard (Memory)",
+      type: "dynamic",
+      editable: "readonly",
+      order: 7,
+      content: "{{BLACKBOARD}}"
+    },
+    {
+      id: "core_principles",
+      title: "Core Principles",
+      type: "static",
+      editable: "editable",
+      order: 8,
+      content: `## CORE PRINCIPLES
+
+1. **Read Before Edit**: ALWAYS read_file before attempting edit_lines. Never assume file content.
+2. **Line Numbers Matter**: Use <<N>> line prefixes from read_file output for precise edits.
+3. **Atomic Operations**: Make one logical change per operation when possible.
+4. **Verify Your Work**: After edits, use read_file to confirm changes if uncertain.
+5. **Status Tracking**: Set status to "completed" ONLY when the task is fully done.`
+    },
+    {
+      id: "file_handling",
+      title: "File Handling Rules",
+      type: "static",
+      editable: "editable",
+      order: 9,
+      content: `## FILE HANDLING RULES
+
+- **New Files**: Use create_file with full content.
+- **Modifications**: Use edit_lines with exact line ranges from read_file output.
+- **Deletions**: Use delete_file for removing files entirely.
+- **Moves/Renames**: Use move_file to change file paths.
+- **Staging**: All write operations automatically stage changes.`
+    },
+    {
+      id: "error_handling",
+      title: "Error Handling",
+      type: "static",
+      editable: "editable",
+      order: 10,
+      content: `## ERROR HANDLING
+
+If an operation fails:
+1. Read the error message carefully
+2. Adjust your approach based on the error
+3. Try alternative methods if available
+4. Document issues in blackboard_entry for future reference`
+    },
+    {
+      id: "critical_rules",
+      title: "Critical Rules",
+      type: "static",
+      editable: "editable",
+      order: 11,
+      content: `## CRITICAL RULES
+
+⚠️ NEVER modify lines outside your specified range
+⚠️ NEVER assume file content without reading first
+⚠️ NEVER use stale file_ids from previous sessions
+⚠️ ALWAYS include reasoning in your response
+⚠️ ALWAYS set appropriate status (in_progress or completed)`
+    },
+    {
+      id: "iteration_rules",
+      title: "Iteration Rules",
+      type: "static",
+      editable: "editable",
+      order: 12,
+      content: `## ITERATION BEHAVIOR
+
+- You run in a loop until you set status: "completed"
+- Each iteration should make meaningful progress
+- Use blackboard_entry to track your progress across iterations
+- If stuck, document the issue and set status: "completed" with explanation`
+    },
+    {
+      id: "iteration_status",
+      title: "Iteration Status",
+      type: "dynamic",
+      editable: "readonly",
+      order: 13,
+      content: "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"
+    }
+  ];
+
+  const sectionsToUse = (promptSections && promptSections.length > 0) ? promptSections : defaultPromptSections;
+  console.log(`Building dynamic system prompt from ${sectionsToUse.length} sections (custom: ${promptSections && promptSections.length > 0})`);
+
+  const MAX_ITERATIONS = Math.min(Math.max(requestedMaxIterations, 1), 500);
+  console.log(`Max iterations set to: ${MAX_ITERATIONS} (requested: ${requestedMaxIterations})`);
+
+  // Dynamic system prompt builder
+  function buildDynamicSystemPrompt(
+    sections: AgentPromptSection[], 
+    currentIteration: number = 1, 
+    maxIters: number = 30,
+    blackboardEntries: string = ""
+  ): string {
+    const enabledSections = sections.filter(s => s.enabled !== false);
+    const sortedSections = [...enabledSections].sort((a, b) => a.order - b.order);
+    
+    const toolsListText = generateToolsListText(manifest, exposeProject);
+    const responseSchemaText = generateResponseSchemaText(manifest, exposeProject);
+    
+    const hasAttachedFiles = attachedFiles && attachedFiles.length > 0;
+    
+    const filteredSections = sortedSections.filter(s => {
+      if (s.id === "attached_files_with") return hasAttachedFiles;
+      if (s.id === "attached_files_without") return !hasAttachedFiles;
+      if (s.id === "attached_files_instruction") return true;
+      return true;
+    });
+    
+    const variables: Record<string, string> = {
+      "{{TOOLS_LIST}}": toolsListText,
+      "{{RESPONSE_SCHEMA}}": responseSchemaText,
+      "{{TASK_MODE}}": mode,
+      "{{AUTO_COMMIT}}": String(autoCommit),
+      "{{PROJECT_CONTEXT}}": contextSummary ? `Project Context:\n${contextSummary}` : "",
+      "{{ATTACHED_FILES_LIST}}": attachedFilesSection,
+      "{{ATTACHED_FILES_INSTRUCTION}}": hasAttachedFiles
+        ? attachedFilesSection
+        : "No files are attached. Use list_files first to explore the project structure, then read relevant files.",
+      "{{CHAT_HISTORY}}": chatHistorySection,
+      "{{BLACKBOARD}}": blackboardEntries 
+        ? `=== YOUR WORKING MEMORY ===\n${blackboardEntries}\n=== END MEMORY ===` 
+        : "(No blackboard entries yet)",
+      "{{CURRENT_ITERATION}}": String(currentIteration),
+      "{{MAX_ITERATIONS}}": String(maxIters),
+    };
+    
+    const promptParts: string[] = [];
+    for (const section of filteredSections) {
+      let content = section.content;
+      for (const [key, value] of Object.entries(variables)) {
+        content = content.split(key).join(value);
+      }
+      promptParts.push(content);
+    }
+    
+    return promptParts.join("\n\n");
+  }
+
+  // Session file registry
+  const sessionFileRegistry = new Map<string, { 
+    staging_id: string; 
+    path: string; 
+    content: string;
+    created_at: Date;
+  }>();
+  console.log("[SESSION] Initialized sessionFileRegistry for tracking session-created files");
+
+  // ============================================================
+  // PHASE 2: CREATE STREAM WITH ITERATION LOOP ONLY
+  // Like chat-stream-gemini, all setup is done - now just stream
+  // ============================================================
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
   const stream = new ReadableStream({
     async start(controller) {
-      const encoder = new TextEncoder();
-      
-      // Track session state for error handling
-      let sessionId: string | null = null;
-      let shareToken: string | null = null;
-      let supabase: any = null;
-      let projectId: string | null = null;
-
       const sendSSE = (event: SSEEventType, data: any) => {
         const message = `data: ${JSON.stringify({ type: event, ...data })}\n\n`;
         try {
@@ -431,639 +919,36 @@ serve(async (req) => {
         }
       };
 
+      // Send session created event immediately
+      sendSSE('session_created', { sessionId });
+
+      let iteration = 0;
+      let conversationHistory: Array<{ role: string; content: string }> = [];
+      let finalStatus = "running";
+      let allOperationResults: any[] = [];
+      let ephemeralContext: any[] = [];
+
+      conversationHistory.push({ role: "user", content: `Task: ${taskDescription}` });
+
       try {
-        supabase = createClient(supabaseUrl, supabaseKey, {
-          global: {
-            headers: authHeader ? { Authorization: authHeader } : {},
-          },
-        });
-
-        shareToken = requestData.shareToken;
-        const {
-          projectId: reqProjectId,
-          repoId,
-          taskDescription,
-          attachedFiles,
-          projectContext,
-          mode,
-          autoCommit = false,
-          chatHistory,
-          exposeProject = false,
-          maxIterations: requestedMaxIterations = 100,
-          promptSections,
-          customToolDescriptions,
-        } = requestData;
-        
-        projectId = reqProjectId;
-
-        console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
-
-        // Get project settings for API key and model selection
-        const { data: project, error: projectError } = await supabase.rpc("get_project_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken,
-        });
-
-        if (projectError) throw projectError;
-
-        const selectedModel = project.selected_model || "gemini-2.5-flash";
-        const maxTokens = project.max_tokens || 32768;
-
-        // Select API key based on model
-        let apiKey: string;
-        let apiEndpoint: string;
-        let modelName: string;
-
-        if (selectedModel.startsWith("gemini")) {
-          apiKey = Deno.env.get("GEMINI_API_KEY")!;
-          apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
-          modelName = selectedModel;
-        } else if (selectedModel.startsWith("claude")) {
-          apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
-          apiEndpoint = "https://api.anthropic.com/v1/messages";
-          modelName = selectedModel;
-        } else if (selectedModel.startsWith("grok")) {
-          apiKey = Deno.env.get("XAI_API_KEY")!;
-          apiEndpoint = "https://api.x.ai/v1/chat/completions";
-          modelName = selectedModel;
-        } else {
-          throw new Error(`Unsupported model: ${selectedModel}`);
-        }
-
-        if (!apiKey) {
-          throw new Error(`API key not configured for model: ${selectedModel}`);
-        }
-
-        // Create agent session
-        const { data: session, error: sessionError } = await supabase.rpc("create_agent_session_with_token", {
-          p_project_id: projectId,
-          p_mode: mode,
-          p_task_description: taskDescription,
-          p_token: shareToken,
-        });
-
-        if (sessionError) throw sessionError;
-        if (!session) throw new Error("Failed to create session");
-
-        sessionId = session.id;
-
-        // Log user's task as first message
-        await supabase.rpc("insert_agent_message_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_role: "user",
-          p_content: taskDescription,
-          p_metadata: { attachedFiles, projectContext },
-        });
-        
-        // Broadcast to notify subscribers immediately
-        await supabase.channel(`agent-messages-project-${projectId}`).send({
-          type: 'broadcast',
-          event: 'agent_message_refresh',
-          payload: { sessionId, iteration: 0 }
-        });
-        
-        console.log("Created session:", session.id);
-        
-        // Send SSE event for session creation
-        sendSSE('session_created', { sessionId: session.id });
-
-        // Load instruction manifest - full structure with params for schema generation
-        const manifest: ToolsManifest = {
-          id: "coding-agent-tools",
-          name: "Coding Agent Tools Manifest",
-          version: "1.1.0",
-          description: "Unified tool definitions",
-          file_operations: {
-            list_files: { description: "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure.", category: "discovery", enabled: true, params: { path_prefix: { type: "string | null", required: false, description: "Filter files by path prefix" } } },
-            wildcard_search: { description: "Multi-term search across all files. Returns ranked results by match count.", category: "discovery", enabled: true, params: { query: { type: "string", required: true, description: "Multi-term search query" } } },
-            search: { description: "Search file paths and content by single keyword.", category: "discovery", enabled: true, params: { keyword: { type: "string", required: true, description: "Single keyword to search" } } },
-            read_file: { description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>.", category: "read", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path (alternative to file_id)" } } },
-            edit_lines: { description: "Edit specific line range in a file and stage the change.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path" }, start_line: { type: "integer", required: true, description: "Starting line number (1-based)" }, end_line: { type: "integer", required: true, description: "Ending line number (inclusive)" }, new_content: { type: "string", required: true, description: "Replacement content" } } },
-            create_file: { description: "Create new file and stage as add operation.", category: "write", enabled: true, params: { path: { type: "string", required: true, description: "Full path for new file" }, content: { type: "string", required: true, description: "File content" } } },
-            delete_file: { description: "Delete file and stage as delete operation.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "File path" } } },
-            move_file: { description: "Move or rename file to a new path.", category: "write", enabled: true, params: { file_id: { type: "string", required: false, description: "UUID of file" }, path: { type: "string", required: false, description: "Current file path" }, new_path: { type: "string", required: true, description: "New path" } } },
-            get_staged_changes: { description: "View all currently staged changes.", category: "staging", enabled: true, params: {} },
-            unstage_file: { description: "Discard a specific staged change by file_path.", category: "staging", enabled: true, params: { file_path: { type: "string", required: true, description: "File path to unstage" } } },
-            discard_all_staged: { description: "Discard ALL staged changes. Use with EXTREME CAUTION.", category: "staging", enabled: true, params: {} },
-          },
-          project_exploration_tools: {
-            project_inventory: { description: "Returns counts and brief previews for ALL project elements in one call.", category: "project", enabled: true, params: {} },
-            project_category: { description: "Load ALL items from a specific category with full details.", category: "project", enabled: true, params: { category: { type: "string", required: true, description: "Category name" } } },
-            project_elements: { description: "Load SPECIFIC elements by their IDs with full details.", category: "project", enabled: true, params: { elements: { type: "array", required: true, description: "Array of {category, id} pairs" } } },
-          },
-        };
-
-        // Merge custom tool descriptions if provided by the client
-        if (customToolDescriptions) {
-          console.log("[coding-agent-orchestrator] Merging custom tool descriptions");
-          
-          // Merge file_operations custom descriptions
-          if (customToolDescriptions.file_operations) {
-            for (const [toolName, desc] of Object.entries(customToolDescriptions.file_operations)) {
-              if (manifest.file_operations[toolName]) {
-                manifest.file_operations[toolName].description = desc;
-              }
-            }
-          }
-          
-          // Merge project_exploration_tools custom descriptions
-          if (customToolDescriptions.project_exploration_tools && manifest.project_exploration_tools) {
-            for (const [toolName, desc] of Object.entries(customToolDescriptions.project_exploration_tools)) {
-              if (manifest.project_exploration_tools[toolName]) {
-                manifest.project_exploration_tools[toolName].description = desc;
-              }
-            }
-          }
-        }
-
-        // Describe attached files by id and path only (let the agent read them via tools)
-        let attachedFilesSection = "";
-        if (attachedFiles && attachedFiles.length > 0) {
-          const attachedList = attachedFiles.map((f) => `- ${f.path} (file_id: ${f.id})`).join("\n");
-          attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: The file_id values are PROVIDED ABOVE. Use read_file directly with these IDs - DO NOT call list_files first. Only use list_files if NO files are attached and you need to search. For attached files, immediately use read_file with the provided file_id.`;
-        }
-
-        // Build rich context summary from ProjectSelector data
-        let contextSummary = "";
-        if (projectContext) {
-          const parts: string[] = [];
-
-          if (projectContext.projectMetadata) {
-            const meta = projectContext.projectMetadata as any;
-            parts.push(
-              `Project: ${meta.name}\n` +
-                (meta.description ? `Description: ${meta.description}\n` : "") +
-                (meta.organization ? `Organization: ${meta.organization}\n` : "") +
-                (meta.scope ? `Scope: ${meta.scope}\n` : ""),
-            );
-          }
-
-          if (projectContext.artifacts?.length > 0) {
-            const artifacts = projectContext.artifacts as any[];
-            const preview = artifacts
-              .slice(0, 5)
-              .map((a, index) => {
-                const title = a.ai_title || a.title || `Artifact ${index + 1}`;
-                const summary = a.ai_summary || (a.content ? String(a.content).slice(0, 160) : "");
-                return `- ${title}: ${summary}`;
-              })
-              .join("\n");
-            parts.push(`Artifacts (${artifacts.length} total, showing up to 5):\n${preview}`);
-          }
-
-          if (projectContext.requirements?.length > 0) {
-            const reqs = projectContext.requirements as any[];
-            const preview = reqs
-              .slice(0, 10)
-              .map((r) => {
-                const code = r.code ? `${r.code} - ` : "";
-                const contentSnippet = r.content ? String(r.content).slice(0, 160) : "";
-                return `- ${code}${r.title}: ${contentSnippet}`;
-              })
-              .join("\n");
-            parts.push(`Requirements (${reqs.length} total, showing up to 10):\n${preview}`);
-          }
-
-          if (projectContext.standards?.length > 0) {
-            const stds = projectContext.standards as any[];
-            const preview = stds
-              .slice(0, 10)
-              .map((s) => {
-                const code = s.code ? `${s.code} - ` : "";
-                const desc = s.description ? String(s.description).slice(0, 160) : "";
-                return `- ${code}${s.title}: ${desc}`;
-              })
-              .join("\n");
-            parts.push(`Standards (${stds.length} total, showing up to 10):\n${preview}`);
-          }
-
-          if (projectContext.techStacks?.length > 0) {
-            const stacks = projectContext.techStacks as any[];
-            const preview = stacks
-              .slice(0, 10)
-              .map((t) => {
-                const type = t.type ? ` [${t.type}]` : "";
-                const desc = t.description ? String(t.description).slice(0, 120) : "";
-                return `- ${t.name}${type}: ${desc}`;
-              })
-              .join("\n");
-            parts.push(`Tech Stacks (${stacks.length} total, showing up to 10):\n${preview}`);
-          }
-
-          if (projectContext.canvasNodes?.length > 0) {
-            const nodes = projectContext.canvasNodes as any[];
-            const preview = nodes
-              .slice(0, 20)
-              .map((n) => {
-                const data = (n.data || {}) as any;
-                const type = data.type || n.type || "node";
-                const label = data.label || data.title || data.name || n.id;
-                return `- [${type}] ${label}`;
-              })
-              .join("\n");
-            parts.push(`Canvas Nodes (${nodes.length} total, showing up to 20):\n${preview}`);
-          }
-
-          if (projectContext.canvasEdges?.length > 0) {
-            const edges = projectContext.canvasEdges as any[];
-            const preview = edges
-              .slice(0, 20)
-              .map((e) => `- ${e.source_id} -> ${e.target_id}${e.label ? ` (${e.label})` : ""}`)
-              .join("\n");
-            parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
-          }
-
-          if (projectContext.files?.length > 0) {
-            const files = projectContext.files as any[];
-            // Include FULL content for ALL attached files - user explicitly selected these
-            const allFilesContent = files.map((f: any) => 
-              `### FILE: ${f.path}\n\`\`\`\n${f.content || ''}\n\`\`\``
-            ).join("\n\n");
-            
-            parts.push(`Repository Files (${files.length} attached by user - FULL CONTENT):\n\n${allFilesContent}`);
-          }
-
-          if (projectContext.databases?.length > 0) {
-            const dbs = projectContext.databases as any[];
-            const dbItems = dbs.map((d: any) => {
-              let itemStr = `### ${d.type.toUpperCase()}: ${d.schemaName}.${d.name}`;
-              if (d.definition) {
-                itemStr += `\n\`\`\`sql\n${d.definition}\n\`\`\``;
-              }
-              if (d.columns?.length) {
-                const colDetails = d.columns.map((c: any) => {
-                  let col = `  - ${c.name}: ${c.type}`;
-                  if (c.isPrimaryKey) col += ' [PK]';
-                  if (c.isForeignKey) col += ` [FK -> ${c.foreignKeyRef}]`;
-                  if (!c.nullable) col += ' NOT NULL';
-                  if (c.default) col += ` DEFAULT ${c.default}`;
-                  return col;
-                }).join('\n');
-                itemStr += `\nColumns:\n${colDetails}`;
-              }
-              if (d.indexes?.length) {
-                const idxDetails = d.indexes.map((i: any) => `  - ${i.name}: ${i.definition}`).join('\n');
-                itemStr += `\nIndexes:\n${idxDetails}`;
-              }
-              if (d.sql_content) itemStr += `\n\`\`\`sql\n${d.sql_content}\n\`\`\``;
-              if (d.sampleData?.length) itemStr += `\nSample data: ${d.sampleData.length} rows\n${JSON.stringify(d.sampleData.slice(0, 3), null, 2)}`;
-              return itemStr;
-            }).join("\n\n");
-            parts.push(`DATABASE SCHEMAS (${dbs.length} items attached):\n\n${dbItems}`);
-          }
-
-          contextSummary = parts.join("\n\n");
-        }
-
-        // Build chat history section
-        let chatHistorySection = "";
-        if (chatHistory && chatHistory.trim()) {
-          chatHistorySection = `\n\n📜 RECENT CONVERSATION CONTEXT:\n${chatHistory}\n--- END CONVERSATION CONTEXT ---`;
-        }
-
-        // Dynamic system prompt builder - substitutes variables in prompt sections
-        function buildDynamicSystemPrompt(
-          sections: AgentPromptSection[], 
-          currentIteration: number = 1, 
-          maxIterations: number = 30,
-          blackboardEntries: string = ""
-        ): string {
-          // Filter out disabled sections, then sort by order
-          const enabledSections = sections.filter(s => s.enabled !== false);
-          const sortedSections = [...enabledSections].sort((a, b) => a.order - b.order);
-          
-          console.log(`[buildDynamicSystemPrompt] ${sections.length} total sections, ${enabledSections.length} enabled`);
-          
-          // Generate dynamic content from manifest
-          const toolsListText = generateToolsListText(manifest, exposeProject);
-          const responseSchemaText = generateResponseSchemaText(manifest, exposeProject);
-          
-          // Determine which attached files section to use
-          const hasAttachedFiles = attachedFiles && attachedFiles.length > 0;
-          
-          // Filter sections based on attached files state
-          const filteredSections = sortedSections.filter(s => {
-            // Show "attached_files_with" only when files are attached
-            if (s.id === "attached_files_with") return hasAttachedFiles;
-            // Show "attached_files_without" only when no files are attached
-            if (s.id === "attached_files_without") return !hasAttachedFiles;
-            // Legacy support for old templates
-            if (s.id === "attached_files_instruction") return true;
-            return true;
-          });
-          
-          // Build variable substitutions
-          const variables: Record<string, string> = {
-            // New unified variables
-            "{{TOOLS_LIST}}": toolsListText,
-            "{{RESPONSE_SCHEMA}}": responseSchemaText,
-            // Runtime values
-            "{{TASK_MODE}}": mode,
-            "{{AUTO_COMMIT}}": String(autoCommit),
-            "{{PROJECT_CONTEXT}}": contextSummary ? `Project Context:\n${contextSummary}` : "",
-            "{{ATTACHED_FILES_LIST}}": attachedFilesSection,
-            // Legacy support for old templates
-            "{{ATTACHED_FILES_INSTRUCTION}}": hasAttachedFiles
-              ? attachedFilesSection
-              : "No files are attached. Use list_files first to explore the project structure, then read relevant files.",
-            "{{CHAT_HISTORY}}": chatHistorySection,
-            "{{BLACKBOARD}}": blackboardEntries 
-              ? `=== YOUR WORKING MEMORY ===\n${blackboardEntries}\n=== END MEMORY ===` 
-              : "(No blackboard entries yet)",
-            "{{CURRENT_ITERATION}}": String(currentIteration),
-            "{{MAX_ITERATIONS}}": String(maxIterations),
-          };
-          
-          // Build final prompt from sections
-          const promptParts: string[] = [];
-          for (const section of filteredSections) {
-            let content = section.content;
-            // Apply all variable substitutions
-            for (const [key, value] of Object.entries(variables)) {
-              content = content.split(key).join(value);
-            }
-            promptParts.push(content);
-          }
-          
-          return promptParts.join("\n\n");
-        }
-
-        // Default prompt sections - embedded as fallback if none provided by client
-        const defaultPromptSections: AgentPromptSection[] = [
-          {
-            id: "role",
-            title: "Agent Role",
-            type: "static",
-            editable: "editable",
-            order: 1,
-            content: `You are a senior software engineer with expert knowledge across all programming languages, frameworks, and best practices.
-
-Your task is: {{TASK_MODE}}
-Auto-commit mode: {{AUTO_COMMIT}}
-
-{{PROJECT_CONTEXT}}`
-          },
-          {
-            id: "chat_context",
-            title: "Chat Context",
-            type: "dynamic",
-            editable: "readonly",
-            order: 2,
-            content: "{{CHAT_HISTORY}}"
-          },
-          {
-            id: "attached_files_with",
-            title: "Attached Files (With Files)",
-            type: "dynamic",
-            editable: "readonly",
-            order: 3,
-            content: "{{ATTACHED_FILES_LIST}}"
-          },
-          {
-            id: "attached_files_without",
-            title: "Attached Files (Without Files)",
-            type: "dynamic",
-            editable: "readonly",
-            order: 3,
-            content: "No files are attached. Use list_files first to explore the project structure, then read relevant files."
-          },
-          {
-            id: "available_tools",
-            title: "Available Tools",
-            type: "dynamic",
-            editable: "readonly",
-            order: 5,
-            content: "{{TOOLS_LIST}}"
-          },
-          {
-            id: "response_format",
-            title: "Response Format",
-            type: "dynamic",
-            editable: "readonly",
-            order: 6,
-            content: "{{RESPONSE_SCHEMA}}"
-          },
-          {
-            id: "edit_lines_modes",
-            title: "Edit Lines Operation Modes",
-            type: "static",
-            editable: "editable",
-            order: 7,
-            content: `=== EDIT LINES OPERATION MODES ===
-
-EDIT_LINES OPERATION MODES - CRITICAL:
-
-1. REPLACE LINES (delete existing + insert new):
-   - Set start_line and end_line to the range you want to REPLACE
-   - Lines start_line through end_line (inclusive) will be DELETED
-   - new_content will be INSERTED in their place
-   - Example: start_line=10, end_line=15 replaces lines 10-15 with new_content
-
-2. INSERT ONLY (no deletion, preserves all existing content):
-   - Set end_line = start_line - 1 (end BEFORE start)
-   - NO lines will be deleted
-   - new_content will be INSERTED BEFORE the specified start_line
-   - Example: start_line=23, end_line=22 inserts new_content at line 23, shifting existing lines down
-   - USE THIS when adding new code without removing anything
-
-3. APPEND TO END OF FILE:
-   - Set start_line = total_lines + 1 (beyond file length)
-   - System will cap and append at end
-   - Example: 50-line file, start_line=51, end_line=50 appends after line 50`
-          },
-          {
-            id: "operation_batching",
-            title: "Operation Batching",
-            type: "static",
-            editable: "editable",
-            order: 8,
-            content: `=== OPERATION BATCHING ===
-
-OPERATION BATCHING - MULTIPLE EDITS PER RESPONSE:
-You can and SHOULD include multiple operations in a single response to work efficiently.
-
-1. BATCH MULTIPLE edit_lines OPERATIONS:
-   - If you need to make several changes in a file, include multiple edit_lines operations in ONE response. There is no limit, but 5-10 are common, and more are accepted.
-   - Each edit_lines should still be targeted and surgical (change only the lines needed)
-   - If you think you'll struggle with bracket or function closures, its OK to replace a whole block if it is more efficient.
-
-2. EXAMPLE - MULTIPLE OPERATIONS IN ONE RESPONSE:
-   If you need to add an import, update a function, and fix a typo in the same file:
-   {
-     "operations": [
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 1, "end_line": 3, "new_content": "import React from 'react';\\nimport { useState } from 'react';\\nimport { newDep } from 'new-package';" }},
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 25, "end_line": 27, "new_content": "  const result = processData(input);\\n  return result;" }},
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 42, "end_line": 42, "new_content": "  // Fixed typo in comment" }}
-     ]
-   }`
-          },
-          {
-            id: "iteration_philosophy",
-            title: "Iteration Philosophy",
-            type: "static",
-            editable: "editable",
-            order: 9,
-            content: `=== ITERATION PHILOSOPHY ===
-
-ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
-You have up to {{MAX_ITERATIONS}} iterations available. USE THEM FULLY.
-
-CRITICAL: Do NOT set status='completed' until you have:
-1. Implemented ALL aspects of the user's request, not just the basics
-2. Handled ALL edge cases and error conditions
-3. Added proper error handling with try/catch blocks
-4. Verified your changes by reading back modified files
-5. Checked for and fixed any broken dependencies or imports
-6. Run list_files at least once to verify file state
-
-WARNING: If you feel 'done' but have only used a few iterations, you are likely NOT done. Push yourself to:
-- Implement the feature completely, not just stub it out
-- Add inline comments for documentation
-- Handle what could break and proactively fix it
-- Consider related functionality that should be updated
-
-Stay in status='in_progress' until you have exhaustively validated completion.`
-          },
-          {
-            id: "completion_validation",
-            title: "Completion Validation",
-            type: "static",
-            editable: "editable",
-            order: 10,
-            content: `=== COMPLETION VALIDATION ===
-
-BEFORE SETTING status='completed', YOU MUST:
-
-STEP 1 - MINIMUM ITERATION CHECK:
-If you have completed fewer than 5 iterations, you are almost certainly NOT done.
-Ask yourself: Did I really complete EVERY aspect of the user's request?
-
-STEP 2 - REVIEW CURRENT STATE:
-Call list_files to see ALL files that currently exist.
-Review what files you created, edited, or deleted.
-
-STEP 3 - COMPARE AGAINST ORIGINAL TASK:
-Re-read the original user task at the top of this conversation.
-Ask: Does the current state satisfy EVERY aspect of the user's request?
-
-STEP 4 - IDENTIFY GAPS:
-- Are there features mentioned that aren't implemented?
-- Are there files that should exist but don't?
-- Are there edge cases or error handling missing?
-- Are there related files that need updating?
-
-STEP 5 - MAKE THE DECISION:
-If ANY gaps exist, set status='in_progress' and continue.
-If uncertain whether you're done, YOU'RE NOT DONE - continue working.
-
-ONLY set status='completed' when ALL requirements are met AND verified.
-
-CRITICAL: Before marking complete, execute this verification:
-{
-  "reasoning": "Verifying completion by checking file list against original task...",
-  "operations": [{ "type": "list_files", "params": { "path_prefix": null } }],
-  "status": "in_progress"
-}`
-          },
-          {
-            id: "response_enforcement",
-            title: "Response Format Enforcement",
-            type: "static",
-            editable: "editable",
-            order: 11,
-            content: `=== RESPONSE FORMAT ENFORCEMENT ===
-
-RESPONSE FORMAT ENFORCEMENT:
-Your entire response must be a single valid JSON object. Do not include ANY text before or after the JSON.
-
-CORRECT FORMAT:
-{"reasoning": "...", "operations": [...], "status": "..."}
-
-INCORRECT (DO NOT DO):
-Here is my response: {"reasoning": "..."}
-I will now... {"reasoning": "..."}
-\`\`\`json
-{"reasoning": "..."}
-\`\`\`
-
-Start your response with { and end with }. Nothing else.`
-          },
-          {
-            id: "blackboard",
-            title: "Agent Blackboard",
-            type: "dynamic",
-            editable: "readonly",
-            order: 12,
-            content: "{{BLACKBOARD}}"
-          },
-          {
-            id: "iteration_status",
-            title: "Iteration Status",
-            type: "dynamic",
-            editable: "readonly",
-            order: 13,
-            content: "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"
-          }
-        ];
-
-        // Build system prompt - use custom sections if provided, otherwise use embedded default
-        const sectionsToUse = (promptSections && promptSections.length > 0) ? promptSections : defaultPromptSections;
-        console.log(`Building dynamic system prompt from ${sectionsToUse.length} sections (custom: ${promptSections && promptSections.length > 0})`);
-        
-        // We'll rebuild the prompt each iteration with updated blackboard and iteration count
-        // Initial prompt built without iteration-specific data (will be rebuilt in loop)
-        let systemPrompt = buildDynamicSystemPrompt(sectionsToUse, 1, requestedMaxIterations, "");
-        
-        // Autonomous iteration loop - use requested max or default to 30, cap at 500
-        const MAX_ITERATIONS = Math.min(Math.max(requestedMaxIterations, 1), 500);
-        console.log(`Max iterations set to: ${MAX_ITERATIONS} (requested: ${requestedMaxIterations})`);
-        
-        let iteration = 0;
-        let conversationHistory: Array<{ role: string; content: string }> = [];
-        let finalStatus = "running";
-        let allOperationResults: any[] = [];
-        // Ephemeral context holds full operation results for current iteration only (NOT added to history)
-        let ephemeralContext: any[] = [];
-        
-        // Session file registry: tracks files created/modified during this session
-        // Maps file path -> { staging_id, path, content, created_at }
-        // This prevents stale file_id issues when agent tries to read/edit newly created files
-        const sessionFileRegistry = new Map<string, { 
-          staging_id: string; 
-          path: string; 
-          content: string;
-          created_at: Date;
-        }>();
-        console.log("[SESSION] Initialized sessionFileRegistry for tracking session-created files");
-
-        conversationHistory.push({ role: "user", content: `Task: ${taskDescription}` });
-
         while (iteration < MAX_ITERATIONS) {
-          // Check if abort was requested before starting this iteration
-          const { data: sessionCheck, error: sessionCheckError } = await supabase.rpc("get_agent_session_with_token", {
+          // Check abort status
+          const { data: sessionCheck } = await supabase.rpc("get_agent_session_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
           });
 
-          if (sessionCheckError) {
-            console.error("Error checking session status:", sessionCheckError);
-          } else if (sessionCheck && sessionCheck.length > 0) {
-            const sessionData = sessionCheck[0];
-            if (sessionData.abort_requested || sessionData.status === "aborted") {
-              console.log("Abort requested, stopping iteration loop");
-              finalStatus = "aborted";
-              break;
-            }
+          if (sessionCheck?.[0]?.abort_requested || sessionCheck?.[0]?.status === "aborted") {
+            console.log("Abort requested, stopping iteration loop");
+            finalStatus = "aborted";
+            break;
           }
 
           iteration++;
           console.log(`\n=== Iteration ${iteration} ===`);
-          
-          // Send SSE event for iteration start
           sendSSE('iteration_start', { iteration, maxIterations: MAX_ITERATIONS });
 
-          // Fetch blackboard entries from previous iterations to inject into prompt
+          // Fetch blackboard entries
           let blackboardSummary = "";
           try {
             const { data: blackboardEntries } = await supabase.rpc("get_agent_blackboard_with_token", {
@@ -1072,7 +957,7 @@ Start your response with { and end with }. Nothing else.`
             });
             if (blackboardEntries && blackboardEntries.length > 0) {
               blackboardSummary = blackboardEntries
-                .slice(-10) // Last 10 entries to avoid prompt bloat
+                .slice(-10)
                 .map((e: any) => `[${e.entry_type}] ${e.content}`)
                 .join("\n");
             }
@@ -1080,52 +965,40 @@ Start your response with { and end with }. Nothing else.`
             console.warn("Could not fetch blackboard entries:", err);
           }
 
-          // Rebuild system prompt with current iteration data
-          systemPrompt = buildDynamicSystemPrompt(sectionsToUse, iteration, MAX_ITERATIONS, blackboardSummary);
+          // Build system prompt for this iteration
+          const systemPrompt = buildDynamicSystemPrompt(sectionsToUse, iteration, MAX_ITERATIONS, blackboardSummary);
           
-          // Build conversation with ephemeral context injected for this iteration only
+          // Build conversation with ephemeral context
           let conversationForLLM = [...conversationHistory];
           if (ephemeralContext.length > 0) {
-            // Inject full operation results as ephemeral context (for read_file content, etc.)
-            // This is NOT stored in conversationHistory - only used for this single LLM call
             conversationForLLM.push({
               role: "user",
               content: `[EPHEMERAL CONTEXT - Full operation results from last iteration]\n${JSON.stringify(ephemeralContext, null, 2)}\n[END EPHEMERAL CONTEXT]`,
             });
           }
-          // Clear ephemeral context after building conversationForLLM (will be repopulated after this iteration's operations)
-          const ephemeralContextForLog = [...ephemeralContext]; // Keep copy for logging
           ephemeralContext = [];
 
-          // Build full input prompt for logging - MUST include the EXACT prompt sent to LLM including ephemeral context
           const fullInputPrompt = JSON.stringify({
             systemPrompt: systemPrompt,
             conversationForLLM: conversationForLLM,
             timestamp: new Date().toISOString()
           }, null, 2);
-          const inputCharCount = systemPrompt.length + conversationForLLM.reduce((acc, msg) => acc + msg.content.length, 0);
 
-          // Call LLM based on provider - use streaming where possible for progress updates
+          // Call LLM and stream response
           let rawOutputText = "";
-          const apiResponseStatus: number | null = null;
 
           if (selectedModel.startsWith("gemini")) {
-            // Gemini API with streaming enabled
+            // Gemini streaming
             const contents = conversationForLLM.map((msg) => ({
               role: msg.role === "assistant" ? "model" : "user",
               parts: [{ text: msg.content }],
             }));
 
-            // Use streamGenerateContent endpoint for SSE streaming
-            const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?key=${apiKey}&alt=sse`;
-            
-            const llmResponse = await fetch(streamEndpoint, {
+            const llmResponse = await fetch(apiEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                systemInstruction: {
-                  parts: [{ text: systemPrompt }],
-                },
+                systemInstruction: { parts: [{ text: systemPrompt }] },
                 contents,
                 generationConfig: {
                   maxOutputTokens: maxTokens,
@@ -1157,62 +1030,46 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Gemini API error: ${errorText}`);
             }
 
-            // Stream the response - INLINE for true real-time SSE forwarding
-            {
-              const reader = llmResponse.body?.getReader();
-              if (!reader) throw new Error("No response body reader available");
-              const decoder = new TextDecoder();
-              let textBuffer = "";
+            // Stream immediately from response body
+            const reader = llmResponse.body?.getReader();
+            if (!reader) throw new Error("No response body reader available");
+            let textBuffer = "";
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
               
-              try {
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
+              textBuffer += decoder.decode(value, { stream: true });
+              
+              let newlineIndex: number;
+              while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                let line = textBuffer.slice(0, newlineIndex);
+                textBuffer = textBuffer.slice(newlineIndex + 1);
+                
+                if (line.endsWith("\r")) line = line.slice(0, -1);
+                if (line.trim() === "" || line.startsWith(':')) continue;
+                if (!line.startsWith('data: ')) continue;
+                
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === "[DONE]") continue;
+                
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
                   
-                  textBuffer += decoder.decode(value, { stream: true });
-                  
-                  // Parse SSE lines immediately as they arrive
-                  let newlineIndex: number;
-                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-                    let line = textBuffer.slice(0, newlineIndex);
-                    textBuffer = textBuffer.slice(newlineIndex + 1);
-                    
-                    if (line.endsWith("\r")) line = line.slice(0, -1);
-                    if (line.trim() === "" || line.startsWith(':')) continue;
-                    if (!line.startsWith('data: ')) continue;
-                    
-                    const jsonStr = line.slice(6).trim();
-                    if (!jsonStr || jsonStr === "[DONE]") continue;
-                    
-                    try {
-                      const parsed = JSON.parse(jsonStr);
-                      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                      
-                      if (text) {
-                        const prevLength = rawOutputText.length;
-                        rawOutputText += text;
-                        
-                        // IMMEDIATELY forward each chunk to client - no batching
-                        sendSSE('llm_streaming', { 
-                          iteration, 
-                          charsReceived: rawOutputText.length,
-                          delta: text
-                        });
-                      }
-                    } catch (e) {
-                      // Ignore parse errors for partial chunks
-                    }
+                  if (text) {
+                    rawOutputText += text;
+                    sendSSE('llm_streaming', { iteration, charsReceived: rawOutputText.length, delta: text });
                   }
+                } catch (e) {
+                  // Ignore parse errors for partial chunks
                 }
-              } finally {
-                reader.releaseLock();
               }
             }
-            
+            reader.releaseLock();
+
           } else if (selectedModel.startsWith("claude")) {
-            // Anthropic API with streaming enabled
-            console.log(`Using Claude model ${modelName} with streaming`);
-            
+            // Claude streaming
             const messages = conversationForLLM.map((msg) => ({
               role: msg.role,
               content: msg.content,
@@ -1259,80 +1116,60 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Claude API error: ${errorText}`);
             }
 
-            // Stream the response - INLINE for true real-time SSE forwarding
-            // Claude returns tool input as JSON streamed via input_json_delta
-            {
-              const reader = llmResponse.body?.getReader();
-              if (!reader) throw new Error("No response body reader available");
-              const decoder = new TextDecoder();
-              let textBuffer = "";
-              let claudeToolInput = "";
+            const reader = llmResponse.body?.getReader();
+            if (!reader) throw new Error("No response body reader available");
+            let textBuffer = "";
+            let claudeToolInput = "";
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
               
-              try {
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
+              textBuffer += decoder.decode(value, { stream: true });
+              
+              let newlineIndex: number;
+              while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                let line = textBuffer.slice(0, newlineIndex);
+                textBuffer = textBuffer.slice(newlineIndex + 1);
+                
+                if (line.endsWith("\r")) line = line.slice(0, -1);
+                if (line.trim() === "" || line.startsWith(':')) continue;
+                if (!line.startsWith('data: ')) continue;
+                
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === "[DONE]") continue;
+                
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  let text = "";
                   
-                  textBuffer += decoder.decode(value, { stream: true });
-                  
-                  // Parse SSE lines immediately as they arrive
-                  let newlineIndex: number;
-                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-                    let line = textBuffer.slice(0, newlineIndex);
-                    textBuffer = textBuffer.slice(newlineIndex + 1);
-                    
-                    if (line.endsWith("\r")) line = line.slice(0, -1);
-                    if (line.trim() === "" || line.startsWith(':')) continue;
-                    if (!line.startsWith('data: ')) continue;
-                    
-                    const jsonStr = line.slice(6).trim();
-                    if (!jsonStr || jsonStr === "[DONE]") continue;
-                    
-                    try {
-                      const parsed = JSON.parse(jsonStr);
-                      let text = "";
-                      
-                      // Handle Claude streaming - both text and tool_use input
-                      if (parsed.type === "content_block_delta") {
-                        if (parsed.delta?.type === "text_delta") {
-                          text = parsed.delta.text || "";
-                        } else if (parsed.delta?.type === "input_json_delta") {
-                          // Tool input streaming - accumulate partial JSON
-                          const partialJson = parsed.delta.partial_json || "";
-                          claudeToolInput += partialJson;
-                          text = partialJson;
-                        }
-                      }
-                      
-                      if (text) {
-                        rawOutputText += text;
-                        
-                        // IMMEDIATELY forward each chunk to client - no batching
-                        sendSSE('llm_streaming', { 
-                          iteration, 
-                          charsReceived: rawOutputText.length,
-                          delta: text
-                        });
-                      }
-                    } catch (e) {
-                      // Ignore parse errors for partial chunks
+                  if (parsed.type === "content_block_delta") {
+                    if (parsed.delta?.type === "text_delta") {
+                      text = parsed.delta.text || "";
+                    } else if (parsed.delta?.type === "input_json_delta") {
+                      const partialJson = parsed.delta.partial_json || "";
+                      claudeToolInput += partialJson;
+                      text = partialJson;
                     }
                   }
+                  
+                  if (text) {
+                    rawOutputText += text;
+                    sendSSE('llm_streaming', { iteration, charsReceived: rawOutputText.length, delta: text });
+                  }
+                } catch (e) {
+                  // Ignore parse errors
                 }
-              } finally {
-                reader.releaseLock();
-              }
-              
-              // For Claude tool_use, use the accumulated tool input JSON
-              if (claudeToolInput) {
-                rawOutputText = claudeToolInput;
               }
             }
+            reader.releaseLock();
             
+            if (claudeToolInput) {
+              rawOutputText = claudeToolInput;
+            }
+
           } else if (selectedModel.startsWith("grok")) {
-            // xAI API with streaming enabled
-            console.log(`Using Grok model ${modelName} with streaming`);
-            
+            // xAI streaming
             const messages = [
               { role: "system", content: systemPrompt },
               ...conversationForLLM.map((msg) => ({
@@ -1379,83 +1216,50 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Grok API error: ${errorText}`);
             }
 
-            // Stream the response - INLINE for true real-time SSE forwarding
-            {
-              const reader = llmResponse.body?.getReader();
-              if (!reader) throw new Error("No response body reader available");
-              const decoder = new TextDecoder();
-              let textBuffer = "";
+            const reader = llmResponse.body?.getReader();
+            if (!reader) throw new Error("No response body reader available");
+            let textBuffer = "";
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
               
-              try {
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
+              textBuffer += decoder.decode(value, { stream: true });
+              
+              let newlineIndex: number;
+              while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                let line = textBuffer.slice(0, newlineIndex);
+                textBuffer = textBuffer.slice(newlineIndex + 1);
+                
+                if (line.endsWith("\r")) line = line.slice(0, -1);
+                if (line.trim() === "" || line.startsWith(':')) continue;
+                if (!line.startsWith('data: ')) continue;
+                
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === "[DONE]") continue;
+                
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const text = parsed.choices?.[0]?.delta?.content || "";
                   
-                  textBuffer += decoder.decode(value, { stream: true });
-                  
-                  // Parse SSE lines immediately as they arrive
-                  let newlineIndex: number;
-                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-                    let line = textBuffer.slice(0, newlineIndex);
-                    textBuffer = textBuffer.slice(newlineIndex + 1);
-                    
-                    if (line.endsWith("\r")) line = line.slice(0, -1);
-                    if (line.trim() === "" || line.startsWith(':')) continue;
-                    if (!line.startsWith('data: ')) continue;
-                    
-                    const jsonStr = line.slice(6).trim();
-                    if (!jsonStr || jsonStr === "[DONE]") continue;
-                    
-                    try {
-                      const parsed = JSON.parse(jsonStr);
-                      const text = parsed.choices?.[0]?.delta?.content || "";
-                      
-                      if (text) {
-                        rawOutputText += text;
-                        
-                        // IMMEDIATELY forward each chunk to client - no batching
-                        sendSSE('llm_streaming', { 
-                          iteration, 
-                          charsReceived: rawOutputText.length,
-                          delta: text
-                        });
-                      }
-                    } catch (e) {
-                      // Ignore parse errors for partial chunks
-                    }
+                  if (text) {
+                    rawOutputText += text;
+                    sendSSE('llm_streaming', { iteration, charsReceived: rawOutputText.length, delta: text });
                   }
+                } catch (e) {
+                  // Ignore parse errors
                 }
-              } finally {
-                reader.releaseLock();
               }
             }
+            reader.releaseLock();
           }
 
-          // Send LLM complete event
           sendSSE('llm_complete', { iteration, totalChars: rawOutputText.length });
 
-          // Parse the response
-          let agentResponse: any;
-          let parseSuccess = true;
-          let parseError: string | null = null;
+          // Parse agent response
+          const agentResponse = parseAgentResponseText(rawOutputText);
 
-          try {
-            agentResponse = parseAgentResponseText(rawOutputText);
-            if (agentResponse.status === "parse_error") {
-              parseSuccess = false;
-              parseError = agentResponse.reasoning || "Failed to parse response";
-            }
-          } catch (e) {
-            parseSuccess = false;
-            parseError = e instanceof Error ? e.message : String(e);
-            agentResponse = {
-              reasoning: `Parse error: ${parseError}`,
-              operations: [],
-              status: "parse_error",
-            };
-          }
-
-          // Log LLM call to database
+          // Log to LLM logs
           await supabase.rpc("insert_agent_llm_log_with_token", {
             p_session_id: sessionId,
             p_project_id: projectId,
@@ -1464,69 +1268,61 @@ Start your response with { and end with }. Nothing else.`
             p_model: selectedModel,
             p_input_prompt: fullInputPrompt,
             p_output_raw: rawOutputText,
-            p_was_parse_success: parseSuccess,
-            p_parse_error_message: parseError,
-            p_api_response_status: apiResponseStatus,
+            p_was_parse_success: agentResponse.status !== "parse_error",
+            p_parse_error_message: agentResponse.status === "parse_error" ? "Failed to parse response" : null,
+            p_api_response_status: 200,
           });
 
-          console.log(`Agent response status: ${agentResponse.status}, operations: ${agentResponse.operations?.length || 0}`);
+          // Handle blackboard entry
+          if (agentResponse.blackboard_entry) {
+            await supabase.rpc("insert_agent_blackboard_entry_with_token", {
+              p_session_id: sessionId,
+              p_token: shareToken,
+              p_entry_type: agentResponse.blackboard_entry.entry_type || "progress",
+              p_content: agentResponse.blackboard_entry.content || "",
+              p_metadata: null,
+            });
+          }
 
-          // Log agent message
+          // Log assistant message
           await supabase.rpc("insert_agent_message_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
             p_role: "assistant",
-            p_content: JSON.stringify(agentResponse),
-            p_metadata: { iteration, parseSuccess },
+            p_content: rawOutputText,
+            p_metadata: { reasoning: agentResponse.reasoning, status: agentResponse.status, iteration },
           });
-          
-          // Broadcast to notify subscribers immediately after each iteration
+
+          // Broadcast message refresh
           await supabase.channel(`agent-messages-project-${projectId}`).send({
             type: 'broadcast',
             event: 'agent_message_refresh',
             payload: { sessionId, iteration }
           });
-          console.log(`[BROADCAST] Sent agent_message_refresh for iteration ${iteration}`);
-
-          // Add blackboard entry
-          if (agentResponse.blackboard_entry) {
-            await supabase.rpc("add_blackboard_entry_with_token", {
-              p_session_id: session.id,
-              p_entry_type: agentResponse.blackboard_entry.entry_type,
-              p_content: agentResponse.blackboard_entry.content,
-              p_token: shareToken,
-            });
-          }
 
           // Execute operations
           const operationResults = [];
           let filesChanged = false;
 
-          // Sort edit_lines operations by start_line DESCENDING (back-to-front) to prevent line number corruption
-          // When multiple edits target the same file, editing from the end first preserves earlier line numbers
+          // Sort edits back-to-front
           const operations = [...(agentResponse.operations || [])];
           const editsByFile = new Map<string, any[]>();
           const nonEditOps: any[] = [];
 
           for (const op of operations) {
-            // Handle malformed operations: convert _param_keys/params_summary to params for parameterless ops
             const hasMalformedParams = op && !op.params && ((op as any)._param_keys !== undefined || (op as any).params_summary !== undefined);
             if (hasMalformedParams) {
               const parameterlessOps = ['list_files', 'get_staged_changes', 'discard_all_staged'];
               if (parameterlessOps.includes(op.type)) {
-                console.log(`[AGENT] Converting malformed params to params for parameterless operation: ${op.type}`);
                 op.params = {} as any;
                 if (op.type === 'list_files') {
                   op.params.path_prefix = null;
                 }
-              } else {
-                console.warn(`[AGENT] Cannot infer params from _param_keys/params_summary for operation: ${op.type}`);
               }
             }
             
-            // Skip invalid operations without params entirely - do NOT add to processing list
             if (!op || !op.params) {
-              console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify({ type: op?.type, has_malformed_params: hasMalformedParams }));
+              console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify({ type: op?.type }));
               continue;
             }
             if (op.type === 'edit_lines') {
@@ -1538,32 +1334,26 @@ Start your response with { and end with }. Nothing else.`
             }
           }
 
-          // Build final operations list: non-edits first, then edits sorted back-to-front per file
           const sortedOperations: any[] = [...nonEditOps];
           for (const [fileId, edits] of editsByFile) {
-            // Sort by start_line DESCENDING (highest first = back-to-front)
             edits.sort((a, b) => b.params.start_line - a.params.start_line);
-
-            // Detect and skip overlapping edits (after sorting, check if current end_line >= next start_line)
             let lastStartLine = Infinity;
             for (const edit of edits) {
               if (edit.params.end_line >= lastStartLine) {
-                console.warn(`[AGENT] Skipping overlapping edit for file ${fileId}: ` +
-                  `lines ${edit.params.start_line}-${edit.params.end_line} overlaps with edit starting at line ${lastStartLine}`);
-                continue; // Skip overlapping edit
+                console.warn(`[AGENT] Skipping overlapping edit`);
+                continue;
               }
               lastStartLine = edit.params.start_line;
               sortedOperations.push(edit);
             }
           }
 
-          console.log(`[AGENT] Executing ${sortedOperations.length} operations (${editsByFile.size} files with edits, sorted back-to-front)`);
+          console.log(`[AGENT] Executing ${sortedOperations.length} operations`);
 
           for (let opIndex = 0; opIndex < sortedOperations.length; opIndex++) {
             const op = sortedOperations[opIndex];
             console.log("Executing operation:", op.type);
             
-            // Send SSE event for operation start
             sendSSE('operation_start', { 
               iteration, 
               operation: op.type, 
@@ -1572,7 +1362,6 @@ Start your response with { and end with }. Nothing else.`
               path: op.params?.path || op.params?.file_path || null 
             });
             
-            // Log operation start
             const { data: logEntry } = await supabase.rpc("log_agent_operation_with_token", {
               p_session_id: session.id,
               p_operation_type: op.type,
@@ -1582,7 +1371,6 @@ Start your response with { and end with }. Nothing else.`
               p_token: shareToken,
             });
 
-            // Broadcast operation started
             await supabase.channel(`agent-operations-project-${projectId}`).send({
               type: 'broadcast',
               event: 'agent_operation_refresh',
@@ -1600,13 +1388,10 @@ Start your response with { and end with }. Nothing else.`
                     p_path_prefix: op.params.path_prefix || null,
                   });
                   
-                  // Merge session registry to ensure current staging IDs for session-created files
                   if (result.data && Array.isArray(result.data)) {
                     for (const [filePath, info] of sessionFileRegistry) {
                       const existingIdx = result.data.findIndex((f: any) => f.path === filePath);
                       if (existingIdx >= 0) {
-                        // Update with session's known ID (most recent)
-                        console.log(`[SESSION] Updating list_files result for ${filePath} with session-tracked ID: ${info.staging_id}`);
                         result.data[existingIdx].id = info.staging_id;
                         result.data[existingIdx].is_staged = true;
                         result.data[existingIdx].operation_type = 'add';
@@ -1630,7 +1415,6 @@ Start your response with { and end with }. Nothing else.`
                     p_query: op.params.query || "",
                     p_token: shareToken,
                   });
-                  // Strip content from wildcard_search results - agent should use read_file if needed
                   if (result.data && Array.isArray(result.data)) {
                     result.data = result.data.map((item: any) => ({
                       id: item.id,
@@ -1642,21 +1426,17 @@ Start your response with { and end with }. Nothing else.`
                   }
                   break;
 
-                case "read_file":
-                  // PATH-FIRST RESOLUTION: Resolve file ID upfront before any RPC calls
+                case "read_file": {
                   const readPath = op.params.path;
                   let readFileId = op.params.file_id;
                   let resolvedReadPath: string | null = null;
                   
-                  // 1. Try path in session registry first
                   if (readPath && sessionFileRegistry.has(readPath)) {
                     const entry = sessionFileRegistry.get(readPath)!;
                     readFileId = entry.staging_id;
                     resolvedReadPath = entry.path;
-                    console.log(`[SESSION] read_file: Found ${readPath} in session registry with ID ${readFileId}`);
                   }
                   
-                  // 2. Try path in staging (if not found in registry)
                   if (!resolvedReadPath && readPath) {
                     const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                       p_repo_id: repoId,
@@ -1666,11 +1446,9 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedStaged) {
                       readFileId = matchedStaged.id;
                       resolvedReadPath = matchedStaged.file_path;
-                      console.log(`[SESSION] read_file: Found ${readPath} in staging with ID ${readFileId}`);
                     }
                   }
                   
-                  // 3. Try path in repo_files (committed files)
                   if (!resolvedReadPath && readPath) {
                     const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
                       p_repo_id: repoId,
@@ -1681,22 +1459,18 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedFile) {
                       readFileId = matchedFile.id;
                       resolvedReadPath = matchedFile.path;
-                      console.log(`[SESSION] read_file: Found ${readPath} in repo_files with ID ${readFileId}`);
                     }
                   }
                   
-                  // 4. If we still don't have an ID, fail with helpful error
                   if (!readFileId) {
                     throw new Error(`File not found: ${readPath || 'no path or file_id provided'}`);
                   }
                   
-                  // Now make the RPC call with resolved ID
                   result = await supabase.rpc("get_file_content_with_token", {
                     p_file_id: readFileId,
                     p_token: shareToken,
                   });
                   
-                  // Update registry if resolution worked (for future lookups)
                   if (!result.error && result.data?.[0] && resolvedReadPath) {
                     sessionFileRegistry.set(resolvedReadPath, {
                       staging_id: readFileId,
@@ -1706,33 +1480,27 @@ Start your response with { and end with }. Nothing else.`
                     });
                   }
 
-                  // Add line numbers to content for LLM clarity
                   if (result.data?.[0]?.content) {
                     const lines = result.data[0].content.split("\n");
                     const numberedContent = lines.map((line: string, idx: number) => `<<${idx + 1}>> ${line}`).join("\n");
-
                     result.data[0].numbered_content = numberedContent;
                     result.data[0].total_lines = lines.length;
-                    // Replace content with numbered version for agent consumption
                     result.data[0].content = numberedContent;
                   }
                   break;
+                }
 
-                case "edit_lines":
-                  // PATH-FIRST RESOLUTION: Resolve file ID upfront before any RPC calls
+                case "edit_lines": {
                   const editPath = op.params.path;
                   let editFileId = op.params.file_id;
                   let resolvedEditPath: string | null = null;
                   
-                  // 1. Try path in session registry first
                   if (editPath && sessionFileRegistry.has(editPath)) {
                     const entry = sessionFileRegistry.get(editPath)!;
                     editFileId = entry.staging_id;
                     resolvedEditPath = entry.path;
-                    console.log(`[SESSION] edit_lines: Found ${editPath} in session registry with ID ${editFileId}`);
                   }
                   
-                  // 2. Try path in staging (if not found in registry)
                   if (!resolvedEditPath && editPath) {
                     const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                       p_repo_id: repoId,
@@ -1742,11 +1510,9 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedStaged) {
                       editFileId = matchedStaged.id;
                       resolvedEditPath = matchedStaged.file_path;
-                      console.log(`[SESSION] edit_lines: Found ${editPath} in staging with ID ${editFileId}`);
                     }
                   }
                   
-                  // 3. Try path in repo_files (committed files)
                   if (!resolvedEditPath && editPath) {
                     const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
                       p_repo_id: repoId,
@@ -1757,182 +1523,107 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedFile) {
                       editFileId = matchedFile.id;
                       resolvedEditPath = matchedFile.path;
-                      console.log(`[SESSION] edit_lines: Found ${editPath} in repo_files with ID ${editFileId}`);
                     }
                   }
                   
-                  // 4. If we still don't have an ID, fail with helpful error
                   if (!editFileId) {
                     throw new Error(`File not found: ${editPath || 'no path or file_id provided'}`);
                   }
-                  
-                  // Read file using function that checks both repo_files and repo_staging
-                  console.log(`[AGENT] edit_lines: Reading file ${editFileId} (resolved from path: ${resolvedEditPath || editPath || 'N/A'})`);
-                  let fileData: any[] | null = null;
-                  let readError: any = null;
                   
                   const readResult = await supabase.rpc("get_file_content_with_token", {
                     p_file_id: editFileId,
                     p_token: shareToken,
                   });
-                  fileData = readResult.data;
-                  readError = readResult.error;
 
-                  if (readError) {
-                    console.error(`[AGENT] edit_lines: Read error:`, readError);
-                    throw new Error(`Failed to read file ${editPath || editFileId}: ${readError.message}`);
+                  if (readResult.error) throw new Error(`Failed to read file: ${readResult.error.message}`);
+                  if (!readResult.data || readResult.data.length === 0) {
+                    throw new Error(`File not found: ${editPath || editFileId}`);
                   }
 
-                  if (!fileData || fileData.length === 0) {
-                    console.error(`[AGENT] edit_lines: File not found: ${editPath || editFileId}`);
-                    throw new Error(
-                      `File not found: ${editPath || editFileId}. Cannot edit. The file may not exist or may have been deleted.`,
-                    );
+                  const fileData = readResult.data[0];
+                  const baseContent = fileData.content;
+                  const baseLines = baseContent.split("\n");
+                  const totalBaseLines = baseLines.length;
+
+                  let startIdx = op.params.start_line - 1;
+                  if (startIdx > totalBaseLines) startIdx = totalBaseLines;
+
+                  let endIdx = op.params.end_line - 1;
+                  if (endIdx >= totalBaseLines) endIdx = totalBaseLines - 1;
+
+                  if (startIdx < 0) {
+                    throw new Error(`Invalid start line: start_line=${op.params.start_line}`);
                   }
 
-                  console.log(
-                    `[AGENT] edit_lines: File found: ${fileData[0].path}, content length: ${fileData[0].content?.length || 0}`,
-                  );
+                  let newContent: string;
+                  const newContentLines = op.params.new_content.split("\n");
+                  
+                  if (startIdx >= totalBaseLines) {
+                    const appendedLines = [...baseLines, ...newContentLines];
+                    newContent = appendedLines.join("\n");
+                  } else {
+                    const deleteCount = startIdx <= endIdx ? (endIdx - startIdx + 1) : 0;
+                    const newLines = [...baseLines];
+                    newLines.splice(startIdx, deleteCount, ...newContentLines);
+                    newContent = newLines.join("\n");
+                  }
 
-                  if (fileData?.[0]) {
-                    // get_file_content_with_token already returns staged content via COALESCE overlay
-                    // No need to separately fetch staged changes - the RPC handles this
-                    const baseContent = fileData[0].content;
+                  result = await supabase.rpc("stage_file_change_with_token", {
+                    p_repo_id: repoId,
+                    p_token: shareToken,
+                    p_operation_type: "modify",
+                    p_file_path: fileData.path,
+                    p_old_content: baseContent,
+                    p_new_content: newContent,
+                  });
 
-                    // Validate line numbers against current content
-                    const baseLines = baseContent.split("\n");
-                    const totalBaseLines = baseLines.length;
-
-                    // Cap start_line to allow appending at end of file
-                    // If start_line is beyond file length, treat as append (start at last line + 1)
-                    let startIdx = op.params.start_line - 1;
-                    if (startIdx > totalBaseLines) {
-                      console.log(
-                        `[AGENT] edit_lines: start_line ${op.params.start_line} exceeds file length ${totalBaseLines}, capping to append position`,
-                      );
-                      startIdx = totalBaseLines; // Will append after last line
-                    }
-
-                    // Cap end_line to actual file length (allows agent to be less precise)
-                    let endIdx = op.params.end_line - 1;
-                    if (endIdx >= totalBaseLines) {
-                      console.log(
-                        `[AGENT] edit_lines: end_line ${op.params.end_line} exceeds file length ${totalBaseLines}, capping to ${totalBaseLines}`,
-                      );
-                      endIdx = totalBaseLines - 1;
-                    }
-
-                    // Only validate that start_line is not negative
-                    if (startIdx < 0) {
-                      throw new Error(
-                        `Invalid start line: start_line=${op.params.start_line}. ` +
-                          `Line numbers must be positive (1 or greater).`,
-                      );
-                    }
-
-                    // INSERT operation: when start > end (e.g., start=10, end=9),
-                    // this means "insert at position 10 with 0 deletions"
-                    // The splice below handles this correctly: splice(startIdx, 0, ...newContentLines)
-                    if (startIdx > endIdx && startIdx < totalBaseLines) {
-                      console.log(
-                        `[AGENT] edit_lines: INSERT operation (start ${startIdx + 1} > end ${endIdx + 1}), ` +
-                          `inserting at line ${startIdx + 1} with 0 deletions`,
-                      );
-                    }
-
-                    // Now check for pure append (when start is BEYOND file length)
-                    // This only triggers when startIdx >= totalBaseLines (truly appending after last line)
-                    if (startIdx >= totalBaseLines) {
-                      console.log(
-                        `[AGENT] edit_lines: Pure append operation detected (start ${startIdx + 1} beyond file length ${totalBaseLines}), appending to end of file`,
-                      );
-                      // Append: splice at totalBaseLines with 0 deletions
-                      startIdx = totalBaseLines;
-                      endIdx = totalBaseLines - 1; // Will result in 0 deletions
-                    }
-
-                    // Apply edit to the correct base content
-                    const newContentLines = op.params.new_content.split("\n");
-                    // Calculate deletions: when end < start (INSERT mode), delete 0 lines
-                    const linesToDelete = endIdx >= startIdx ? endIdx - startIdx + 1 : 0;
-                    baseLines.splice(startIdx, linesToDelete, ...newContentLines);
-                    const newContent = baseLines.join("\n");
-
-                    // Stage the change - pass the FILE PATH, not ID, for proper staging
-                    // Look up the actual file path from fileData
-                    const actualFilePath = fileData[0].path;
-
-                    result = await supabase.rpc("stage_file_change_with_token", {
-                      p_repo_id: repoId,
-                      p_token: shareToken,
-                      p_operation_type: "edit",
-                      p_file_path: actualFilePath,
-                      p_old_content: baseContent,
-                      p_new_content: newContent,
+                  if (!result.error && result.data?.[0]) {
+                    sessionFileRegistry.set(fileData.path, {
+                      staging_id: result.data[0].id,
+                      path: fileData.path,
+                      content: newContent,
+                      created_at: new Date(),
                     });
-
-                    // Update session registry with new content
-                    if (result.data?.id) {
-                      sessionFileRegistry.set(actualFilePath, {
-                        staging_id: result.data.id,
-                        path: actualFilePath,
-                        content: newContent,
-                        created_at: new Date(),
-                      });
-                      console.log(`[SESSION] Updated registry for edited file: ${actualFilePath}`);
-                    }
-
-                    // Include new line count in result for agent context
-                    if (result.data) {
-                      result.data.total_lines = baseLines.length;
-                    }
+                    result.data[0].total_lines = newContent.split("\n").length;
                   }
+                  filesChanged = true;
                   break;
+                }
 
-                case "create_file":
+                case "create_file": {
                   result = await supabase.rpc("stage_file_change_with_token", {
                     p_repo_id: repoId,
                     p_token: shareToken,
                     p_operation_type: "add",
                     p_file_path: op.params.path,
-                    p_old_content: "", // Empty string for new files, not NULL
                     p_new_content: op.params.content,
                   });
-                  
-                  // Register newly created file in session registry for future operations
-                  if (result.data?.id) {
+
+                  if (!result.error && result.data?.[0]) {
                     sessionFileRegistry.set(op.params.path, {
-                      staging_id: result.data.id,
+                      staging_id: result.data[0].id,
                       path: op.params.path,
                       content: op.params.content,
                       created_at: new Date(),
                     });
-                    console.log(`[SESSION] Registered new file ${op.params.path} with staging ID: ${result.data.id}`);
-                    
-                    // Return the staging ID to the agent for reference
-                    result.data.file_id = result.data.id;
-                    result.data.path = op.params.path;
-                    result.data.session_tracked = true;
                   }
+                  filesChanged = true;
                   break;
+                }
 
-                case "delete_file":
-                  // Path-first resolution: try path -> session registry -> staging -> repo_files -> file_id
+                case "delete_file": {
                   const deletePath = op.params.path;
                   let deleteFileId = op.params.file_id;
                   let deleteFilePath: string | null = null;
                   let deleteFileContent: string | null = null;
                   
-                  // 1. Try path in session registry
                   if (deletePath && sessionFileRegistry.has(deletePath)) {
                     const entry = sessionFileRegistry.get(deletePath)!;
                     deleteFileId = entry.staging_id;
                     deleteFilePath = entry.path;
                     deleteFileContent = entry.content;
-                    console.log(`[SESSION] delete_file: Found ${deletePath} in session registry with ID ${deleteFileId}`);
                   }
                   
-                  // 2. Try path in staging
                   if (!deleteFilePath && deletePath) {
                     const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                       p_repo_id: repoId,
@@ -1943,11 +1634,9 @@ Start your response with { and end with }. Nothing else.`
                       deleteFileId = matchedStaged.id;
                       deleteFilePath = matchedStaged.file_path;
                       deleteFileContent = matchedStaged.new_content || matchedStaged.old_content;
-                      console.log(`[SESSION] delete_file: Found ${deletePath} in staging with ID ${deleteFileId}`);
                     }
                   }
                   
-                  // 3. Try path in repo_files (committed files)
                   if (!deleteFilePath && deletePath) {
                     const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
                       p_repo_id: repoId,
@@ -1958,11 +1647,9 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedFile) {
                       deleteFileId = matchedFile.id;
                       deleteFilePath = matchedFile.path;
-                      console.log(`[SESSION] delete_file: Found ${deletePath} in repo_files with ID ${deleteFileId}`);
                     }
                   }
                   
-                  // 4. Fallback to file_id if path resolution failed
                   if (!deleteFilePath && deleteFileId) {
                     const { data: deleteFileData } = await supabase.rpc("get_file_content_with_token", {
                       p_file_id: deleteFileId,
@@ -1971,15 +1658,13 @@ Start your response with { and end with }. Nothing else.`
                     if (deleteFileData?.[0]) {
                       deleteFilePath = deleteFileData[0].path;
                       deleteFileContent = deleteFileData[0].content;
-                      console.log(`[SESSION] delete_file: Resolved file_id ${deleteFileId} to path ${deleteFilePath}`);
                     }
                   }
                   
                   if (!deleteFilePath) {
                     throw new Error(`File not found: ${deletePath || deleteFileId}`);
                   }
-                  
-                  // Now perform the delete
+
                   const { data: stagedForDelete } = await supabase.rpc("get_staged_changes_with_token", {
                     p_repo_id: repoId,
                     p_token: shareToken,
@@ -1989,20 +1674,15 @@ Start your response with { and end with }. Nothing else.`
                   );
 
                   if (newlyCreatedDelete) {
-                    // Just unstage the add operation instead of staging a delete
                     result = await supabase.rpc("unstage_file_with_token", {
                       p_repo_id: repoId,
-                      p_file_path: newlyCreatedDelete.file_path,
+                      p_file_path: deleteFilePath,
                       p_token: shareToken,
                     });
-                    // Remove from session registry
-                    if (sessionFileRegistry.has(newlyCreatedDelete.file_path)) {
-                      sessionFileRegistry.delete(newlyCreatedDelete.file_path);
-                      console.log(`[SESSION] Removed ${newlyCreatedDelete.file_path} from registry after delete`);
+                    if (sessionFileRegistry.has(deleteFilePath)) {
+                      sessionFileRegistry.delete(deleteFilePath);
                     }
-                    console.log(`[AGENT] Unstaged newly created file: ${newlyCreatedDelete.file_path}`);
                   } else {
-                    // Stage the delete for a committed file - need to fetch content if we don't have it
                     if (!deleteFileContent) {
                       const { data: contentData } = await supabase.rpc("get_file_content_with_token", {
                         p_file_id: deleteFileId,
@@ -2017,27 +1697,24 @@ Start your response with { and end with }. Nothing else.`
                       p_file_path: deleteFilePath,
                       p_old_content: deleteFileContent,
                     });
-                    console.log(`[AGENT] Staged delete for committed file: ${deleteFilePath}`);
                   }
+                  filesChanged = true;
                   break;
+                }
 
-                case "move_file":
-                  // Path-first resolution: try path -> session registry -> staging -> repo_files -> file_id
+                case "move_file": {
                   const movePath = op.params.path;
                   let moveFileId = op.params.file_id;
                   let moveFilePath: string | null = null;
                   let moveFileContent: string | null = null;
                   
-                  // 1. Try path in session registry
                   if (movePath && sessionFileRegistry.has(movePath)) {
                     const entry = sessionFileRegistry.get(movePath)!;
                     moveFileId = entry.staging_id;
                     moveFilePath = entry.path;
                     moveFileContent = entry.content;
-                    console.log(`[SESSION] move_file: Found ${movePath} in session registry with ID ${moveFileId}`);
                   }
                   
-                  // 2. Try path in staging
                   if (!moveFilePath && movePath) {
                     const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
                       p_repo_id: repoId,
@@ -2048,11 +1725,9 @@ Start your response with { and end with }. Nothing else.`
                       moveFileId = matchedStaged.id;
                       moveFilePath = matchedStaged.file_path;
                       moveFileContent = matchedStaged.new_content || matchedStaged.old_content;
-                      console.log(`[SESSION] move_file: Found ${movePath} in staging with ID ${moveFileId}`);
                     }
                   }
                   
-                  // 3. Try path in repo_files (committed files)
                   if (!moveFilePath && movePath) {
                     const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
                       p_repo_id: repoId,
@@ -2063,11 +1738,9 @@ Start your response with { and end with }. Nothing else.`
                     if (matchedFile) {
                       moveFileId = matchedFile.id;
                       moveFilePath = matchedFile.path;
-                      console.log(`[SESSION] move_file: Found ${movePath} in repo_files with ID ${moveFileId}`);
                     }
                   }
                   
-                  // 4. Fallback to file_id if path resolution failed
                   if (!moveFilePath && moveFileId) {
                     const { data: moveFileData } = await supabase.rpc("get_file_content_with_token", {
                       p_file_id: moveFileId,
@@ -2076,7 +1749,6 @@ Start your response with { and end with }. Nothing else.`
                     if (moveFileData?.[0]) {
                       moveFilePath = moveFileData[0].path;
                       moveFileContent = moveFileData[0].content;
-                      console.log(`[SESSION] move_file: Resolved file_id ${moveFileId} to path ${moveFilePath}`);
                     }
                   }
                   
@@ -2084,7 +1756,6 @@ Start your response with { and end with }. Nothing else.`
                     throw new Error(`File not found: ${movePath || moveFileId}`);
                   }
                   
-                  // Now perform the move
                   const { data: stagedForMove } = await supabase.rpc("get_staged_changes_with_token", {
                     p_repo_id: repoId,
                     p_token: shareToken,
@@ -2095,14 +1766,12 @@ Start your response with { and end with }. Nothing else.`
 
                   if (newlyCreatedMove) {
                     const oldPath = moveFilePath;
-                    // For staged "add" files, just update the staging record's file_path
                     result = await supabase.rpc("update_staged_file_path_with_token", {
                       p_staging_id: newlyCreatedMove.id,
                       p_new_path: op.params.new_path,
                       p_token: shareToken,
                     });
                     
-                    // Update session registry with new path
                     if (sessionFileRegistry.has(oldPath)) {
                       const existingEntry = sessionFileRegistry.get(oldPath)!;
                       sessionFileRegistry.delete(oldPath);
@@ -2110,26 +1779,23 @@ Start your response with { and end with }. Nothing else.`
                         ...existingEntry,
                         path: op.params.new_path,
                       });
-                      console.log(`[SESSION] Updated registry: ${oldPath} -> ${op.params.new_path}`);
                     }
-                    console.log(`[AGENT] Moved staged file from ${oldPath} to ${op.params.new_path}`);
                   } else {
-                    // For committed files, use the existing move logic
                     result = await supabase.rpc("move_file_with_token", {
                       p_file_id: moveFileId,
                       p_new_path: op.params.new_path,
                       p_token: shareToken,
                     });
-                    console.log(`[AGENT] Moved committed file from ${moveFilePath} to ${op.params.new_path}`);
                   }
+                  filesChanged = true;
                   break;
+                }
 
                 case "get_staged_changes":
                   result = await supabase.rpc("get_staged_changes_with_token", {
                     p_repo_id: repoId,
                     p_token: shareToken,
                   });
-                  // Strip old_content and new_content from staged changes - agent should use read_file if needed
                   if (result.data && Array.isArray(result.data)) {
                     result.data = result.data.map((item: any) => ({
                       id: item.id,
@@ -2139,7 +1805,6 @@ Start your response with { and end with }. Nothing else.`
                       created_at: item.created_at,
                     }));
                   }
-                  console.log(`[AGENT] Retrieved ${result.data?.length || 0} staged changes`);
                   break;
 
                 case "unstage_file":
@@ -2148,13 +1813,10 @@ Start your response with { and end with }. Nothing else.`
                     p_file_path: op.params.file_path,
                     p_token: shareToken,
                   });
-                  // Remove from session registry
                   if (sessionFileRegistry.has(op.params.file_path)) {
                     sessionFileRegistry.delete(op.params.file_path);
-                    console.log(`[SESSION] Removed ${op.params.file_path} from registry after unstage`);
                   }
                   filesChanged = true;
-                  console.log(`[AGENT] Unstaged file: ${op.params.file_path}`);
                   break;
 
                 case "discard_all_staged":
@@ -2162,11 +1824,8 @@ Start your response with { and end with }. Nothing else.`
                     p_repo_id: repoId,
                     p_token: shareToken,
                   });
-                  // Clear session registry since all staged changes are discarded
                   sessionFileRegistry.clear();
-                  console.log(`[SESSION] Cleared registry after discard_all_staged`);
                   filesChanged = true;
-                  console.log(`[AGENT] Discarded all staged changes, count: ${result.data || 0}`);
                   break;
 
                 case "project_inventory":
@@ -2177,7 +1836,6 @@ Start your response with { and end with }. Nothing else.`
                     p_project_id: projectId,
                     p_token: shareToken,
                   });
-                  console.log(`[AGENT] Retrieved project inventory`);
                   break;
 
                 case "project_category":
@@ -2189,7 +1847,6 @@ Start your response with { and end with }. Nothing else.`
                     p_category: op.params.category,
                     p_token: shareToken,
                   });
-                  console.log(`[AGENT] Retrieved project category: ${op.params.category}`);
                   break;
 
                 case "project_elements":
@@ -2201,25 +1858,21 @@ Start your response with { and end with }. Nothing else.`
                     p_elements: op.params.elements,
                     p_token: shareToken,
                   });
-                  console.log(`[AGENT] Retrieved ${op.params.elements?.length || 0} project elements`);
                   break;
               }
 
               if (result?.error) throw result.error;
 
-              // Mark that files have changed for broadcast purposes
               if (["edit_lines", "create_file", "delete_file", "move_file", "unstage_file", "discard_all_staged"].includes(op.type)) {
                 filesChanged = true;
               }
 
-              // Update operation log to completed
               await supabase.rpc("update_agent_operation_status_with_token", {
                 p_operation_id: logEntry.id,
                 p_status: "completed",
                 p_token: shareToken,
               });
 
-              // Broadcast operation refresh
               await supabase.channel(`agent-operations-project-${projectId}`).send({
                 type: 'broadcast',
                 event: 'agent_operation_refresh',
@@ -2231,18 +1884,15 @@ Start your response with { and end with }. Nothing else.`
             } catch (error) {
               console.error("Operation failed:", error);
 
-              // Properly serialize error for display
               let errorMessage: string;
               if (error instanceof Error) {
                 errorMessage = error.message;
               } else if (typeof error === "object" && error !== null) {
-                // PostgreSQL errors are objects with code, message, details, hint
                 errorMessage = JSON.stringify(error, null, 2);
               } else {
                 errorMessage = String(error);
               }
 
-              // Update operation log to failed
               await supabase.rpc("update_agent_operation_status_with_token", {
                 p_operation_id: logEntry.id,
                 p_status: "failed",
@@ -2250,7 +1900,6 @@ Start your response with { and end with }. Nothing else.`
                 p_token: shareToken,
               });
 
-              // Broadcast operation refresh
               await supabase.channel(`agent-operations-project-${projectId}`).send({
                 type: 'broadcast',
                 event: 'agent_operation_refresh',
@@ -2262,13 +1911,13 @@ Start your response with { and end with }. Nothing else.`
                 success: false,
                 error: errorMessage,
               });
+              sendSSE('operation_complete', { iteration, operation: op.type, success: false, error: errorMessage });
             }
           }
 
-          // If any file changes occurred in this iteration, broadcast refresh events
+          // Broadcast file changes
           if (filesChanged) {
             try {
-              // Broadcast staging_refresh for local runner
               const stagingChannel = supabase.channel(`repo-staging-${repoId}`);
               await stagingChannel.subscribe();
               await stagingChannel.send({
@@ -2277,9 +1926,7 @@ Start your response with { and end with }. Nothing else.`
                 payload: { repoId, action: "agent_edit", timestamp: Date.now() },
               });
               await supabase.removeChannel(stagingChannel);
-              console.log(`[BROADCAST] Sent staging_refresh for repo: ${repoId}`);
 
-              // Broadcast repo_files_refresh for Build.tsx file tree
               const filesChannel = supabase.channel(`repo-changes-${projectId}`);
               await filesChannel.subscribe();
               await filesChannel.send({
@@ -2295,12 +1942,10 @@ Start your response with { and end with }. Nothing else.`
 
           allOperationResults.push(...operationResults);
 
-          // Create summary of operation results for conversation history (without large content)
+          // Summarize results for conversation history
           const summarizedResults = operationResults.map((r: any) => {
             const summary: any = { type: r.type, success: r.success };
             if (r.error) summary.error = r.error;
-            
-            // Create brief summaries instead of including full data
             if (r.success && r.data) {
               switch (r.type) {
                 case "list_files":
@@ -2319,9 +1964,7 @@ Start your response with { and end with }. Nothing else.`
                   break;
                 case "get_staged_changes":
                   summary.summary = `${Array.isArray(r.data) ? r.data.length : 0} staged changes`;
-                  if (Array.isArray(r.data)) {
-                    summary.files = r.data; // Already stripped of content above
-                  }
+                  if (Array.isArray(r.data)) summary.files = r.data;
                   break;
                 case "edit_lines":
                   summary.summary = `Edited file, now ${r.data?.total_lines || 'unknown'} lines`;
@@ -2342,17 +1985,14 @@ Start your response with { and end with }. Nothing else.`
             return summary;
           });
 
-          // Add ONLY the agent's response to conversation history (reasoning + operations with truncated params)
           conversationHistory.push({
             role: "assistant",
             content: JSON.stringify({
               reasoning: agentResponse.reasoning,
               operations: agentResponse.operations?.map((op: any) => {
-                // Truncate params to prevent bloat but preserve correct format
                 const truncatedParams: any = {};
                 for (const [key, value] of Object.entries(op.params || {})) {
                   if (key === 'content' || key === 'new_content') {
-                    // Aggressively truncate content fields (full content is in ephemeral context)
                     truncatedParams[key] = typeof value === 'string' && value.length > 50 
                       ? `[${value.length} chars]` 
                       : value;
@@ -2368,28 +2008,25 @@ Start your response with { and end with }. Nothing else.`
             }),
           });
           
-          // Add brief operation summaries (NOT full results with content)
           conversationHistory.push({
             role: "user",
             content: `Operation summaries:\n${JSON.stringify(summarizedResults, null, 2)}`,
           });
           
-          // Store full operation results for ephemeral injection into next iteration's prompt
-          // This will be used in the system prompt context, NOT added to conversation history
           ephemeralContext = operationResults;
 
-          // Check status to determine if we should continue
+          sendSSE('iteration_complete', { iteration, operationCount: operationResults.length });
+
           if (agentResponse.status === "completed") {
             finalStatus = "completed";
             console.log(`Agent signaled completion with status: completed`);
             break;
           }
 
-          // If status is still "in_progress", continue to next iteration
           console.log("Continuing to next iteration...");
         }
 
-        // Update session status on completion with completed_at timestamp
+        // Update session status
         const completedAt = finalStatus === "completed" || finalStatus === "failed" ? new Date().toISOString() : null;
 
         await supabase.rpc("update_agent_session_status_with_token", {
@@ -2401,7 +2038,6 @@ Start your response with { and end with }. Nothing else.`
 
         console.log("Task completed with status:", finalStatus);
 
-        // Send completion event via SSE
         sendSSE('task_complete', {
           sessionId: session.id,
           status: finalStatus,
@@ -2412,26 +2048,21 @@ Start your response with { and end with }. Nothing else.`
       } catch (error) {
         console.error("Error in coding-agent-orchestrator:", error);
 
-        // Update session to failed status on error if session was created
-        if (sessionId && shareToken && supabase) {
-          try {
-            await supabase.rpc("update_agent_session_status_with_token", {
-              p_session_id: sessionId,
-              p_status: "failed",
-              p_token: shareToken,
-              p_completed_at: new Date().toISOString(),
-            });
-          } catch (updateError) {
-            console.error("Failed to update session status on error:", updateError);
-          }
+        try {
+          await supabase.rpc("update_agent_session_status_with_token", {
+            p_session_id: sessionId,
+            p_status: "failed",
+            p_token: shareToken,
+            p_completed_at: new Date().toISOString(),
+          });
+        } catch (updateError) {
+          console.error("Failed to update session status on error:", updateError);
         }
 
-        // Send error event via SSE
         sendSSE('error', {
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
-        // CRITICAL: Close the stream in finally block to ensure proper termination
         try {
           controller.close();
         } catch (e) {
@@ -2441,7 +2072,6 @@ Start your response with { and end with }. Nothing else.`
     }
   });
 
-  // Return SSE stream
   return new Response(stream, {
     headers: {
       ...corsHeaders,
