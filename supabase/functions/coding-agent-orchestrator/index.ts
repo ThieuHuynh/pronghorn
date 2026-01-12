@@ -1520,7 +1520,7 @@ serve(async (req) => {
                 result = await supabase.rpc("stage_file_change_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
-                  p_operation_type: "modify",
+                  p_operation_type: "edit",
                   p_file_path: fileData.path,
                   p_old_content: baseContent,
                   p_new_content: newContent,
