@@ -509,10 +509,13 @@ serve(async (req) => {
         p_session_id: sessionId,
         p_token: shareToken,
       });
+      console.log("get_agent_session_with_token response:", { data, error, dataType: typeof data, isArray: Array.isArray(data) });
       if (error) throw error;
       // get_agent_session_with_token returns a single row, not an array
-      if (!data) throw new Error("Session not found");
-      session = data;
+      // Handle both array and single object responses from Supabase RPC
+      const sessionData = Array.isArray(data) ? data[0] : data;
+      if (!sessionData) throw new Error("Session not found");
+      session = sessionData;
 
       // Check if abort requested
       if (session.abort_requested || session.status === "aborted") {
