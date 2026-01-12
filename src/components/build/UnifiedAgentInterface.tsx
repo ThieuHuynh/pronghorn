@@ -91,6 +91,21 @@ export function UnifiedAgentInterface({
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
   
+  // SSE streaming progress state
+  const [streamProgress, setStreamProgress] = useState<{
+    iteration: number;
+    maxIterations: number;
+    charsReceived: number;
+    currentOperation: string | null;
+    status: 'idle' | 'streaming' | 'processing' | 'complete';
+  }>({
+    iteration: 0,
+    maxIterations: 100,
+    charsReceived: 0,
+    currentOperation: null,
+    status: 'idle',
+  });
+  
   // Chat history settings state
   const [chatHistorySettings, setChatHistorySettings] = useState<ChatHistorySettings>({
     includeHistory: true,
@@ -388,9 +403,22 @@ export function UnifiedAgentInterface({
 
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
+      
+      // Reset streaming progress
+      setStreamProgress({ iteration: 0, maxIterations: agentConfig.maxIterations, charsReceived: 0, currentOperation: null, status: 'idle' });
 
-      const { error } = await supabase.functions.invoke('coding-agent-orchestrator', {
-        body: {
+      // Use fetch for SSE streaming instead of supabase.functions.invoke
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/coding-agent-orchestrator`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           projectId,
           repoId,
           shareToken: shareToken || null,
@@ -401,9 +429,7 @@ export function UnifiedAgentInterface({
           attachedFiles: attachedFiles,
           exposeProject: agentConfig.exposeProject,
           maxIterations: agentConfig.maxIterations,
-          // Pass custom prompt sections if user has configured them
           promptSections: hasCustomConfig ? promptSections : undefined,
-          // Pass custom tool descriptions if user has modified any
           customToolDescriptions: (customToolDescriptions.file_operations && Object.keys(customToolDescriptions.file_operations).length > 0) ||
             (customToolDescriptions.project_exploration_tools && Object.keys(customToolDescriptions.project_exploration_tools).length > 0)
             ? customToolDescriptions
@@ -419,31 +445,68 @@ export function UnifiedAgentInterface({
             files: attachedContext.files?.length > 0 ? attachedContext.files : undefined,
             databases: attachedContext.databases?.length > 0 ? attachedContext.databases : undefined,
           } : {},
-        },
+        }),
         signal: abortControllerRef.current.signal,
       });
 
-      if (error) {
-        // Check if this was an abort
-        if (error.message?.includes('aborted')) {
-          throw new Error('Task cancelled by user');
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+
+      // Parse SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              switch (data.type) {
+                case 'iteration_start':
+                  setStreamProgress(p => ({ ...p, iteration: data.iteration, maxIterations: data.maxIterations, charsReceived: 0, status: 'streaming' }));
+                  break;
+                case 'llm_streaming':
+                  setStreamProgress(p => ({ ...p, charsReceived: data.charsReceived }));
+                  break;
+                case 'operation_start':
+                  setStreamProgress(p => ({ ...p, currentOperation: data.operation, status: 'processing' }));
+                  break;
+                case 'operation_complete':
+                  setStreamProgress(p => ({ ...p, currentOperation: null }));
+                  break;
+                case 'task_complete':
+                  setStreamProgress(p => ({ ...p, status: 'complete' }));
+                  break;
+                case 'error':
+                  throw new Error(data.error);
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+            }
+          }
         }
-        throw error;
       }
 
       toast.success('Agent task completed');
-
-      // Refresh messages and operations
       refetchMessages();
       refetchOperations();
 
-      // Auto-commit and push if enabled
       if (autoCommit) {
         await performAutoCommitAndPush(userMessageContent);
       }
     } catch (error: any) {
       console.error('Error submitting task:', error);
-      if (error.message?.includes('cancelled')) {
+      if (error.name === 'AbortError' || error.message?.includes('cancelled')) {
         toast.info('Task cancelled');
       } else {
         toast.error('Failed to submit task');
@@ -451,6 +514,7 @@ export function UnifiedAgentInterface({
       setMessages(previousMessages);
     } finally {
       setIsSubmitting(false);
+      setStreamProgress(p => ({ ...p, status: 'idle' }));
       abortControllerRef.current = null;
     }
   };
