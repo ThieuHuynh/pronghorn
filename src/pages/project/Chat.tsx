@@ -49,6 +49,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -910,24 +916,36 @@ export default function Chat() {
                           >
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <p className="text-xs opacity-70">{format(new Date(message.created_at), "h:mm a")}</p>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleCopyMessage(message.content)}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleSaveMessageAsArtifact(message.content)}
-                              >
-                                <Archive className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            <TooltipProvider>
+                              <div className="flex gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleCopyMessage(message.content)}
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Copy message</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleSaveMessageAsArtifact(message.content)}
+                                    >
+                                      <Archive className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Save as artifact</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TooltipProvider>
                           </div>
                           <div className={`prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:break-all [&_code]:whitespace-pre-wrap ${message.role === "user" ? "text-primary-foreground" : ""}`}>
                             {message.role === "user" ? (
@@ -936,24 +954,36 @@ export default function Chat() {
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                             )}
                           </div>
-                          <div className="flex justify-end gap-1 mt-3 pt-2 border-t border-border/50">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleCopyMessage(message.content)}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleSaveMessageAsArtifact(message.content)}
-                            >
-                              <Archive className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <TooltipProvider>
+                            <div className="flex justify-end gap-1 mt-3 pt-2 border-t border-border/50">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => handleCopyMessage(message.content)}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy message</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => handleSaveMessageAsArtifact(message.content)}
+                                  >
+                                    <Archive className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Save as artifact</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
                         </Card>
                       </div>
                     );
