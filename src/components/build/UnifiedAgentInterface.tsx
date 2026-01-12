@@ -114,6 +114,12 @@ export function UnifiedAgentInterface({
     showStreamingContent: false,
   });
   
+  // Streaming message for real-time display in chat
+  const [streamingMessage, setStreamingMessage] = useState<{
+    content: string;
+    isStreaming: boolean;
+  } | null>(null);
+  
   // Chat history settings state
   const [chatHistorySettings, setChatHistorySettings] = useState<ChatHistorySettings>({
     includeHistory: true,
@@ -128,6 +134,28 @@ export function UnifiedAgentInterface({
     if (!fileId) return 'N/A';
     const file = files.find(f => f.id === fileId);
     return file?.path || fileId; // Return path if found, fallback to ID
+  };
+  
+  // Helper function to parse streaming content and extract readable text
+  const parseStreamingContent = (content: string): string => {
+    // Try to extract reasoning from partial JSON for better readability
+    try {
+      // Check if it looks like JSON
+      if (content.trim().startsWith('{')) {
+        // Try to extract reasoning field from partial JSON
+        const reasoningMatch = content.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+        if (reasoningMatch) {
+          // Unescape the JSON string
+          return reasoningMatch[1]
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+        }
+      }
+    } catch {
+      // Fall through to return raw content
+    }
+    return content;
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
@@ -218,6 +246,19 @@ export function UnifiedAgentInterface({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [timeline.length, isAutoScrollEnabled]);
+  
+  // Auto-scroll when streaming content updates (throttled)
+  const lastScrollTimeRef = useRef(0);
+  useEffect(() => {
+    if (streamingMessage?.isStreaming && isAutoScrollEnabled && messagesEndRef.current) {
+      const now = Date.now();
+      // Throttle scroll to once per 100ms for performance
+      if (now - lastScrollTimeRef.current > 100) {
+        lastScrollTimeRef.current = now;
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [streamingMessage?.content, streamingMessage?.isStreaming, isAutoScrollEnabled]);
 
   // Intersection observer for infinite scroll (messages)
   useEffect(() => {
@@ -438,6 +479,9 @@ export function UnifiedAgentInterface({
           charsReceived: 0,
           streamingContent: ''
         }));
+        
+        // Reset streaming message for new iteration
+        setStreamingMessage({ content: '', isStreaming: true });
 
         const requestBody: any = {
           projectId,
@@ -517,6 +561,11 @@ export function UnifiedAgentInterface({
                       charsReceived: data.charsReceived,
                       streamingContent: p.streamingContent + (data.delta || '')
                     }));
+                    // Also update the streaming message for display in chat
+                    setStreamingMessage(prev => ({
+                      content: (prev?.content || '') + (data.delta || ''),
+                      isStreaming: true
+                    }));
                     break;
                   case 'operation_start':
                     setStreamProgress(p => ({ 
@@ -533,6 +582,8 @@ export function UnifiedAgentInterface({
                   case 'iteration_complete':
                     status = data.status;
                     currentSessionId = data.sessionId;
+                    // Clear streaming message - real message will load from database
+                    setStreamingMessage(null);
                     break;
                   case 'error':
                     throw new Error(data.error);
@@ -1181,6 +1232,35 @@ export function UnifiedAgentInterface({
                 )}
                 
                 {timeline.map((item, index) => renderTimelineItem(item, index, timeline))}
+                
+                {/* Streaming message placeholder - shows real-time LLM output */}
+                {streamingMessage?.isStreaming && (
+                  <div className="flex gap-3" data-timeline-id="streaming">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
+                        <Bot className="w-4 h-4 text-secondary" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold">Agent</span>
+                        <Badge variant="outline" className="text-xs">
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          Generating...
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {streamingMessage.content.length.toLocaleString()} chars
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/30 border max-h-96 overflow-y-auto">
+                        <p className="text-sm whitespace-pre-wrap font-mono break-words">
+                          {parseStreamingContent(streamingMessage.content)}
+                          <span className="animate-pulse text-primary">▌</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
             <div ref={messagesEndRef} />
