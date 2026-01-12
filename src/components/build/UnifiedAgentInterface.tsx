@@ -917,7 +917,7 @@ export function UnifiedAgentInterface({
 
     if (isMessage) {
       const isUser = item.role === 'user';
-      const isAgent = item.role === 'agent';
+      const isAgent = item.role === 'agent' || item.role === 'assistant';
 
       if (isUser) {
         return (

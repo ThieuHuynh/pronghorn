@@ -93,7 +93,7 @@ export function AgentChatViewer({ projectId, shareToken }: AgentChatViewerProps)
             <div className="space-y-4">
               {messages.map((message) => {
                 const isUser = message.role === 'user';
-                const isAgent = message.role === 'agent';
+                const isAgent = message.role === 'agent' || message.role === 'assistant';
 
                 if (isUser) {
                   return (

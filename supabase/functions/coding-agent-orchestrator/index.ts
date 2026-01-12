@@ -82,8 +82,25 @@ function parseAgentResponseText(rawText: string): any {
     }
   };
 
+  // Clean up common LLM mistakes: XML-like parameter tags in JSON
+  const cleanXmlTags = (str: string): string => {
+    // Remove patterns like: "\n<parameter name=\"entry_type\">reflection", "content": "..."
+    // Replace with proper JSON object
+    return str
+      .replace(/"blackboard_entry":\s*"\s*\\n<parameter[^"]*"?\s*,\s*"content":\s*"([^"]*)"/g, 
+        (_, content) => `"blackboard_entry": {"entry_type": "progress", "content": "${content}"}`)
+      .replace(/<parameter[^>]*>[^<]*<\/parameter>/g, '')
+      .replace(/<parameter[^>]*>/g, '')
+      .replace(/<\/parameter>/g, '');
+  };
+
   let result = tryParse(text, "direct parse");
-  if (result) return result;
+  if (result) return normalizeAgentResponse(result);
+
+  // Try after cleaning XML tags
+  const xmlCleaned = cleanXmlTags(text);
+  result = tryParse(xmlCleaned, "xml-cleaned parse");
+  if (result) return normalizeAgentResponse(result);
 
   const lastFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```[\s\S]*$/i);
   if (lastFenceMatch?.[1]) {
@@ -93,7 +110,11 @@ function parseAgentResponseText(rawText: string): any {
       .replace(/^[\s\n]*json[:\s]*/i, "")
       .trim();
     result = tryParse(cleaned, "last code fence");
-    if (result) return result;
+    if (result) return normalizeAgentResponse(result);
+    
+    // Try with XML cleaning
+    result = tryParse(cleanXmlTags(cleaned), "last code fence (xml-cleaned)");
+    if (result) return normalizeAgentResponse(result);
   }
 
   const allFences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)];
@@ -101,7 +122,7 @@ function parseAgentResponseText(rawText: string): any {
     const content = allFences[i][1].trim();
     if (content) {
       result = tryParse(content, `code fence #${i + 1} (reverse)`);
-      if (result) return result;
+      if (result) return normalizeAgentResponse(result);
     }
   }
 
@@ -110,20 +131,24 @@ function parseAgentResponseText(rawText: string): any {
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     const candidate = originalText.slice(firstBrace, lastBrace + 1);
     result = tryParse(candidate, "brace extraction (raw)");
-    if (result) return result;
+    if (result) return normalizeAgentResponse(result);
+
+    // Try with XML cleaning
+    result = tryParse(cleanXmlTags(candidate), "brace extraction (xml-cleaned)");
+    if (result) return normalizeAgentResponse(result);
 
     const cleaned = candidate
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
     result = tryParse(cleaned, "brace extraction (cleaned)");
-    if (result) return result;
+    if (result) return normalizeAgentResponse(result);
   }
 
   const heuristicMatch = originalText.match(/(\{(?:[^{}]|"(?:\\.|[^"\\])*")*\})/);
   if (heuristicMatch) {
     result = tryParse(heuristicMatch[1], "heuristic object match");
-    if (result) return result;
+    if (result) return normalizeAgentResponse(result);
   }
 
   console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
@@ -133,6 +158,21 @@ function parseAgentResponseText(rawText: string): any {
     operations: [],
     status: "parse_error",
   };
+}
+
+// Normalize agent response to ensure blackboard_entry is a proper object
+function normalizeAgentResponse(response: any): any {
+  if (typeof response.blackboard_entry === 'string') {
+    // Try to extract content from malformed string
+    const contentMatch = response.blackboard_entry.match(/content[":>\s]+(.+)/i);
+    response.blackboard_entry = {
+      entry_type: "progress",
+      content: contentMatch ? contentMatch[1].trim() : response.blackboard_entry
+    };
+  } else if (response.blackboard_entry && !response.blackboard_entry.entry_type) {
+    response.blackboard_entry.entry_type = "progress";
+  }
+  return response;
 }
 
 function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean): string {
