@@ -1203,7 +1203,7 @@ serve(async (req) => {
         const agentResponse = parseAgentResponseText(rawOutputText);
 
         // Log to LLM logs
-        await supabase.rpc("insert_agent_llm_log_with_token", {
+        const llmLogResult = await supabase.rpc("insert_agent_llm_log_with_token", {
           p_session_id: sessionId,
           p_project_id: projectId,
           p_token: shareToken,
@@ -1215,26 +1215,47 @@ serve(async (req) => {
           p_parse_error_message: agentResponse.status === "parse_error" ? "Failed to parse response" : null,
           p_api_response_status: 200,
         });
+        if (llmLogResult.error) {
+          console.error("[AGENT] Failed to insert LLM log:", JSON.stringify(llmLogResult.error));
+        }
 
         // Handle blackboard entry
         if (agentResponse.blackboard_entry) {
-          await supabase.rpc("insert_agent_blackboard_entry_with_token", {
+          // Validate entry_type to prevent malformed values from LLM
+          const validEntryTypes = ['planning', 'progress', 'decision', 'reasoning', 'next_steps', 'reflection'];
+          let entryType = agentResponse.blackboard_entry.entry_type || "progress";
+          if (typeof entryType !== 'string' || entryType.includes('<') || !validEntryTypes.includes(entryType)) {
+            console.warn("[AGENT] Invalid blackboard entry_type:", entryType, "- defaulting to 'progress'");
+            entryType = 'progress';
+          }
+          
+          const blackboardResult = await supabase.rpc("insert_agent_blackboard_entry_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
-            p_entry_type: agentResponse.blackboard_entry.entry_type || "progress",
+            p_entry_type: entryType,
             p_content: agentResponse.blackboard_entry.content || "",
             p_metadata: null,
           });
+          if (blackboardResult.error) {
+            console.error("[AGENT] Failed to insert blackboard entry:", JSON.stringify(blackboardResult.error));
+          } else {
+            console.log("[AGENT] Blackboard entry saved successfully");
+          }
         }
 
         // Log agent message (must use 'agent' role - database constraint)
-        await supabase.rpc("insert_agent_message_with_token", {
+        const agentMsgResult = await supabase.rpc("insert_agent_message_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_role: "agent",
           p_content: rawOutputText,
           p_metadata: { reasoning: agentResponse.reasoning, status: agentResponse.status, iteration },
         });
+        if (agentMsgResult.error) {
+          console.error("[AGENT] Failed to insert agent message:", JSON.stringify(agentMsgResult.error));
+        } else {
+          console.log("[AGENT] Agent message saved successfully, id:", agentMsgResult.data?.id);
+        }
 
         // Broadcast message refresh
         await supabase.channel(`agent-messages-project-${projectId}`).send({
