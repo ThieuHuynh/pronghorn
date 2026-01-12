@@ -510,8 +510,9 @@ serve(async (req) => {
         p_token: shareToken,
       });
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Session not found");
-      session = data[0];
+      // get_agent_session_with_token returns a single row, not an array
+      if (!data) throw new Error("Session not found");
+      session = data;
 
       // Check if abort requested
       if (session.abort_requested || session.status === "aborted") {
