@@ -1824,11 +1824,26 @@ serve(async (req) => {
             switch (r.type) {
               case "list_files":
                 summary.summary = `Listed ${Array.isArray(r.data) ? r.data.length : 0} files`;
+                // Include actual file list so agent can see paths and IDs
+                if (Array.isArray(r.data)) {
+                  summary.files = r.data.map((f: any) => ({ id: f.id, path: f.path }));
+                }
                 break;
               case "wildcard_search":
                 summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} matching files`;
                 if (Array.isArray(r.data)) {
                   summary.files = r.data.map((f: any) => ({ id: f.id, path: f.path, match_count: f.match_count }));
+                }
+                break;
+              case "search":
+                summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} results`;
+                // Include search results with snippets
+                if (Array.isArray(r.data)) {
+                  summary.results = r.data.map((f: any) => ({ 
+                    id: f.id, 
+                    path: f.path, 
+                    snippet: f.snippet || f.content?.slice(0, 500) 
+                  }));
                 }
                 break;
               case "read_file":
@@ -1857,8 +1872,21 @@ serve(async (req) => {
               case "move_file":
                 summary.summary = `Moved file`;
                 break;
+              case "project_inventory":
+                summary.summary = `Retrieved project inventory`;
+                summary.data = r.data;
+                break;
+              case "project_category":
+                summary.summary = `Retrieved category data`;
+                summary.data = r.data;
+                break;
+              case "project_elements":
+                summary.summary = `Retrieved ${Array.isArray(r.data) ? r.data.length : 0} elements`;
+                summary.data = r.data;
+                break;
               default:
                 summary.summary = `Completed ${r.type}`;
+                summary.data = r.data;
             }
           }
           return summary;
