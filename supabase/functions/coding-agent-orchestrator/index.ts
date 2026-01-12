@@ -377,16 +377,152 @@ function generateClaudeSchema(manifest: ToolsManifest, exposeProject: boolean) {
 
 // Old hardcoded getClaudeResponseTool removed - now using generateClaudeSchema() above
 
+// SSE event types for streaming progress to client
+type SSEEventType = 
+  | 'session_created'
+  | 'iteration_start'
+  | 'llm_streaming'
+  | 'llm_complete'
+  | 'operation_start'
+  | 'operation_complete'
+  | 'iteration_complete'
+  | 'task_complete'
+  | 'error';
+
+// Helper to parse streaming responses from different LLM providers
+async function streamLLMResponse(
+  provider: 'gemini' | 'anthropic' | 'grok',
+  response: Response,
+  sendSSE: (event: SSEEventType, data: any) => void,
+  iteration: number
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body reader available");
+
+  const decoder = new TextDecoder();
+  let textBuffer = "";
+  let fullContent = "";
+  let lastReportedChars = 0;
+  
+  // For Claude tool_use streaming, we need to accumulate the input_json_delta
+  let claudeToolInput = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      textBuffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE lines
+      let newlineIndex: number;
+      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+        let line = textBuffer.slice(0, newlineIndex);
+        textBuffer = textBuffer.slice(newlineIndex + 1);
+
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (line.trim() === "" || line.startsWith(':')) continue;
+        if (!line.startsWith('data: ')) continue;
+
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          let text = "";
+
+          if (provider === 'gemini') {
+            text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else if (provider === 'anthropic') {
+            // Handle Claude streaming - both text and tool_use input
+            if (parsed.type === "content_block_delta") {
+              if (parsed.delta?.type === "text_delta") {
+                text = parsed.delta.text || "";
+              } else if (parsed.delta?.type === "input_json_delta") {
+                // Tool input streaming - accumulate partial JSON
+                claudeToolInput += parsed.delta.partial_json || "";
+                text = parsed.delta.partial_json || "";
+              }
+            }
+          } else if (provider === 'grok') {
+            text = parsed.choices?.[0]?.delta?.content || "";
+          }
+
+          if (text) {
+            fullContent += text;
+            // Send progress every ~500 chars
+            if (fullContent.length - lastReportedChars >= 500) {
+              sendSSE('llm_streaming', { iteration, charsReceived: fullContent.length });
+              lastReportedChars = fullContent.length;
+            }
+          }
+        } catch (e) {
+          // Ignore parse errors for partial chunks
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // Final char count update
+  if (fullContent.length > lastReportedChars) {
+    sendSSE('llm_streaming', { iteration, charsReceived: fullContent.length });
+  }
+
+  // For Claude tool_use, return the accumulated tool input JSON
+  if (provider === 'anthropic' && claudeToolInput) {
+    return claudeToolInput;
+  }
+
+  return fullContent;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Parse request early to access data in error handlers
   let sessionId: string | null = null;
   let shareToken: string | null = null;
   let supabase: any = null;
+  let projectId: string | null = null;
 
-  try {
+  // Create SSE stream infrastructure
+  const encoder = new TextEncoder();
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+
+  const stream = new ReadableStream({
+    start(c) {
+      controller = c;
+    },
+  });
+
+  const sendSSE = (event: SSEEventType, data: any) => {
+    if (controller) {
+      const message = `data: ${JSON.stringify({ type: event, ...data })}\n\n`;
+      try {
+        controller.enqueue(encoder.encode(message));
+      } catch (e) {
+        console.error("Failed to send SSE event:", e);
+      }
+    }
+  };
+
+  const closeStream = () => {
+    if (controller) {
+      try {
+        controller.close();
+      } catch (e) {
+        // Already closed
+      }
+    }
+  };
+
+  // Start async processing without blocking the response
+  (async () => {
+    try {
     const authHeader = req.headers.get("authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -482,6 +618,9 @@ serve(async (req) => {
     });
     
     console.log("Created session:", session.id);
+    
+    // Send SSE event for session creation
+    sendSSE('session_created', { sessionId: session.id });
 
     // Load instruction manifest - full structure with params for schema generation
     const manifest: ToolsManifest = {
@@ -1058,6 +1197,9 @@ Start your response with { and end with }. Nothing else.`
 
       iteration++;
       console.log(`\n=== Iteration ${iteration} ===`);
+      
+      // Send SSE event for iteration start
+      sendSSE('iteration_start', { iteration, maxIterations: MAX_ITERATIONS });
 
       // Fetch blackboard entries from previous iterations to inject into prompt
       let blackboardSummary = "";
@@ -1100,17 +1242,21 @@ Start your response with { and end with }. Nothing else.`
       }, null, 2);
       const inputCharCount = systemPrompt.length + conversationForLLM.reduce((acc, msg) => acc + msg.content.length, 0);
 
-      // Call LLM based on provider
-      let llmResponse: any;
+      // Call LLM based on provider - use streaming where possible for progress updates
+      let rawOutputText = "";
+      const apiResponseStatus: number | null = null;
 
       if (selectedModel.startsWith("gemini")) {
-        // Gemini API with system instruction
+        // Gemini API with streaming enabled
         const contents = conversationForLLM.map((msg) => ({
           role: msg.role === "assistant" ? "model" : "user",
           parts: [{ text: msg.content }],
         }));
 
-        llmResponse = await fetch(`${apiEndpoint}?key=${apiKey}`, {
+        // Use streamGenerateContent endpoint for SSE streaming
+        const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?key=${apiKey}&alt=sse`;
+        
+        const llmResponse = await fetch(streamEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1125,16 +1271,42 @@ Start your response with { and end with }. Nothing else.`
             },
           }),
         });
+
+        if (!llmResponse.ok) {
+          const errorText = await llmResponse.text();
+          console.error("Gemini API error:", llmResponse.status, errorText);
+          
+          await supabase.rpc("insert_agent_llm_log_with_token", {
+            p_session_id: sessionId,
+            p_project_id: projectId,
+            p_token: shareToken,
+            p_iteration: iteration,
+            p_model: selectedModel,
+            p_input_prompt: fullInputPrompt,
+            p_output_raw: errorText,
+            p_was_parse_success: false,
+            p_parse_error_message: `API error: ${llmResponse.status}`,
+            p_api_response_status: llmResponse.status,
+          });
+
+          if (llmResponse.status === 429) throw new Error("Rate limit exceeded. Please try again later.");
+          if (llmResponse.status === 402) throw new Error("Payment required. Please add credits to your API account.");
+          throw new Error(`Gemini API error: ${errorText}`);
+        }
+
+        // Stream the response
+        rawOutputText = await streamLLMResponse('gemini', llmResponse, sendSSE, iteration);
+        
       } else if (selectedModel.startsWith("claude")) {
-        // Anthropic API with strict tool use for structured output
-        console.log(`Using Claude model ${modelName} with strict tool use enforcement`);
+        // Anthropic API with streaming enabled
+        console.log(`Using Claude model ${modelName} with streaming`);
         
         const messages = conversationForLLM.map((msg) => ({
           role: msg.role,
           content: msg.content,
         }));
 
-        llmResponse = await fetch(apiEndpoint, {
+        const llmResponse = await fetch(apiEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1149,11 +1321,38 @@ Start your response with { and end with }. Nothing else.`
             messages,
             tools: [generateClaudeSchema(manifest, exposeProject)],
             tool_choice: { type: "tool", name: "respond_with_actions" },
+            stream: true,
           }),
         });
+
+        if (!llmResponse.ok) {
+          const errorText = await llmResponse.text();
+          console.error("Claude API error:", llmResponse.status, errorText);
+          
+          await supabase.rpc("insert_agent_llm_log_with_token", {
+            p_session_id: sessionId,
+            p_project_id: projectId,
+            p_token: shareToken,
+            p_iteration: iteration,
+            p_model: selectedModel,
+            p_input_prompt: fullInputPrompt,
+            p_output_raw: errorText,
+            p_was_parse_success: false,
+            p_parse_error_message: `API error: ${llmResponse.status}`,
+            p_api_response_status: llmResponse.status,
+          });
+
+          if (llmResponse.status === 429) throw new Error("Rate limit exceeded. Please try again later.");
+          if (llmResponse.status === 402) throw new Error("Payment required. Please add credits to your API account.");
+          throw new Error(`Claude API error: ${errorText}`);
+        }
+
+        // Stream the response - Claude returns tool input as JSON streamed
+        rawOutputText = await streamLLMResponse('anthropic', llmResponse, sendSSE, iteration);
+        
       } else if (selectedModel.startsWith("grok")) {
-        // xAI API with structured output enforcement
-        console.log(`Using Grok model ${modelName} with structured output enforcement`);
+        // xAI API with streaming enabled
+        console.log(`Using Grok model ${modelName} with streaming`);
         
         const messages = [
           { role: "system", content: systemPrompt },
@@ -1163,7 +1362,7 @@ Start your response with { and end with }. Nothing else.`
           })),
         ];
 
-        llmResponse = await fetch(apiEndpoint, {
+        const llmResponse = await fetch(apiEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1175,85 +1374,50 @@ Start your response with { and end with }. Nothing else.`
             max_tokens: maxTokens,
             temperature: 0.7,
             response_format: generateGrokSchema(manifest, exposeProject),
+            stream: true,
           }),
         });
-      }
 
-      // Capture API response status for logging
-      const apiResponseStatus = llmResponse?.status || null;
+        if (!llmResponse.ok) {
+          const errorText = await llmResponse.text();
+          console.error("Grok API error:", llmResponse.status, errorText);
+          
+          await supabase.rpc("insert_agent_llm_log_with_token", {
+            p_session_id: sessionId,
+            p_project_id: projectId,
+            p_token: shareToken,
+            p_iteration: iteration,
+            p_model: selectedModel,
+            p_input_prompt: fullInputPrompt,
+            p_output_raw: errorText,
+            p_was_parse_success: false,
+            p_parse_error_message: `API error: ${llmResponse.status}`,
+            p_api_response_status: llmResponse.status,
+          });
 
-      if (!llmResponse?.ok) {
-        const errorText = await llmResponse?.text();
-        console.error("LLM API error:", llmResponse?.status, errorText);
-
-        // Log the failed API call
-        await supabase.rpc("insert_agent_llm_log_with_token", {
-          p_session_id: sessionId,
-          p_project_id: projectId,
-          p_token: shareToken,
-          p_iteration: iteration,
-          p_model: selectedModel,
-          p_input_prompt: fullInputPrompt,
-          p_output_raw: errorText,
-          p_was_parse_success: false,
-          p_parse_error_message: `API error: ${llmResponse?.status}`,
-          p_api_response_status: apiResponseStatus,
-        });
-
-        if (llmResponse?.status === 429) {
-          throw new Error("Rate limit exceeded. Please try again later.");
-        }
-        if (llmResponse?.status === 402) {
-          throw new Error("Payment required. Please add credits to your API account.");
+          if (llmResponse.status === 429) throw new Error("Rate limit exceeded. Please try again later.");
+          if (llmResponse.status === 402) throw new Error("Payment required. Please add credits to your API account.");
+          throw new Error(`Grok API error: ${errorText}`);
         }
 
-        throw new Error(`LLM API error: ${errorText}`);
+        // Stream the response
+        rawOutputText = await streamLLMResponse('grok', llmResponse, sendSSE, iteration);
+      } else {
+        throw new Error(`Unsupported model: ${selectedModel}`);
       }
 
-      const llmData = await llmResponse.json();
-      console.log("LLM response received");
+      // Send LLM complete event
+      sendSSE('llm_complete', { iteration, totalChars: rawOutputText.length });
+      console.log(`LLM response received: ${rawOutputText.length} chars`);
 
-      // Extract raw output text BEFORE parsing (for logging)
-      let rawOutputText = "";
-      if (selectedModel.startsWith("gemini")) {
-        rawOutputText = llmData.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(llmData);
-      } else if (selectedModel.startsWith("claude")) {
-        const toolUseBlock = llmData.content?.find((block: any) => block.type === "tool_use");
-        const textBlock = llmData.content?.find((block: any) => block.type === "text");
-        rawOutputText = toolUseBlock 
-          ? JSON.stringify(toolUseBlock.input, null, 2) 
-          : (textBlock?.text || JSON.stringify(llmData.content));
-      } else if (selectedModel.startsWith("grok")) {
-        rawOutputText = llmData.choices?.[0]?.message?.content || JSON.stringify(llmData);
-      }
-
-      // Parse LLM response
+      // Parse LLM response from accumulated rawOutputText
       let agentResponse: any;
       let wasParseSuccess = true;
       let parseErrorMessage: string | null = null;
 
       try {
-        if (selectedModel.startsWith("gemini")) {
-          const text = llmData.candidates[0].content.parts[0].text as string;
-          agentResponse = parseAgentResponseText(text);
-        } else if (selectedModel.startsWith("claude")) {
-          // With strict tool use, response comes in tool_use block's input field
-          const toolUseBlock = llmData.content.find((block: any) => block.type === "tool_use");
-          if (toolUseBlock && toolUseBlock.input) {
-            // Tool input is already structured JSON, use directly
-            agentResponse = toolUseBlock.input;
-            console.log("Claude strict tool use response parsed directly");
-          } else {
-            // Fallback: try text content with robust parser
-            const textBlock = llmData.content.find((block: any) => block.type === "text");
-            const text = textBlock?.text || JSON.stringify(llmData.content);
-            console.warn("No tool_use block found, falling back to text parsing");
-            agentResponse = parseAgentResponseText(text);
-          }
-        } else if (selectedModel.startsWith("grok")) {
-          const text = llmData.choices[0].message.content as string;
-          agentResponse = parseAgentResponseText(text);
-        }
+        // All providers now return accumulated text, use the robust parser
+        agentResponse = parseAgentResponseText(rawOutputText);
 
         // Check if parsing actually failed (parse_error status)
         if (agentResponse?.status === "parse_error") {
@@ -1396,9 +1560,18 @@ Start your response with { and end with }. Nothing else.`
 
       console.log(`[AGENT] Executing ${sortedOperations.length} operations (${editsByFile.size} files with edits, sorted back-to-front)`);
 
-      for (const op of sortedOperations) {
+      for (let opIndex = 0; opIndex < sortedOperations.length; opIndex++) {
+        const op = sortedOperations[opIndex];
         console.log("Executing operation:", op.type);
-
+        
+        // Send SSE event for operation start
+        sendSSE('operation_start', { 
+          iteration, 
+          operation: op.type, 
+          operationIndex: opIndex,
+          totalOperations: sortedOperations.length,
+          path: op.params?.path || op.params?.file_path || null 
+        });
         // Log operation start
         const { data: logEntry } = await supabase.rpc("log_agent_operation_with_token", {
           p_session_id: session.id,
@@ -2139,6 +2312,7 @@ Start your response with { and end with }. Nothing else.`
           });
 
           operationResults.push({ type: op.type, success: true, data: result?.data });
+          sendSSE('operation_complete', { iteration, operation: op.type, success: true });
         } catch (error) {
           console.error("Operation failed:", error);
 
@@ -2312,37 +2486,47 @@ Start your response with { and end with }. Nothing else.`
 
     console.log("Task completed with status:", finalStatus);
 
-    return new Response(
-      JSON.stringify({
-        sessionId: session.id,
-        status: finalStatus,
-        iterations: iteration,
-        operations: allOperationResults,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
-  } catch (error) {
-    console.error("Error in coding-agent-orchestrator:", error);
-
-    // Update session to failed status on error if session was created
-    if (sessionId && shareToken && supabase) {
-      try {
-        await supabase.rpc("update_agent_session_status_with_token", {
-          p_session_id: sessionId,
-          p_status: "failed",
-          p_token: shareToken,
-          p_completed_at: new Date().toISOString(),
-        });
-      } catch (updateError) {
-        console.error("Failed to update session status on error:", updateError);
-      }
-    }
-
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Send completion event via SSE
+    sendSSE('task_complete', {
+      sessionId: session.id,
+      status: finalStatus,
+      totalIterations: iteration,
+      totalOperations: allOperationResults.length,
     });
-  }
+
+    } catch (error) {
+      console.error("Error in coding-agent-orchestrator:", error);
+
+      // Update session to failed status on error if session was created
+      if (sessionId && shareToken && supabase) {
+        try {
+          await supabase.rpc("update_agent_session_status_with_token", {
+            p_session_id: sessionId,
+            p_status: "failed",
+            p_token: shareToken,
+            p_completed_at: new Date().toISOString(),
+          });
+        } catch (updateError) {
+          console.error("Failed to update session status on error:", updateError);
+        }
+      }
+
+      // Send error event via SSE
+      sendSSE('error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      closeStream();
+    }
+  })();
+
+  // Return SSE stream immediately
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
 });
