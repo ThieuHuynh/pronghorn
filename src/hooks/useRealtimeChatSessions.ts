@@ -199,12 +199,46 @@ export const useRealtimeChatSessions = (
     }
   };
 
+  const cloneSession = async (id: string) => {
+    if (!projectId) return null;
+
+    try {
+      const { data, error } = await supabase.rpc("clone_chat_session_with_token", {
+        p_id: id,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+      
+      if (data) {
+        setSessions((prev) => [data, ...prev]);
+      }
+      
+      // Broadcast using the subscribed channel reference
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'chat_session_refresh',
+          payload: {}
+        });
+      }
+      
+      toast.success("Chat session cloned");
+      return data;
+    } catch (error) {
+      console.error("Error cloning chat session:", error);
+      toast.error("Failed to clone chat session");
+      return null;
+    }
+  };
+
   return {
     sessions,
     isLoading,
     createSession,
     updateSession,
     deleteSession,
+    cloneSession,
     refresh: loadSessions,
   };
 };
@@ -447,6 +481,39 @@ export const useRealtimeChatMessages = (
     }
   };
 
+  const deleteMessage = async (id: string) => {
+    if (!chatSessionId) return;
+
+    // Optimistic update
+    const originalMessages = messages;
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+
+    try {
+      const { error } = await supabase.rpc("delete_chat_message_with_token", {
+        p_id: id,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+      
+      // Broadcast using the subscribed channel reference
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'chat_message_refresh',
+          payload: {}
+        });
+      }
+      
+      toast.success("Message deleted");
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast.error("Failed to delete message");
+      // Rollback on error
+      setMessages(originalMessages);
+    }
+  };
+
   return {
     messages,
     isLoading,
@@ -454,6 +521,7 @@ export const useRealtimeChatMessages = (
     addTemporaryMessage,
     updateStreamingMessage,
     saveAssistantMessage,
+    deleteMessage,
     refresh: loadMessages,
     channelRef,
   };

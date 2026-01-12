@@ -3246,6 +3246,25 @@ export type Database = {
         Args: { p_project_id: string; p_token?: string }
         Returns: Database["public"]["Enums"]["project_token_role"]
       }
+      clone_chat_session_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       clone_project_with_token: {
         Args: {
           p_clone_artifacts?: boolean
@@ -3484,6 +3503,10 @@ export type Database = {
         Returns: undefined
       }
       delete_canvas_node_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_chat_message_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }

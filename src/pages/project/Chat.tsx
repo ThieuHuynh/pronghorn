@@ -27,6 +27,7 @@ import {
   Eye,
   RefreshCw,
   Loader2,
+  Files,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -71,6 +72,7 @@ export default function Chat() {
     createSession,
     deleteSession,
     updateSession,
+    cloneSession,
   } = useRealtimeChatSessions(projectId, shareToken, isTokenSet);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -100,6 +102,7 @@ export default function Chat() {
     updateStreamingMessage,
     addTemporaryMessage,
     saveAssistantMessage,
+    deleteMessage,
     refresh: refreshMessages,
   } = useRealtimeChatMessages(selectedSessionId || undefined, shareToken, isTokenSet && !!selectedSessionId, projectId);
 
@@ -808,35 +811,63 @@ export default function Chat() {
                               {format(new Date(session.updated_at), "MMM d, h:mm a")}
                             </p>
                           </div>
-                          <div className="flex gap-1 flex-shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartRename(session.id, session.ai_title || session.title || "");
-                              }}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const isCurrentSession = selectedSessionId === session.id;
-                                if (isCurrentSession) {
-                                  // Clear selection first to prevent flash of old messages
-                                  setSelectedSessionId(null);
-                                }
-                                await deleteSession(session.id);
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <TooltipProvider>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartRename(session.id, session.ai_title || session.title || "");
+                                    }}
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Rename</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const cloned = await cloneSession(session.id);
+                                      if (cloned) setSelectedSessionId(cloned.id);
+                                    }}
+                                  >
+                                    <Files className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Clone chat</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const isCurrentSession = selectedSessionId === session.id;
+                                      if (isCurrentSession) {
+                                        setSelectedSessionId(null);
+                                      }
+                                      await deleteSession(session.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
                         </div>
                       </Card>
                     ))}
@@ -944,6 +975,19 @@ export default function Chat() {
                                   </TooltipTrigger>
                                   <TooltipContent>Save as artifact</TooltipContent>
                                 </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => deleteMessage(message.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete message</TooltipContent>
+                                </Tooltip>
                               </div>
                             </TooltipProvider>
                           </div>
@@ -981,6 +1025,19 @@ export default function Chat() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Save as artifact</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => deleteMessage(message.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete message</TooltipContent>
                               </Tooltip>
                             </div>
                           </TooltipProvider>
