@@ -429,11 +429,15 @@ export function UnifiedAgentInterface({
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
+      // Get the user's JWT for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token || supabaseAnonKey;
+      
       const response = await fetch(`${supabaseUrl}/functions/v1/coding-agent-orchestrator`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${accessToken}`,
           'apikey': supabaseAnonKey,
         },
         body: JSON.stringify({
