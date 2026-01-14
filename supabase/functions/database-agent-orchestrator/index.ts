@@ -744,6 +744,9 @@ Your task is to help with database operations by executing SQL and managing sche
 ${toolsListText}
 
 === RESPONSE FORMAT ===
+CRITICAL: Return ONLY raw JSON. Do NOT wrap your response in markdown code blocks.
+Do NOT use \`\`\`json or \`\`\` formatting. Output pure JSON directly.
+
 ${responseSchemaText}
 
 === CRITICAL RULES ===

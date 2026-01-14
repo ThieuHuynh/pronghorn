@@ -89,12 +89,26 @@ export function DatabaseAgentInterface({
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isStoppingRef = useRef<boolean>(false);
   
   // Helper function to parse streaming content and extract readable text
   const parseStreamingContent = (content: string): string => {
+    let cleaned = content.trim();
+    
+    // Strip markdown code fences that LLM might add
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.slice(7);
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.slice(3);
+    }
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.slice(0, -3);
+    }
+    cleaned = cleaned.trim();
+    
     try {
-      if (content.trim().startsWith('{')) {
-        const reasoningMatch = content.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (cleaned.startsWith('{')) {
+        const reasoningMatch = cleaned.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
         if (reasoningMatch) {
           return reasoningMatch[1]
             .replace(/\\n/g, '\n')
@@ -105,7 +119,7 @@ export function DatabaseAgentInterface({
     } catch {
       // Fall through to return raw content
     }
-    return content;
+    return cleaned;
   };
   
   // Sync loaded messages with local state
@@ -162,6 +176,9 @@ export function DatabaseAgentInterface({
       return;
     }
     
+    // Reset stop flag at start
+    isStoppingRef.current = false;
+    
     const userMessageContent = taskInput;
     setIsSubmitting(true);
     setTaskInput('');
@@ -206,6 +223,12 @@ export function DatabaseAgentInterface({
       const maxIterations = 50;
       
       while (status === 'in_progress' && currentIteration <= maxIterations) {
+        // Check if user clicked stop before starting new iteration
+        if (isStoppingRef.current) {
+          console.log('Stop requested, exiting loop');
+          break;
+        }
+        
         abortControllerRef.current = new AbortController();
         
         setStreamProgress(p => ({ 
@@ -322,8 +345,17 @@ export function DatabaseAgentInterface({
                 }
               }
             }
-          } catch (streamError) {
+          } catch (streamError: any) {
             console.error('Stream read error:', streamError);
+            
+            // If user clicked stop or abort was triggered, break out of loop
+            if (streamError.name === 'AbortError' || isStoppingRef.current) {
+              console.log('Stream aborted by user');
+              isStoppingRef.current = false;
+              break;
+            }
+            
+            // Only retry for unintentional interruptions
             if (!receivedIterationComplete && status === 'in_progress') {
               console.warn(`Stream interrupted at iteration ${currentIteration}, will retry...`);
               toast.warning(`Iteration ${currentIteration} interrupted, retrying...`);
@@ -369,10 +401,12 @@ export function DatabaseAgentInterface({
   
   const handleStop = () => {
     if (abortControllerRef.current) {
+      isStoppingRef.current = true;  // Mark as intentional stop
       abortControllerRef.current.abort();
       setIsSubmitting(false);
+      setStreamingMessage(null);
       abortControllerRef.current = null;
-      toast.info('Stopping agent...');
+      toast.info('Agent stopped');
     }
   };
   
