@@ -1147,6 +1147,17 @@ ${blackboardContent}`;
           p_metadata: { reasoning: agentResponse.reasoning, status: agentResponse.status, iteration },
         });
 
+        // Broadcast message refresh for real-time UI updates
+        try {
+          await supabase.channel(`agent-messages-project-${projectId}`).send({
+            type: 'broadcast',
+            event: 'agent_message_refresh',
+            payload: { sessionId, iteration, projectId }
+          });
+        } catch (e) {
+          console.error('Failed to broadcast message refresh:', e);
+        }
+
         // Execute operations
         const operationResults = [];
         const operations = agentResponse.operations || [];
@@ -1168,6 +1179,17 @@ ${blackboardContent}`;
             p_details: op.params,
             p_token: shareToken,
           });
+
+          // Broadcast operation start for real-time UI
+          try {
+            await supabase.channel(`agent-operations-project-${projectId}`).send({
+              type: 'broadcast',
+              event: 'agent_operation_refresh',
+              payload: { sessionId, operationId: logEntry?.id, status: 'in_progress', operation: op.type }
+            });
+          } catch (e) {
+            console.error('Failed to broadcast operation start:', e);
+          }
 
           try {
             let result: any;
@@ -1324,6 +1346,17 @@ ${blackboardContent}`;
               p_token: shareToken,
             });
 
+            // Broadcast operation completed
+            try {
+              await supabase.channel(`agent-operations-project-${projectId}`).send({
+                type: 'broadcast',
+                event: 'agent_operation_refresh',
+                payload: { sessionId, operationId: logEntry?.id, status: 'completed', operation: op.type }
+              });
+            } catch (e) {
+              console.error('Failed to broadcast operation complete:', e);
+            }
+
             operationResults.push({ type: op.type, success: true, data: result?.data || result });
             sendSSE('operation_complete', { iteration, operation: op.type, success: true });
           } catch (error) {
@@ -1336,6 +1369,17 @@ ${blackboardContent}`;
               p_error_message: errorMessage,
               p_token: shareToken,
             });
+
+            // Broadcast operation failed
+            try {
+              await supabase.channel(`agent-operations-project-${projectId}`).send({
+                type: 'broadcast',
+                event: 'agent_operation_refresh',
+                payload: { sessionId, operationId: logEntry?.id, status: 'failed', operation: op.type, error: errorMessage }
+              });
+            } catch (e) {
+              console.error('Failed to broadcast operation failed:', e);
+            }
 
             operationResults.push({ type: op.type, success: false, error: errorMessage });
             sendSSE('operation_complete', { iteration, operation: op.type, success: false, error: errorMessage });

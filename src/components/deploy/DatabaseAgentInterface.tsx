@@ -19,7 +19,8 @@ import {
   Table2,
   Code,
   FileText,
-  Settings
+  Settings,
+  Sliders
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,6 +28,7 @@ import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentPromptEditor } from '@/components/build/AgentPromptEditor';
 import { RawLLMLogsViewer } from '@/components/build/RawLLMLogsViewer';
+import { AgentConfigurationModal, AgentConfiguration } from '@/components/build/AgentConfigurationModal';
 
 interface SchemaInfo {
   name: string;
@@ -63,6 +65,11 @@ export function DatabaseAgentInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'prompt' | 'logs'>('chat');
+  const [isAgentConfigOpen, setIsAgentConfigOpen] = useState(false);
+  const [agentConfig, setAgentConfig] = useState<AgentConfiguration>({
+    exposeProject: false,
+    maxIterations: 50,
+  });
   
   // SSE streaming progress state
   const [streamProgress, setStreamProgress] = useState<{
@@ -251,7 +258,7 @@ export function DatabaseAgentInterface({
       let currentSessionId: string | null = null;
       let currentIteration = 1;
       let status = 'in_progress';
-      const maxIterations = 50;
+      const maxIterations = agentConfig.maxIterations;
       
       while (status === 'in_progress' && currentIteration <= maxIterations) {
         // Check if user clicked stop before starting new iteration
@@ -286,6 +293,7 @@ export function DatabaseAgentInterface({
         // Only include full context on first iteration
         if (currentIteration === 1) {
           requestBody.taskDescription = userMessageContent;
+          requestBody.exposeProject = agentConfig.exposeProject;
           // Include schema context
           requestBody.schemaContext = schemas.map(s => ({
             name: s.name,
@@ -429,10 +437,24 @@ export function DatabaseAgentInterface({
     }
   };
   
-  const handleStop = () => {
+  const handleStop = async () => {
     if (abortControllerRef.current) {
       isStoppingRef.current = true;  // Mark as intentional stop
       abortControllerRef.current.abort();
+      
+      // Call server-side abort RPC
+      const lastAgentMessage = messages.find((m: any) => m.session_id && !m.session_id.startsWith('temp'));
+      if (lastAgentMessage?.session_id) {
+        try {
+          await supabase.rpc('request_agent_session_abort_with_token', {
+            p_session_id: lastAgentMessage.session_id,
+            p_token: shareToken || null,
+          });
+        } catch (e) {
+          console.error('Failed to request abort:', e);
+        }
+      }
+      
       setIsSubmitting(false);
       setStreamingMessage(null);
       abortControllerRef.current = null;
@@ -546,6 +568,15 @@ export function DatabaseAgentInterface({
           )}
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsAgentConfigOpen(true)}
+            className="h-6 w-6"
+            title="Agent Configuration"
+          >
+            <Sliders className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -702,6 +733,14 @@ export function DatabaseAgentInterface({
           />
         </TabsContent>
       </Tabs>
+      
+      {/* Agent Configuration Modal */}
+      <AgentConfigurationModal
+        open={isAgentConfigOpen}
+        onOpenChange={setIsAgentConfigOpen}
+        config={agentConfig}
+        onConfigChange={setAgentConfig}
+      />
     </div>
   );
 }
