@@ -92,6 +92,11 @@ export function DatabaseAgentInterface({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isStoppingRef = useRef<boolean>(false);
   
+  // Scroll position preservation refs
+  const anchorIdBeforeLoad = useRef<string | null>(null);
+  const anchorOffsetBeforeLoad = useRef<number>(0);
+  const lastScrollTimeRef = useRef<number>(0);
+  
   // Helper function to parse streaming content and extract readable text
   const parseStreamingContent = (content: string): string => {
     let cleaned = content.trim();
@@ -123,15 +128,28 @@ export function DatabaseAgentInterface({
     return cleaned;
   };
   
-  // Sync loaded messages with local state
+  // Sync loaded messages with local state using smart deduplication
   useEffect(() => {
-    // Filter to only database agent messages (mode = 'database')
-    const dbMessages = loadedMessages.filter((m: any) => 
-      m.metadata?.mode === 'database' || 
-      m.session_id?.includes('database') ||
-      true // For now, show all project messages - we'll refine this later
-    );
-    setMessages(dbMessages);
+    setMessages(prev => {
+      // Get IDs of real messages from database
+      const realMessageIds = new Set(loadedMessages.map((m: any) => m.id));
+      
+      // Keep optimistic messages only if no matching real message exists
+      const optimisticToKeep = prev.filter(optMsg => {
+        if (!optMsg.id?.startsWith('temp-')) return false;
+        // Check if a real version exists (same role + content)
+        const hasRealVersion = loadedMessages.some((realMsg: any) => 
+          realMsg.role === optMsg.role && 
+          realMsg.content === optMsg.content
+        );
+        return !hasRealVersion;
+      });
+      
+      // Combine and sort by timestamp
+      return [...loadedMessages, ...optimisticToKeep].sort((a: any, b: any) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    });
   }, [loadedMessages]);
   
   // Scroll to bottom when messages first load
@@ -163,12 +181,43 @@ export function DatabaseAgentInterface({
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, []);
   
-  // Auto-scroll when streaming
+  // Auto-scroll when streaming (throttled for performance)
   useEffect(() => {
-    if (isAutoScrollEnabled && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (streamingMessage?.isStreaming && isAutoScrollEnabled && messagesEndRef.current) {
+      const now = Date.now();
+      // Throttle scroll to once per 100ms for performance
+      if (now - lastScrollTimeRef.current > 100) {
+        lastScrollTimeRef.current = now;
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-  }, [messages.length, isAutoScrollEnabled]);
+  }, [streamingMessage?.content, streamingMessage?.isStreaming, isAutoScrollEnabled]);
+  
+  // Scroll position preservation after message updates
+  useEffect(() => {
+    if (anchorIdBeforeLoad.current) {
+      const anchorId = anchorIdBeforeLoad.current;
+      const savedOffset = anchorOffsetBeforeLoad.current;
+      
+      setTimeout(() => {
+        const viewport = scrollViewportRef.current?.querySelector(
+          '[data-radix-scroll-area-viewport]'
+        ) as HTMLElement;
+        const anchorElement = scrollViewportRef.current?.querySelector(
+          `[data-timeline-id="${anchorId}"]`
+        ) as HTMLElement;
+        
+        if (anchorElement && viewport) {
+          const viewportRect = viewport.getBoundingClientRect();
+          const anchorRect = anchorElement.getBoundingClientRect();
+          const currentOffset = anchorRect.top - viewportRect.top;
+          const adjustment = currentOffset - savedOffset;
+          viewport.scrollTop += adjustment;
+        }
+        anchorIdBeforeLoad.current = null;
+      }, 50);
+    }
+  }, [messages.length]);
   
   const handleSubmit = async () => {
     if (!taskInput.trim() || isSubmitting) return;
