@@ -688,11 +688,11 @@ serve(async (req) => {
   let conversationHistory: Array<{ role: string; content: string }> = [];
   
   if (!isNewSession) {
+    // Continuing an existing session - load messages from this session
     if (session?.task_description) {
       conversationHistory.push({ role: "user", content: `Task: ${session.task_description}` });
     }
     
-    // Must pass all required params: p_project_id is required!
     const { data: previousMessages, error: historyError } = await supabase.rpc("get_agent_messages_with_token", {
       p_project_id: projectId,
       p_session_id: sessionId,
@@ -708,21 +708,95 @@ serve(async (req) => {
     }
 
     if (previousMessages && previousMessages.length > 0) {
-      // Sort oldest first (messages are returned DESC by default)
       const sortedMessages = [...previousMessages].reverse();
       for (const msg of sortedMessages) {
         if (msg.role === 'user') {
           conversationHistory.push({ role: "user", content: msg.content });
         } else if (msg.role === 'assistant' || msg.role === 'agent') {
-          // Include agent responses with full content
           conversationHistory.push({ role: "assistant", content: msg.content });
         } else if (msg.role === 'system' && msg.metadata?.operation_results) {
-          // Include operation results as user context so LLM sees them
           conversationHistory.push({ role: "user", content: `[Tool Results]: ${msg.content}` });
         }
       }
     }
-    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation (including task and operation results)`);
+    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation`);
+  } else {
+    // NEW SESSION: Load recent history from the LAST session of this agent type
+    // This gives the agent context about what was discussed before
+    try {
+      // First, find the most recent completed session for this project + agent type
+      const { data: recentSessions, error: sessionQueryError } = await supabase
+        .from("agent_sessions")
+        .select("id, task_description, created_at")
+        .eq("project_id", projectId)
+        .eq("agent_type", "database")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      
+      if (sessionQueryError) {
+        console.error("Failed to query recent sessions:", sessionQueryError);
+      } else if (recentSessions && recentSessions.length > 0) {
+        // Load messages from recent sessions (not including the current new one)
+        const recentSessionIds = recentSessions
+          .filter(s => s.id !== sessionId)
+          .slice(0, 2) // Last 2 sessions
+          .map(s => s.id);
+        
+        if (recentSessionIds.length > 0) {
+          // Add context header
+          conversationHistory.push({
+            role: "user",
+            content: "=== PREVIOUS SESSION CONTEXT ===\nThe following is context from recent database agent sessions. Use this to understand what has been discussed/done before."
+          });
+          
+          for (const prevSessionId of recentSessionIds) {
+            const { data: prevMessages } = await supabase.rpc("get_agent_messages_with_token", {
+              p_project_id: projectId,
+              p_session_id: prevSessionId,
+              p_token: shareToken,
+              p_limit: 10, // Last 10 messages per session
+              p_offset: 0,
+              p_since: null,
+              p_agent_type: "database",
+            });
+            
+            if (prevMessages && prevMessages.length > 0) {
+              // Find the session's task description
+              const sessionInfo = recentSessions.find(s => s.id === prevSessionId);
+              if (sessionInfo?.task_description) {
+                conversationHistory.push({ 
+                  role: "user", 
+                  content: `[Previous task]: ${sessionInfo.task_description}` 
+                });
+              }
+              
+              // Add key messages (user questions and final agent responses)
+              const sortedPrev = [...prevMessages].reverse();
+              for (const msg of sortedPrev) {
+                if (msg.role === 'user' && !msg.content.startsWith('[Tool Results]')) {
+                  conversationHistory.push({ role: "user", content: msg.content });
+                } else if (msg.role === 'agent' || msg.role === 'assistant') {
+                  // Only include agent summary, not full responses
+                  const content = msg.content.length > 500 
+                    ? msg.content.substring(0, 500) + "..." 
+                    : msg.content;
+                  conversationHistory.push({ role: "assistant", content });
+                }
+              }
+            }
+          }
+          
+          conversationHistory.push({
+            role: "user", 
+            content: "=== END PREVIOUS CONTEXT ===\n"
+          });
+          
+          console.log(`Loaded ${conversationHistory.length} context messages from previous sessions`);
+        }
+      }
+    } catch (e) {
+      console.error("Error loading previous session context:", e);
+    }
   }
 
   // Load blackboard
