@@ -564,17 +564,18 @@ export function AgentPromptEditor({ projectId, shareToken, agentType = 'coding-a
         {/* Tools Tab */}
         <TabsContent value="tools" className="flex-1 m-0 min-h-0 overflow-auto">
             <div className="p-4 space-y-6">
-              {/* File Operations */}
+              {/* File Operations (Coding Agent) */}
+              {toolsManifest?.file_operations && Object.keys(toolsManifest.file_operations).length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Wrench className="h-4 w-4 text-muted-foreground" />
                   <h4 className="font-medium">File Operations</h4>
                   <Badge variant="outline" className="text-xs">
-                    {Object.keys(toolsManifest?.file_operations || {}).length} tools
+                    {Object.keys(toolsManifest.file_operations).length} tools
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  {toolsManifest && Object.entries(toolsManifest.file_operations).map(([toolName, tool]) => {
+                  {Object.entries(toolsManifest.file_operations).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('file_operations', toolName);
                     const isModified = customToolDescriptions.file_operations?.[toolName] !== undefined;
                     const params = tool.params;
@@ -638,18 +639,20 @@ export function AgentPromptEditor({ projectId, shareToken, agentType = 'coding-a
                   })}
                 </div>
               </div>
+              )}
 
-              {/* Project Exploration Tools */}
+              {/* Project Exploration Tools (Coding Agent) */}
+              {toolsManifest?.project_exploration_tools && Object.keys(toolsManifest.project_exploration_tools).length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <FolderSearch className="h-4 w-4 text-muted-foreground" />
                   <h4 className="font-medium">Project Exploration Tools</h4>
                   <Badge variant="outline" className="text-xs">
-                    {Object.keys(toolsManifest?.project_exploration_tools || {}).length} tools
+                    {Object.keys(toolsManifest.project_exploration_tools).length} tools
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  {toolsManifest && Object.entries(toolsManifest.project_exploration_tools).map(([toolName, tool]) => {
+                  {Object.entries(toolsManifest.project_exploration_tools).map(([toolName, tool]) => {
                     const currentDesc = getEffectiveToolDescription('project_exploration_tools', toolName);
                     const isModified = customToolDescriptions.project_exploration_tools?.[toolName] !== undefined;
                     const params = tool.params;
@@ -712,6 +715,112 @@ export function AgentPromptEditor({ projectId, shareToken, agentType = 'coding-a
                   })}
                 </div>
               </div>
+              )}
+
+              {/* Database Operations (Database Agent) */}
+              {toolsManifest?.database_operations && Object.keys(toolsManifest.database_operations).length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-medium">Database Operations</h4>
+                  <Badge variant="outline" className="text-xs">
+                    {Object.keys(toolsManifest.database_operations).length} tools
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {Object.entries(toolsManifest.database_operations).map(([toolName, tool]) => {
+                    const params = tool.params;
+                    
+                    return (
+                      <div key={toolName} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
+                            <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
+                          </div>
+                        </div>
+                        
+                        {/* Show parameters (readonly) */}
+                        {params && Object.keys(params).length > 0 && (
+                          <div className="bg-muted/50 rounded p-2 space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
+                            {Object.entries(params).map(([paramName, paramDef]) => {
+                              const p = paramDef as ToolParamDefinition;
+                              return (
+                                <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                  <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                  <span className="text-muted-foreground">: {p.type}</span>
+                                  {p.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                  <span className="text-muted-foreground/70 flex-1">— {p.description}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        <p className="text-sm text-muted-foreground">{tool.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              )}
+
+              {/* Project Context Tools (Database Agent) */}
+              {toolsManifest?.project_context_tools && Object.keys(toolsManifest.project_context_tools).length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FolderSearch className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-medium">Project Context Tools</h4>
+                  <Badge variant="outline" className="text-xs">
+                    {Object.keys(toolsManifest.project_context_tools).length} tools
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {Object.entries(toolsManifest.project_context_tools).map(([toolName, tool]) => {
+                    const params = tool.params;
+                    
+                    return (
+                      <div key={toolName} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded">{toolName}</code>
+                            <Badge variant="secondary" className="text-xs">{tool.category}</Badge>
+                          </div>
+                        </div>
+                        
+                        {/* Show parameters (readonly) */}
+                        {params && Object.keys(params).length > 0 && (
+                          <div className="bg-muted/50 rounded p-2 space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">Parameters:</span>
+                            {Object.entries(params).map(([paramName, paramDef]) => {
+                              const p = paramDef as ToolParamDefinition;
+                              return (
+                                <div key={paramName} className="flex items-start gap-2 text-xs ml-2">
+                                  <code className="text-amber-600 dark:text-amber-400 font-mono">{paramName}</code>
+                                  <span className="text-muted-foreground">: {p.type}</span>
+                                  {p.required && <Badge variant="outline" className="text-xs px-1 py-0">required</Badge>}
+                                  <span className="text-muted-foreground/70 flex-1">— {p.description}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        <p className="text-sm text-muted-foreground">{tool.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              )}
+
+              {/* Empty state */}
+              {!toolsManifest && (
+                <div className="text-center text-muted-foreground py-8">
+                  <p>No tools manifest loaded</p>
+                </div>
+              )}
             </div>
         </TabsContent>
 
