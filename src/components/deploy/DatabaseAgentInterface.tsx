@@ -418,25 +418,35 @@ export function DatabaseAgentInterface({
     return <FileText className="h-4 w-4" />;
   };
   
+  // Parse agent content to extract reasoning and operations
+  const parseAgentContent = (content: string) => {
+    try {
+      const parsed = JSON.parse(content);
+      let operations = parsed.operations || [];
+      if (typeof operations === 'string') {
+        try { operations = JSON.parse(operations); } catch { operations = []; }
+      }
+      if (!Array.isArray(operations)) operations = [];
+      
+      return {
+        reasoning: parsed.reasoning || '',
+        operations,
+        status: parsed.status || '',
+      };
+    } catch {
+      return { reasoning: content, operations: [], status: '' };
+    }
+  };
+  
   const renderMessage = (message: any, index: number) => {
     const isUser = message.role === 'user';
     const isSystem = message.role === 'system';
     
     if (isSystem) return null; // Hide system messages
     
-    // Try to parse agent message content
-    let displayContent = message.content;
-    let reasoning = '';
-    
-    if (!isUser && message.content) {
-      try {
-        const parsed = JSON.parse(message.content);
-        reasoning = parsed.reasoning || '';
-        displayContent = reasoning || message.content;
-      } catch {
-        displayContent = message.content;
-      }
-    }
+    // Parse agent message content for reasoning and operations
+    const parsed = !isUser ? parseAgentContent(message.content) : null;
+    const displayContent = parsed?.reasoning || message.content;
     
     return (
       <div
@@ -454,9 +464,38 @@ export function DatabaseAgentInterface({
               {new Date(message.created_at).toLocaleTimeString()}
             </span>
           </div>
+          
+          {/* Reasoning text */}
           <div className="text-sm whitespace-pre-wrap break-words">
             {displayContent}
           </div>
+          
+          {/* Tool calls / Operations */}
+          {parsed && parsed.operations.length > 0 && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Operations:</p>
+              {parsed.operations.map((op: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-2 text-xs bg-muted/50 px-2 py-1 rounded">
+                  {getOperationIcon(op.type)}
+                  <Badge variant="outline" className="text-xs">{op.type}</Badge>
+                  <span className="text-muted-foreground truncate flex-1">
+                    {op.params?.table_name || op.params?.sql?.slice(0, 60) || JSON.stringify(op.params || {}).slice(0, 60)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Status badge */}
+          {parsed?.status && parsed.status !== 'in_progress' && (
+            <Badge 
+              variant={parsed.status === 'completed' ? 'default' : 'outline'} 
+              className="mt-2 text-xs"
+            >
+              {parsed.status === 'completed' ? <CheckCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+              {parsed.status}
+            </Badge>
+          )}
         </div>
       </div>
     );

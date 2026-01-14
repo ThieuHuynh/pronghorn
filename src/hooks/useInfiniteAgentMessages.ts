@@ -15,7 +15,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
-  const LIMIT = 10;
+  const LIMIT = 50;
 
   const loadInitialMessages = useCallback(async () => {
     if (!projectId) return;
@@ -89,24 +89,27 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         },
         (payload) => {
           console.log("[AgentMessages] Postgres change received:", payload);
+          // Skip if already loading to prevent overlapping fetches
+          if (loading) return;
           // Debounce refetches to prevent flickering
           if (refetchTimeoutRef.current) {
             clearTimeout(refetchTimeoutRef.current);
           }
           refetchTimeoutRef.current = setTimeout(() => {
             loadInitialMessages();
-          }, 300);
+          }, 500);
         }
       )
       // Broadcast listener for immediate updates from orchestrator
       .on("broadcast", { event: "agent_message_refresh" }, (payload) => {
         console.log("[AgentMessages] Broadcast received:", payload);
+        if (loading) return;
         if (refetchTimeoutRef.current) {
           clearTimeout(refetchTimeoutRef.current);
         }
         refetchTimeoutRef.current = setTimeout(() => {
           loadInitialMessages();
-        }, 300);
+        }, 500);
       })
       .subscribe((status) => {
         console.log(`[AgentMessages] Subscription status: ${status}`);
