@@ -79,15 +79,19 @@ function buildConnectionString(parts: ConnectionParts, sslMode: string): string 
   if (!host || !username || !password) return "";
   
   // Build URL - password is NOT encoded here, backend will handle it
-  let connStr = `postgresql://${username}:${password}@${host}`;
-  if (port && port !== "5432") {
-    connStr += `:${port}`;
-  }
+  // Always include port for compatibility
+  const portNum = port || "5432";
+  let connStr = `postgresql://${username}:${password}@${host}:${portNum}`;
+  
+  // Database is optional - only add if provided
   if (database) {
     connStr += `/${database}`;
   }
+  
+  // Add SSL mode if not disable
   if (sslMode && sslMode !== "disable") {
-    connStr += `?sslmode=${sslMode}`;
+    const separator = connStr.includes("?") ? "&" : "?";
+    connStr += `${separator}sslmode=${sslMode}`;
   }
   return connStr;
 }
@@ -156,7 +160,7 @@ export function ConnectDatabaseDialog({
     }
   }, [open, editConnection]);
 
-  // When connection string changes, try to parse it and update fields
+  // Two-way sync: when connection string changes (in string mode), parse and update fields
   useEffect(() => {
     if (inputMode === "string" && connectionString) {
       const parsed = parseConnectionStringFull(connectionString);
@@ -166,13 +170,25 @@ export function ConnectDatabaseDialog({
         try {
           const url = new URL(connectionString.replace(/^postgres:/, "postgresql:"));
           const ssl = url.searchParams.get("sslmode");
-          if (ssl) setSslMode(ssl);
+          if (ssl && ["disable", "prefer", "require"].includes(ssl)) {
+            setSslMode(ssl);
+          }
         } catch {
           // Ignore parsing errors
         }
       }
     }
   }, [connectionString, inputMode]);
+
+  // Two-way sync: when fields change (in fields mode), update the connection string
+  useEffect(() => {
+    if (inputMode === "fields") {
+      const built = buildConnectionString(connectionParts, sslMode);
+      if (built) {
+        setConnectionString(built);
+      }
+    }
+  }, [connectionParts, sslMode, inputMode]);
 
   // Get the effective connection string (either from input or built from parts)
   const getEffectiveConnectionString = (): string => {
@@ -497,16 +513,13 @@ export function ConnectDatabaseDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="disable">Disable</SelectItem>
-                <SelectItem value="allow">Allow</SelectItem>
-                <SelectItem value="prefer">Prefer</SelectItem>
-                <SelectItem value="require">Require</SelectItem>
-                <SelectItem value="verify-ca">Verify CA</SelectItem>
-                <SelectItem value="verify-full">Verify Full</SelectItem>
+                <SelectItem value="disable">Disable (no encryption)</SelectItem>
+                <SelectItem value="prefer">Prefer (try TLS, fallback to plain)</SelectItem>
+                <SelectItem value="require">Require (TLS required)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              For AWS RDS/Lightsail, use "Require" or higher.
+              <strong>Tip:</strong> For AWS RDS/Lightsail, use "Prefer" mode. It establishes TLS encryption without requiring CA certificate verification.
             </p>
           </div>
 

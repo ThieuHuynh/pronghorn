@@ -33,6 +33,11 @@ function ensurePasswordEncoded(connectionString: string): string {
       url.password = encodedPassword;
     }
     
+    // If no database specified, default to 'postgres' to avoid "Missing connection parameters: database" error
+    if (!url.pathname || url.pathname === '/') {
+      url.pathname = '/postgres';
+    }
+    
     // Return the fixed connection string (convert back to postgres:// if needed)
     let result = url.toString();
     if (connectionString.startsWith('postgres://')) {
