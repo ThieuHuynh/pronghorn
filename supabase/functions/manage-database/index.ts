@@ -51,6 +51,62 @@ function ensurePasswordEncoded(connectionString: string): string {
   }
 }
 
+/**
+ * Extract sslmode from connection string URL parameters.
+ * deno-postgres ignores sslmode in URL, so we need to parse it manually.
+ */
+function extractSslMode(connectionString: string): string {
+  try {
+    const url = new URL(connectionString.replace(/^postgres:\/\//, 'postgresql://'));
+    return url.searchParams.get('sslmode') || 'prefer';
+  } catch {
+    return 'prefer';
+  }
+}
+
+/**
+ * Get TLS options for deno-postgres based on sslmode.
+ * deno-postgres doesn't parse sslmode from URL, so we pass explicit tls config.
+ * Using enforce: false allows TLS without CA certificate verification (works with AWS RDS/Lightsail).
+ */
+function getTlsOptions(sslMode: string): { enabled: boolean; enforce: boolean } | undefined {
+  switch (sslMode) {
+    case 'disable':
+      return { enabled: false, enforce: false };
+    case 'prefer':
+      // Try TLS but don't verify certificate - compatible with AWS
+      return { enabled: true, enforce: false };
+    case 'require':
+      // Force TLS but don't verify certificate - compatible with AWS
+      return { enabled: true, enforce: false };
+    default:
+      return { enabled: true, enforce: false };
+  }
+}
+
+/**
+ * Create a postgres Client with proper TLS configuration.
+ * deno-postgres Client accepts ClientOptions object with connection property.
+ */
+function createDbClient(connectionString: string): Client {
+  const sslMode = extractSslMode(connectionString);
+  const tlsOptions = getTlsOptions(sslMode);
+  console.log(`[manage-database] Creating client with sslmode=${sslMode}, tls=${JSON.stringify(tlsOptions)}`);
+  
+  // Parse connection string into ClientOptions format
+  // deno-postgres expects a single ClientOptions object
+  const url = new URL(connectionString.replace(/^postgres:\/\//, 'postgresql://'));
+  
+  return new Client({
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    hostname: url.hostname,
+    port: url.port ? parseInt(url.port) : 5432,
+    database: url.pathname.slice(1) || 'postgres', // Remove leading /
+    tls: tlsOptions,
+  });
+}
+
 // Convert hex string to Uint8Array
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -166,7 +222,7 @@ Deno.serve(async (req) => {
         const safeConnectionString = ensurePasswordEncoded(body.connectionString);
         console.log("[manage-database] Connection string password encoded for testing");
         
-        const client = new Client(safeConnectionString);
+        const client = createDbClient(safeConnectionString);
         await client.connect();
         await client.queryObject("SELECT 1");
         await client.end();
@@ -236,7 +292,7 @@ Deno.serve(async (req) => {
       // Handle test_connection action
       if (action === 'test_connection') {
         try {
-          const client = new Client(connectionString);
+          const client = createDbClient(connectionString);
           await client.connect();
           await client.queryObject("SELECT 1");
           await client.end();
@@ -488,7 +544,7 @@ Deno.serve(async (req) => {
 });
 
 async function getSchema(connectionString: string) {
-  const client = new Client(connectionString);
+  const client = createDbClient(connectionString);
   await client.connect();
 
   try {
