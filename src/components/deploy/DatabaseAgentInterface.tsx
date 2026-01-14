@@ -150,6 +150,11 @@ export function DatabaseAgentInterface({
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
     });
+    
+    // Clear streaming message when a new agent message arrives from real-time subscription
+    if (loadedMessages.some((m: any) => m.role === 'agent')) {
+      setStreamingMessage(null);
+    }
   }, [loadedMessages]);
   
   // Scroll to bottom when messages first load
@@ -358,7 +363,7 @@ export function DatabaseAgentInterface({
                       status = data.status;
                       currentSessionId = data.sessionId;
                       receivedIterationComplete = true;
-                      setStreamingMessage(null);
+                      // Don't clear streaming message here - let real-time sync handle it
                       break;
                     case 'error':
                       throw new Error(data.error);
@@ -405,7 +410,7 @@ export function DatabaseAgentInterface({
       
       setStreamProgress(p => ({ ...p, status: 'complete' }));
       toast.success('Database Agent task completed');
-      refetchMessages();
+      // Don't refetch - real-time subscription handles message sync
       onSchemaRefresh();
       if (onMigrationRefresh) onMigrationRefresh();
       
