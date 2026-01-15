@@ -66,9 +66,12 @@ interface DatabaseSchemaTreeProps {
   onDropAllSequences?: (schema: string, sequences: string[]) => void;
   onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
   onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
+  // New bulk operations
+  onDeleteAllMigrations?: (migrations: Migration[]) => void;
+  onDropSchema?: (schemaName: string, schemaInfo: SchemaInfo) => void;
 }
 
-type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query' | 'migration' | 'category_tables' | 'category_views' | 'category_functions' | 'category_triggers' | 'category_indexes' | 'category_sequences' | 'category_types' | 'category_constraints';
+type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query' | 'migration' | 'category_tables' | 'category_views' | 'category_functions' | 'category_triggers' | 'category_indexes' | 'category_sequences' | 'category_types' | 'category_constraints' | 'category_migrations';
 
 interface TreeItemProps {
   label: string;
@@ -104,6 +107,8 @@ interface TreeItemProps {
     onDropAllSequences?: (schema: string, sequences: string[]) => void;
     onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
     onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
+    onDeleteAllMigrations?: (migrations: any[]) => void;
+    onDropSchema?: (schemaName: string, schemaInfo: any) => void;
   };
 }
 
@@ -112,7 +117,8 @@ const contextMenuTypes: TreeItemContextType[] = [
   'table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 
   'saved_query', 'migration',
   'category_tables', 'category_views', 'category_functions', 'category_triggers',
-  'category_indexes', 'category_sequences', 'category_types', 'category_constraints'
+  'category_indexes', 'category_sequences', 'category_types', 'category_constraints',
+  'category_migrations', 'schema'
 ];
 
 function TreeItem({ 
@@ -211,6 +217,8 @@ function TreeItem({
           onDropAllSequences={contextMenuProps.onDropAllSequences}
           onDropAllTypes={contextMenuProps.onDropAllTypes}
           onDropAllConstraints={contextMenuProps.onDropAllConstraints}
+          onDeleteAllMigrations={contextMenuProps.onDeleteAllMigrations}
+          onDropSchema={contextMenuProps.onDropSchema}
         >
           {itemButton}
         </DatabaseTreeContextMenu>
@@ -249,6 +257,8 @@ export function DatabaseSchemaTree({
   onDropAllSequences,
   onDropAllTypes,
   onDropAllConstraints,
+  onDeleteAllMigrations,
+  onDropSchema,
 }: DatabaseSchemaTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -292,6 +302,8 @@ export function DatabaseSchemaTree({
     onDropAllSequences,
     onDropAllTypes,
     onDropAllConstraints,
+    onDeleteAllMigrations,
+    onDropSchema,
   };
 
   const filteredSchemas = useMemo(() => {
@@ -407,12 +419,14 @@ export function DatabaseSchemaTree({
           {/* Migrations Section - always render to preserve open state */}
           <TreeItem
             label="Migrations"
-            type="category"
+            type="category_migrations"
             icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
             level={0}
             count={migrations.length}
             isOpen={openStates['migrations'] ?? false}
             onToggle={(v) => toggleOpen('migrations', v)}
+            extra={{ items: migrations }}
+            contextMenuProps={contextMenuProps}
           >
             {migrations.length === 0 ? (
               <div className="px-2 py-1 text-xs text-[#858585]" style={{ paddingLeft: '24px' }}>
@@ -464,6 +478,9 @@ export function DatabaseSchemaTree({
                 level={0}
                 isOpen={openStates[schemaKey] ?? schema.name === 'public'}
                 onToggle={(v) => toggleOpen(schemaKey, v)}
+                name={schema.name}
+                extra={schema}
+                contextMenuProps={contextMenuProps}
               >
                 {/* Tables */}
                 {schema.tables.length > 0 && (

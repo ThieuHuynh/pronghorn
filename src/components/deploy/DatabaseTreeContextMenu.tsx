@@ -36,7 +36,9 @@ export type TreeItemContextType =
   | 'category_indexes'
   | 'category_sequences'
   | 'category_types'
-  | 'category_constraints';
+  | 'category_constraints'
+  | 'category_migrations'
+  | 'schema';
 
 interface DatabaseTreeContextMenuProps {
   type: TreeItemContextType;
@@ -64,6 +66,9 @@ interface DatabaseTreeContextMenuProps {
   onDropAllSequences?: (schema: string, sequences: string[]) => void;
   onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
   onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
+  // New bulk operations
+  onDeleteAllMigrations?: (migrations: any[]) => void;
+  onDropSchema?: (schemaName: string, schemaInfo: any) => void;
 }
 
 export function DatabaseTreeContextMenu({
@@ -91,6 +96,8 @@ export function DatabaseTreeContextMenu({
   onDropAllSequences,
   onDropAllTypes,
   onDropAllConstraints,
+  onDeleteAllMigrations,
+  onDropSchema,
 }: DatabaseTreeContextMenuProps) {
   const handleCopyName = () => {
     const fullName = schema ? `"${schema}"."${name}"` : name;
@@ -376,6 +383,28 @@ export function DatabaseTreeContextMenu({
           >
             <Trash2 className="h-4 w-4 mr-2" />
             Drop All Constraints ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Migrations - Delete All */}
+        {type === 'category_migrations' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDeleteAllMigrations?.(extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete All Migrations ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Schema - Drop Entire Schema */}
+        {type === 'schema' && (
+          <ContextMenuItem 
+            onClick={() => onDropSchema?.(name, extra)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop Schema CASCADE
           </ContextMenuItem>
         )}
       </ContextMenuContent>

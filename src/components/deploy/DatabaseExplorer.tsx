@@ -32,6 +32,16 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { extractDDLStatements } from "@/lib/sqlParser";
 import DatabaseImportWizard from "./DatabaseImportWizard";
 import { DatabaseAgentInterface } from "./DatabaseAgentInterface";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface SchemaInfo {
   name: string;
@@ -92,6 +102,12 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   const [editingQuery, setEditingQuery] = useState<SavedQuery | null>(null);
   const [pendingSqlToSave, setPendingSqlToSave] = useState("");
   const [importWizardOpen, setImportWizardOpen] = useState(false);
+  
+  // Confirmation dialogs state
+  const [deleteAllMigrationsConfirmOpen, setDeleteAllMigrationsConfirmOpen] = useState(false);
+  const [dropSchemaConfirmOpen, setDropSchemaConfirmOpen] = useState(false);
+  const [pendingDeleteAllMigrations, setPendingDeleteAllMigrations] = useState<Migration[]>([]);
+  const [pendingDropSchema, setPendingDropSchema] = useState<{ name: string; info: any } | null>(null);
 
   // Determine if we're using a Render database or external connection
   const isExternal = !!externalConnection;
@@ -469,6 +485,48 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     toast.success(`Downloaded ${migrations.length} migrations`);
   };
 
+  // Delete all migrations handler (opens confirmation)
+  const handleDeleteAllMigrationsRequest = (migrationsToDelete: Migration[]) => {
+    setPendingDeleteAllMigrations(migrationsToDelete);
+    setDeleteAllMigrationsConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteAllMigrations = async () => {
+    if (pendingDeleteAllMigrations.length === 0) return;
+    try {
+      for (const migration of pendingDeleteAllMigrations) {
+        await supabase.rpc("delete_migration_with_token", { 
+          p_migration_id: migration.id, 
+          p_token: shareToken || null 
+        });
+      }
+      toast.success(`Deleted ${pendingDeleteAllMigrations.length} migrations`);
+      loadMigrations();
+    } catch (error: any) {
+      toast.error("Failed to delete migrations: " + error.message);
+    } finally {
+      setDeleteAllMigrationsConfirmOpen(false);
+      setPendingDeleteAllMigrations([]);
+    }
+  };
+
+  // Drop schema handler (opens confirmation)
+  const handleDropSchemaRequest = (schemaName: string, schemaInfo: any) => {
+    setPendingDropSchema({ name: schemaName, info: schemaInfo });
+    setDropSchemaConfirmOpen(true);
+  };
+
+  const handleConfirmDropSchema = () => {
+    if (!pendingDropSchema) return;
+    const sql = `DROP SCHEMA IF EXISTS "${pendingDropSchema.name}" CASCADE;`;
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.warning(`Added DROP SCHEMA statement for "${pendingDropSchema.name}" - review and execute manually`);
+    setDropSchemaConfirmOpen(false);
+    setPendingDropSchema(null);
+  };
+
   const handleExport = async (format: 'json' | 'csv' | 'sql') => {
     if (!selectedTable) return;
     try {
@@ -505,7 +563,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         {schemaError ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center"><AlertCircle className="h-8 w-8 text-destructive mb-2" /><p className="text-sm text-destructive">{schemaError}</p><Button variant="outline" size="sm" onClick={() => loadSchema()} className="mt-4">Retry</Button></div>
         ) : (
-          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onDropTable={handleDropTable} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} onDropAllTables={handleDropAllTables} onDropAllViews={handleDropAllViews} onDropAllFunctions={handleDropAllFunctions} onDropAllTriggers={handleDropAllTriggers} onDropAllIndexes={handleDropAllIndexes} onDropAllSequences={handleDropAllSequences} onDropAllTypes={handleDropAllTypes} onDropAllConstraints={handleDropAllConstraints} />
+          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onDropTable={handleDropTable} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} onDropAllTables={handleDropAllTables} onDropAllViews={handleDropAllViews} onDropAllFunctions={handleDropAllFunctions} onDropAllTriggers={handleDropAllTriggers} onDropAllIndexes={handleDropAllIndexes} onDropAllSequences={handleDropAllSequences} onDropAllTypes={handleDropAllTypes} onDropAllConstraints={handleDropAllConstraints} onDeleteAllMigrations={handleDeleteAllMigrationsRequest} onDropSchema={handleDropSchemaRequest} />
         )}
       </div>
     </div>
@@ -613,6 +671,56 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         existingTables={schemas.flatMap(s => s.tables)}
         onImportComplete={() => { loadSchema(); loadMigrations(); }}
       />
+      
+      {/* Delete All Migrations Confirmation */}
+      <AlertDialog open={deleteAllMigrationsConfirmOpen} onOpenChange={setDeleteAllMigrationsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Migrations?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {pendingDeleteAllMigrations.length} migration record(s) from the database. 
+              This action cannot be undone. The actual database objects will NOT be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDeleteAllMigrations}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete All Migrations
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Drop Schema Confirmation */}
+      <AlertDialog open={dropSchemaConfirmOpen} onOpenChange={setDropSchemaConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Drop Entire Schema?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                This will add a <code className="bg-muted px-1 rounded">DROP SCHEMA "{pendingDropSchema?.name}" CASCADE</code> statement 
+                to the query editor.
+              </p>
+              <p className="text-destructive font-medium">
+                WARNING: This will delete ALL tables, views, functions, triggers, indexes, sequences, types, 
+                and constraints in the "{pendingDropSchema?.name}" schema when executed!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDropSchema}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Add DROP SCHEMA Statement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
