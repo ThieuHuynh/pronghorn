@@ -512,6 +512,8 @@ export type Database = {
           created_by: string | null
           id: string
           image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
           project_id: string
           provenance_id: string | null
           provenance_page: number | null
@@ -529,6 +531,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           image_url?: string | null
+          is_folder?: boolean
+          parent_id?: string | null
           project_id: string
           provenance_id?: string | null
           provenance_page?: number | null
@@ -546,6 +550,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           image_url?: string | null
+          is_folder?: boolean
+          parent_id?: string | null
           project_id?: string
           provenance_id?: string | null
           provenance_page?: number | null
@@ -556,6 +562,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "artifacts_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "artifacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "artifacts_project_id_fkey"
             columns: ["project_id"]
@@ -3857,6 +3870,8 @@ export type Database = {
           created_by: string | null
           id: string
           image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
           project_id: string
           provenance_id: string | null
           provenance_page: number | null
@@ -5425,6 +5440,39 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_artifact_folder_with_token: {
+        Args: {
+          p_name?: string
+          p_parent_id?: string
+          p_project_id: string
+          p_token?: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
+          project_id: string
+          provenance_id: string | null
+          provenance_page: number | null
+          provenance_path: string | null
+          provenance_total_pages: number | null
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_artifact_with_token: {
         Args: {
           p_ai_title?: string
@@ -5447,6 +5495,8 @@ export type Database = {
           created_by: string | null
           id: string
           image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
           project_id: string
           provenance_id: string | null
           provenance_page: number | null
@@ -6251,6 +6301,38 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      move_artifact_with_token: {
+        Args: {
+          p_artifact_id: string
+          p_new_parent_id?: string
+          p_token?: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
+          project_id: string
+          provenance_id: string | null
+          provenance_page: number | null
+          provenance_path: string | null
+          provenance_total_pages: number | null
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       move_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token: string }
         Returns: {
@@ -6284,6 +6366,34 @@ export type Database = {
           p_tags?: string[]
         }
         Returns: string
+      }
+      rename_artifact_folder_with_token: {
+        Args: { p_artifact_id: string; p_new_name?: string; p_token?: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
+          project_id: string
+          provenance_id: string | null
+          provenance_page: number | null
+          provenance_path: string | null
+          provenance_total_pages: number | null
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       rename_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token?: string }
@@ -6740,6 +6850,8 @@ export type Database = {
           created_by: string | null
           id: string
           image_url: string | null
+          is_folder: boolean
+          parent_id: string | null
           project_id: string
           provenance_id: string | null
           provenance_page: number | null

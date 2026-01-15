@@ -11,7 +11,11 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine } from "lucide-react";
+import { CreateFolderDialog } from "@/components/artifacts/CreateFolderDialog";
+import { MoveArtifactDialog } from "@/components/artifacts/MoveArtifactDialog";
+import { ArtifactTreeManager } from "@/components/artifacts/ArtifactTreeManager";
+import { Artifact } from "@/hooks/useRealtimeArtifacts";
 import { VisualRecognitionDialog } from "@/components/artifacts/VisualRecognitionDialog";
 import { EnhanceImageDialog } from "@/components/artifacts/EnhanceImageDialog";
 import { ArtifactDownloadDropdown } from "@/components/artifacts/ArtifactDownloadDropdown";
@@ -68,7 +72,7 @@ export default function Artifacts() {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
-  const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact, refresh, broadcastRefresh } = useRealtimeArtifacts(
+  const { artifacts, artifactTree, isLoading, addArtifact, addFolder, moveArtifact, renameFolder, updateArtifact, deleteArtifact, refresh, broadcastRefresh } = useRealtimeArtifacts(
     projectId,
     shareToken,
     hasAccessToken && isTokenSet
@@ -78,7 +82,11 @@ export default function Artifacts() {
   const [editingArtifact, setEditingArtifact] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"cards" | "table" | "gallery">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "table" | "gallery" | "tree">("cards");
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
+  const [movingArtifact, setMovingArtifact] = useState<Artifact | null>(null);
+  const [addArtifactParentId, setAddArtifactParentId] = useState<string | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -371,9 +379,18 @@ ${artifact.content}`;
                   )}
                   <div className="flex border rounded-md">
                     <Button
+                      variant={viewMode === "tree" ? "secondary" : "ghost"}
+                      size="icon"
+                      onClick={() => setViewMode("tree")}
+                      title="Tree view"
+                    >
+                      <TreePine className="h-4 w-4" />
+                    </Button>
+                    <Button
                       variant={viewMode === "cards" ? "secondary" : "ghost"}
                       size="icon"
                       onClick={() => setViewMode("cards")}
+                      title="Card view"
                     >
                       <LayoutGrid className="h-4 w-4" />
                     </Button>
@@ -381,6 +398,7 @@ ${artifact.content}`;
                       variant={viewMode === "table" ? "secondary" : "ghost"}
                       size="icon"
                       onClick={() => setViewMode("table")}
+                      title="Table view"
                     >
                       <List className="h-4 w-4" />
                     </Button>
@@ -388,10 +406,14 @@ ${artifact.content}`;
                       variant={viewMode === "gallery" ? "secondary" : "ghost"}
                       size="icon"
                       onClick={() => setViewMode("gallery")}
+                      title="Gallery view"
                     >
                       <Grid3X3 className="h-4 w-4" />
                     </Button>
                   </div>
+                  <Button variant="outline" size="icon" className="md:hidden" onClick={() => { setCreateFolderParentId(null); setIsCreateFolderOpen(true); }} title="Create Folder">
+                    <FolderPlus className="h-4 w-4" />
+                  </Button>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -441,7 +463,11 @@ ${artifact.content}`;
                     <Wand2 className="h-4 w-4 mr-2" />
                     Create/Enhance Image
                   </Button>
-                  <Button className="hidden md:flex" onClick={() => setIsAddDialogOpen(true)}>
+                  <Button variant="outline" className="hidden md:flex" onClick={() => { setCreateFolderParentId(null); setIsCreateFolderOpen(true); }}>
+                    <FolderPlus className="h-4 w-4 mr-2" />
+                    Create Folder
+                  </Button>
+                  <Button className="hidden md:flex" onClick={() => { setAddArtifactParentId(null); setIsAddDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Artifact
                   </Button>
@@ -475,6 +501,22 @@ ${artifact.content}`;
 
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading artifacts...</div>
+              ) : viewMode === "tree" ? (
+                <ArtifactTreeManager
+                  artifacts={artifactTree}
+                  onEdit={handleEditClick}
+                  onDelete={(artifact) => setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" })}
+                  onMove={setMovingArtifact}
+                  onCreateFolder={(parentId) => { setCreateFolderParentId(parentId); setIsCreateFolderOpen(true); }}
+                  onRenameFolder={(folder, newName) => renameFolder(folder.id, newName)}
+                  onSummarize={handleSummarize}
+                  onCollaborate={setCollaboratingArtifact}
+                  onClone={handleCloneArtifact}
+                  onShowRelated={handleShowRelated}
+                  onAddArtifact={(parentId) => { setAddArtifactParentId(parentId); setIsAddDialogOpen(true); }}
+                  onImageClick={(url, title) => setPreviewImage({ url, title })}
+                  summarizingId={summarizingId}
+                />
               ) : filteredAndSortedArtifacts.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-12">
@@ -993,6 +1035,27 @@ ${artifact.content}`;
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Folder Dialog */}
+      <CreateFolderDialog
+        open={isCreateFolderOpen}
+        onOpenChange={setIsCreateFolderOpen}
+        onCreateFolder={async (name) => {
+          await addFolder(name, createFolderParentId);
+        }}
+        parentFolderName={createFolderParentId ? artifacts.find(a => a.id === createFolderParentId)?.ai_title || undefined : undefined}
+      />
+
+      {/* Move Artifact Dialog */}
+      <MoveArtifactDialog
+        open={!!movingArtifact}
+        onOpenChange={(open) => !open && setMovingArtifact(null)}
+        artifact={movingArtifact}
+        artifacts={artifacts}
+        onMove={async (artifactId, newParentId) => {
+          await moveArtifact(artifactId, newParentId);
+        }}
+      />
     </div>
   );
 }

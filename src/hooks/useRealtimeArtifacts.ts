@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -19,7 +19,80 @@ export interface Artifact {
   provenance_path: string | null;
   provenance_page: number | null;
   provenance_total_pages: number | null;
+  // Folder fields
+  parent_id: string | null;
+  is_folder: boolean;
+  // For tree structure
+  children?: Artifact[];
 }
+
+// Build a hierarchical tree from a flat list of artifacts
+export const buildArtifactHierarchy = (flatList: Artifact[]): Artifact[] => {
+  const map = new Map<string, Artifact>();
+  const roots: Artifact[] = [];
+
+  // First pass: create map with children array
+  flatList.forEach((item) => {
+    map.set(item.id, { ...item, children: [] });
+  });
+
+  // Second pass: build hierarchy
+  flatList.forEach((item) => {
+    const node = map.get(item.id)!;
+    if (item.parent_id && map.has(item.parent_id)) {
+      map.get(item.parent_id)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  // Sort: folders first, then by title alphabetically
+  const sortItems = (items: Artifact[]) => {
+    items.sort((a, b) => {
+      if (a.is_folder !== b.is_folder) return a.is_folder ? -1 : 1;
+      return (a.ai_title || '').localeCompare(b.ai_title || '');
+    });
+    items.forEach(item => {
+      if (item.children?.length) sortItems(item.children);
+    });
+  };
+  sortItems(roots);
+  
+  return roots;
+};
+
+// Get all descendant IDs of an artifact (for folder selection)
+export const getAllDescendantIds = (artifact: Artifact): string[] => {
+  const descendants: string[] = [artifact.id];
+  if (artifact.children) {
+    artifact.children.forEach((child) => {
+      descendants.push(...getAllDescendantIds(child));
+    });
+  }
+  return descendants;
+};
+
+// Get folder path breadcrumbs
+export const getArtifactPath = (artifacts: Artifact[], targetId: string): Artifact[] => {
+  const path: Artifact[] = [];
+  const findPath = (items: Artifact[], target: string): boolean => {
+    for (const item of items) {
+      if (item.id === target) {
+        path.unshift(item);
+        return true;
+      }
+      if (item.children?.length) {
+        if (findPath(item.children, target)) {
+          path.unshift(item);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  findPath(artifacts, targetId);
+  return path;
+};
 
 export const useRealtimeArtifacts = (
   projectId: string | undefined,
@@ -30,6 +103,9 @@ export const useRealtimeArtifacts = (
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pendingDeletionsRef = useRef<Set<string>>(new Set());
+
+  // Build hierarchy from flat list
+  const artifactTree = useMemo(() => buildArtifactHierarchy(artifacts), [artifacts]);
 
   // Wrap loadArtifacts in useCallback with shareToken in dependencies
   const loadArtifacts = useCallback(async () => {
@@ -117,7 +193,13 @@ export const useRealtimeArtifacts = (
     };
   }, [projectId, enabled, shareToken, loadArtifacts]);
 
-  const addArtifact = async (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => {
+  const addArtifact = async (
+    content: string, 
+    sourceType?: string, 
+    sourceId?: string, 
+    imageUrl?: string,
+    parentId?: string
+  ) => {
     if (!projectId) return;
 
     const tempId = `temp-${Date.now()}`;
@@ -137,6 +219,8 @@ export const useRealtimeArtifacts = (
       provenance_path: null,
       provenance_page: null,
       provenance_total_pages: null,
+      parent_id: parentId || null,
+      is_folder: false,
     };
 
     setArtifacts((prev) => [...prev, optimisticArtifact]);
@@ -174,6 +258,143 @@ export const useRealtimeArtifacts = (
       setArtifacts((prev) => prev.filter((artifact) => artifact.id !== tempId));
       console.error("Error creating artifact:", error);
       toast.error("Failed to create artifact");
+      throw error;
+    }
+  };
+
+  const addFolder = async (name: string, parentId?: string | null) => {
+    if (!projectId) return;
+
+    const tempId = `temp-folder-${Date.now()}`;
+    const optimisticFolder: Artifact = {
+      id: tempId,
+      project_id: projectId,
+      content: '',
+      ai_title: name,
+      ai_summary: null,
+      source_type: null,
+      source_id: null,
+      image_url: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: null,
+      provenance_id: null,
+      provenance_path: null,
+      provenance_page: null,
+      provenance_total_pages: null,
+      parent_id: parentId || null,
+      is_folder: true,
+    };
+
+    setArtifacts((prev) => [...prev, optimisticFolder]);
+
+    try {
+      const { data, error } = await supabase.rpc("insert_artifact_folder_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_name: name,
+        p_parent_id: parentId || null,
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        setArtifacts((prev) =>
+          prev.map((artifact) => (artifact.id === tempId ? data : artifact))
+        );
+      }
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'insert', id: data?.id }
+        });
+      }
+
+      toast.success("Folder created successfully");
+      return data;
+    } catch (error) {
+      setArtifacts((prev) => prev.filter((artifact) => artifact.id !== tempId));
+      console.error("Error creating folder:", error);
+      toast.error("Failed to create folder");
+      throw error;
+    }
+  };
+
+  const moveArtifact = async (artifactId: string, newParentId: string | null) => {
+    const originalArtifacts = artifacts;
+
+    try {
+      // Optimistically update
+      setArtifacts((prev) =>
+        prev.map((artifact) =>
+          artifact.id === artifactId
+            ? { ...artifact, parent_id: newParentId, updated_at: new Date().toISOString() }
+            : artifact
+        )
+      );
+
+      const { data, error } = await supabase.rpc("move_artifact_with_token", {
+        p_artifact_id: artifactId,
+        p_token: shareToken || null,
+        p_new_parent_id: newParentId,
+      });
+
+      if (error) throw error;
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'move', id: artifactId }
+        });
+      }
+
+      toast.success("Artifact moved successfully");
+      return data;
+    } catch (error: any) {
+      setArtifacts(originalArtifacts);
+      console.error("Error moving artifact:", error);
+      toast.error(error.message || "Failed to move artifact");
+      throw error;
+    }
+  };
+
+  const renameFolder = async (folderId: string, newName: string) => {
+    const originalArtifacts = artifacts;
+
+    try {
+      setArtifacts((prev) =>
+        prev.map((artifact) =>
+          artifact.id === folderId
+            ? { ...artifact, ai_title: newName, updated_at: new Date().toISOString() }
+            : artifact
+        )
+      );
+
+      const { data, error } = await supabase.rpc("rename_artifact_folder_with_token", {
+        p_artifact_id: folderId,
+        p_token: shareToken || null,
+        p_new_name: newName,
+      });
+
+      if (error) throw error;
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'rename', id: folderId }
+        });
+      }
+
+      toast.success("Folder renamed successfully");
+      return data;
+    } catch (error) {
+      setArtifacts(originalArtifacts);
+      console.error("Error renaming folder:", error);
+      toast.error("Failed to rename folder");
       throw error;
     }
   };
@@ -240,7 +461,7 @@ export const useRealtimeArtifacts = (
       // Mark as pending deletion BEFORE removing from UI
       pendingDeletionsRef.current.add(id);
       
-      // Optimistically remove from UI
+      // Optimistically remove from UI (includes children due to cascade)
       setArtifacts((prev) => prev.filter((artifact) => artifact.id !== id));
 
       const { error } = await supabase.rpc("delete_artifact_with_token", {
@@ -282,8 +503,12 @@ export const useRealtimeArtifacts = (
 
   return {
     artifacts,
+    artifactTree,
     isLoading,
     addArtifact,
+    addFolder,
+    moveArtifact,
+    renameFolder,
     updateArtifact,
     deleteArtifact,
     refresh: loadArtifacts,
