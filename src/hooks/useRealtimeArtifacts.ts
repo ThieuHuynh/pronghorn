@@ -491,6 +491,63 @@ export const useRealtimeArtifacts = (
     }
   };
 
+  // Delete a folder but move its children to root first
+  const deleteFolder = async (folderId: string) => {
+    const originalArtifacts = artifacts;
+    const folder = artifacts.find(a => a.id === folderId);
+    
+    if (!folder || !folder.is_folder) {
+      toast.error("Not a valid folder");
+      return;
+    }
+
+    try {
+      // Find all direct children of this folder
+      const directChildren = artifacts.filter(a => a.parent_id === folderId);
+      
+      // Move all children to root first
+      for (const child of directChildren) {
+        await supabase.rpc("move_artifact_with_token", {
+          p_artifact_id: child.id,
+          p_token: shareToken || null,
+          p_new_parent_id: null,
+        });
+      }
+      
+      // Now delete the empty folder
+      pendingDeletionsRef.current.add(folderId);
+      setArtifacts((prev) => prev.filter((artifact) => artifact.id !== folderId));
+      
+      // Also update children to have no parent in state
+      setArtifacts((prev) => prev.map(a => 
+        a.parent_id === folderId ? { ...a, parent_id: null } : a
+      ));
+
+      const { error } = await supabase.rpc("delete_artifact_with_token", {
+        p_id: folderId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+      
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'delete_folder', id: folderId }
+        });
+      }
+      
+      toast.success("Folder deleted, contents moved to root");
+    } catch (error) {
+      pendingDeletionsRef.current.delete(folderId);
+      setArtifacts(originalArtifacts);
+      console.error("Error deleting folder:", error);
+      toast.error("Failed to delete folder");
+      throw error;
+    }
+  };
+
   const broadcastRefresh = useCallback((action: string = 'refresh', id?: string) => {
     if (channelRef.current) {
       channelRef.current.send({
@@ -511,6 +568,7 @@ export const useRealtimeArtifacts = (
     renameFolder,
     updateArtifact,
     deleteArtifact,
+    deleteFolder,
     refresh: loadArtifacts,
     broadcastRefresh,
   };

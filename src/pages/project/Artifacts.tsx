@@ -75,7 +75,7 @@ export default function Artifacts() {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
-  const { artifacts, artifactTree, isLoading, addArtifact, addFolder, moveArtifact, renameFolder, updateArtifact, deleteArtifact, refresh, broadcastRefresh } = useRealtimeArtifacts(
+  const { artifacts, artifactTree, isLoading, addArtifact, addFolder, moveArtifact, renameFolder, updateArtifact, deleteArtifact, deleteFolder, refresh, broadcastRefresh } = useRealtimeArtifacts(
     projectId,
     shareToken,
     hasAccessToken && isTokenSet
@@ -545,37 +545,40 @@ ${artifact.content}`;
                 </div>
               </div>
 
-              {/* Breadcrumb when in a folder */}
-              {selectedFolderId && (
-                <div className="flex items-center gap-1 text-sm">
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => setSelectedFolderId(null)}
-                  >
-                    All Artifacts
-                  </Button>
-                  {folderPath.map((folder, index) => (
-                    <div key={folder.id} className="flex items-center gap-1">
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className={cn(
-                          "h-auto p-0",
-                          index === folderPath.length - 1 
-                            ? "text-foreground font-medium" 
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                        onClick={() => setSelectedFolderId(folder.id)}
-                      >
-                        {folder.ai_title || "Untitled Folder"}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Breadcrumb - always visible for consistent layout */}
+              <div className="flex items-center gap-1 text-sm min-h-[24px]">
+                <Button
+                  variant="link"
+                  size="sm"
+                  className={cn(
+                    "h-auto p-0",
+                    selectedFolderId === null 
+                      ? "text-foreground font-medium" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setSelectedFolderId(null)}
+                >
+                  All Artifacts
+                </Button>
+                {folderPath.map((folder, index) => (
+                  <div key={folder.id} className="flex items-center gap-1">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className={cn(
+                        "h-auto p-0",
+                        index === folderPath.length - 1 
+                          ? "text-foreground font-medium" 
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => setSelectedFolderId(folder.id)}
+                    >
+                      {folder.ai_title || "Untitled Folder"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
 
               {/* Main content with folder sidebar */}
               <div className="flex gap-4">
@@ -588,6 +591,9 @@ ${artifact.content}`;
                       onSelectFolder={setSelectedFolderId}
                       onCreateFolder={(parentId) => { setCreateFolderParentId(parentId); setIsCreateFolderOpen(true); }}
                       onDropArtifact={handleDropArtifact}
+                      onRenameFolder={(folderId, newName) => renameFolder(folderId, newName)}
+                      onDeleteFolder={deleteFolder}
+                      onViewArtifact={setViewingArtifact}
                     />
                   </div>
                 )}
