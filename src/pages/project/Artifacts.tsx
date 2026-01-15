@@ -641,13 +641,56 @@ ${artifact.content}`;
                             </p>
                           </div>
                           <div className="flex gap-1 shrink-0">
-                            <Button variant="outline" size="sm" onClick={() => { handleEditClick(viewingArtifact); setViewingArtifact(null); }}>
-                              <Edit2 className="h-4 w-4 mr-2" />
-                              Edit
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Collaborate"
+                              onClick={() => { setCollaboratingArtifact(viewingArtifact); setViewingArtifact(null); }}
+                            >
+                              <Users className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => { setCollaboratingArtifact(viewingArtifact); setViewingArtifact(null); }}>
-                              <Users className="h-4 w-4 mr-2" />
-                              Collaborate
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8"
+                              title="AI Summarize"
+                              disabled={summarizingId === viewingArtifact.id}
+                              onClick={() => handleSummarize(viewingArtifact)}
+                            >
+                              <Sparkles className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Edit"
+                              onClick={() => { handleEditClick(viewingArtifact); setViewingArtifact(null); }}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <ArtifactDownloadDropdown 
+                              title={viewingArtifact.ai_title || "Untitled"}
+                              content={viewingArtifact.content}
+                              aiSummary={viewingArtifact.ai_summary}
+                            />
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Duplicate"
+                              onClick={() => handleCloneArtifact(viewingArtifact)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              title="Delete"
+                              onClick={() => { setDeletingArtifact({ id: viewingArtifact.id, title: viewingArtifact.ai_title || "Untitled" }); setViewingArtifact(null); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
