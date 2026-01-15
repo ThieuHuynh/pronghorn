@@ -48,11 +48,11 @@ export function CreateFolderDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderPlus className="h-5 w-5" />
-            Create Folder
+            {parentFolderName ? "Create Subfolder" : "Create Folder"}
           </DialogTitle>
           <DialogDescription>
             {parentFolderName
-              ? `Create a new folder inside "${parentFolderName}"`
+              ? `Create a new subfolder inside "${parentFolderName}"`
               : "Create a new folder at the root level"}
           </DialogDescription>
         </DialogHeader>
