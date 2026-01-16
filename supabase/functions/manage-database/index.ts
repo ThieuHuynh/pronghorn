@@ -891,9 +891,9 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
   try {
     const startTime = Date.now();
     
-    // Use queryArray instead of queryObject to avoid driver validation issues
-    // queryArray is more reliable for arbitrary SQL including complex SELECTs
-    const result = await client.queryArray(sql);
+    // Use simple query mode by wrapping SQL - this avoids the BIGINT decoder bug
+    // that occurs with extended query protocol in deno-postgres
+    const result = await client.queryArray({ text: sql, args: [] });
     const executionTime = Date.now() - startTime;
     
     // Extract column names from rowDescription
