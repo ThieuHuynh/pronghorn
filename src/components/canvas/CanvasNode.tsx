@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { 
   Box, 
+  Blocks,
   Database, 
   Globe, 
   Webhook, 
@@ -30,6 +31,7 @@ const iconMap: Record<string, LucideIcon> = {
   FolderKanban,
   FileCode,
   Box,
+  Blocks,
   Database,
   Globe,
   Webhook,
@@ -56,6 +58,7 @@ const legacyNodeIcons: Record<string, LucideIcon> = {
   PAGE: FileCode,
   COMPONENT: Box,
   WEB_COMPONENT: Box,
+  BLOCK_FUNCTION: Blocks,
   HOOK_COMPOSABLE: Layers,
   API: Code,
   API_SERVICE: Server,
@@ -84,6 +87,7 @@ const legacyNodeColors: Record<string, string> = {
   PAGE: "bg-sky-500/10 border-sky-500/50 text-sky-700 dark:text-sky-400",
   COMPONENT: "bg-blue-500/10 border-blue-500/50 text-blue-700 dark:text-blue-400",
   WEB_COMPONENT: "bg-blue-500/10 border-blue-500/50 text-blue-700 dark:text-blue-400",
+  BLOCK_FUNCTION: "bg-indigo-400/10 border-indigo-400/50 text-indigo-600 dark:text-indigo-400",
   HOOK_COMPOSABLE: "bg-violet-500/10 border-violet-500/50 text-violet-700 dark:text-violet-400",
   API: "bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400",
   API_SERVICE: "bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400",

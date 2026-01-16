@@ -7640,6 +7640,7 @@ export type Database = {
         | "NOTES"
         | "ZONE"
         | "LABEL"
+        | "BLOCK_FUNCTION"
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
@@ -7855,6 +7856,7 @@ export const Constants = {
         "NOTES",
         "ZONE",
         "LABEL",
+        "BLOCK_FUNCTION",
       ],
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       project_token_role: ["owner", "editor", "viewer"],
