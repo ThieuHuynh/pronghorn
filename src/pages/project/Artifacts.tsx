@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
@@ -103,6 +103,7 @@ export default function Artifacts() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [showFolderSidebar, setShowFolderSidebar] = useState(true);
   const [viewingArtifact, setViewingArtifact] = useState<Artifact | null>(null);
+  const [editViewMode, setEditViewMode] = useState<"raw" | "markdown">("raw");
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -937,16 +938,16 @@ ${artifact.content}`;
                       <CardContent className="space-y-4">
                         {/* Split layout when both image and text content exist */}
                         {artifact.image_url && artifact.content?.trim() ? (
-                          <div className="flex flex-col md:flex-row gap-4">
-                            {/* Text column - takes remaining space with min width */}
-                            <div className="flex-1 min-w-0 md:min-w-[300px]">
-                              <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md h-[300px] overflow-y-auto">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Text column */}
+                            <div className="min-w-0 overflow-hidden">
+                              <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md h-48 md:h-64 overflow-y-auto">
                                 {artifact.content}
                               </pre>
                             </div>
-                            {/* Image column - auto height on mobile, fixed on desktop, max 2/3 width */}
+                            {/* Image column - contained within grid cell */}
                             <div 
-                              className="shrink-0 rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all md:h-[300px] md:max-w-[66%] flex items-center justify-center"
+                              className="rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all h-48 md:h-64 flex items-center justify-center"
                               onClick={() => setPreviewImage({ 
                                 url: artifact.image_url!, 
                                 title: artifact.ai_title || "Artifact image" 
@@ -964,7 +965,7 @@ ${artifact.content}`;
                             {/* Image only layout */}
                             {artifact.image_url && (
                               <div 
-                                className="rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                className="rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all h-48 md:h-64 flex items-center justify-center"
                                 onClick={() => setPreviewImage({ 
                                   url: artifact.image_url!, 
                                   title: artifact.ai_title || "Artifact image" 
@@ -973,7 +974,7 @@ ${artifact.content}`;
                                 <img 
                                   src={artifact.image_url} 
                                   alt={artifact.ai_title || "Artifact image"}
-                                  className="w-full h-auto object-contain max-h-64"
+                                  className="max-w-full max-h-full object-contain"
                                 />
                               </div>
                             )}
@@ -1165,13 +1166,36 @@ ${artifact.content}`;
         <Dialog open={!!editingArtifact} onOpenChange={() => {
           setEditingArtifact(null);
           setEditingTitle("");
+          setEditViewMode("raw");
         }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Edit Artifact</DialogTitle>
+          <DialogContent className="w-[calc(100vw-50px)] max-w-none h-[calc(100vh-50px)] flex flex-col p-0">
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
+              <div className="flex items-center justify-between gap-4">
+                <DialogTitle className="text-lg">Edit Artifact</DialogTitle>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md border">
+                    <Button
+                      variant={editViewMode === "raw" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="rounded-r-none"
+                      onClick={() => setEditViewMode("raw")}
+                    >
+                      Raw
+                    </Button>
+                    <Button
+                      variant={editViewMode === "markdown" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="rounded-l-none"
+                      onClick={() => setEditViewMode("markdown")}
+                    >
+                      Markdown
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
+            <div className="flex-1 flex flex-col gap-4 p-6 overflow-hidden">
+              <div className="space-y-2 shrink-0">
                 <Label htmlFor="artifact-title">Title</Label>
                 <Input
                   id="artifact-title"
@@ -1180,23 +1204,33 @@ ${artifact.content}`;
                   placeholder="Artifact title..."
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="artifact-content">Content</Label>
-                <Textarea
-                  id="artifact-content"
-                  value={editingArtifact.content}
-                  onChange={(e) =>
-                    setEditingArtifact({ ...editingArtifact, content: e.target.value })
-                  }
-                  rows={12}
-                  className="resize-none"
-                />
+              <div className="flex-1 flex flex-col min-h-0">
+                <Label htmlFor="artifact-content" className="mb-2">Content</Label>
+                {editViewMode === "raw" ? (
+                  <Textarea
+                    id="artifact-content"
+                    value={editingArtifact.content}
+                    onChange={(e) =>
+                      setEditingArtifact({ ...editingArtifact, content: e.target.value })
+                    }
+                    className="flex-1 resize-none font-mono text-sm"
+                  />
+                ) : (
+                  <ScrollArea className="flex-1 border rounded-md p-4 bg-muted/30">
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {editingArtifact.content}
+                      </ReactMarkdown>
+                    </div>
+                  </ScrollArea>
+                )}
               </div>
             </div>
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end px-6 py-4 border-t shrink-0">
               <Button variant="outline" onClick={() => {
                 setEditingArtifact(null);
                 setEditingTitle("");
+                setEditViewMode("raw");
               }}>
                 Cancel
               </Button>
