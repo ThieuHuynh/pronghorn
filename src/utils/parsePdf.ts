@@ -235,13 +235,38 @@ export const createPageThumbnails = async (
 };
 
 /**
+ * Create a promise with timeout
+ */
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+    
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+};
+
+/**
  * Extract embedded images from PDF pages using getOperatorList
+ * Includes per-page and per-image timeouts to prevent hanging on problematic PDFs
  */
 export const extractPDFImages = async (
   arrayBuffer: ArrayBuffer,
-  onProgress?: (pageIndex: number, imageCount: number) => void
+  onProgress?: (pageIndex: number, imageCount: number) => void,
+  options?: { pageTimeoutMs?: number; imageTimeoutMs?: number; maxImagesPerPage?: number }
 ): Promise<Map<string, PDFEmbeddedImage>> => {
   if (!arrayBuffer) throw new Error('Invalid PDF input');
+
+  const { pageTimeoutMs = 5000, imageTimeoutMs = 2000, maxImagesPerPage = 20 } = options || {};
 
   const safeArrayBuffer = cloneArrayBuffer(arrayBuffer);
   const loadingTask = pdfjsLib.getDocument({ data: safeArrayBuffer });
@@ -250,80 +275,101 @@ export const extractPDFImages = async (
 
   for (let i = 1; i <= pdf.numPages; i++) {
     try {
-      const page = await pdf.getPage(i);
-      const operatorList = await page.getOperatorList();
-      
-      // Look for image operators (OPS.paintImageXObject, OPS.paintJpegXObject)
-      for (let j = 0; j < operatorList.fnArray.length; j++) {
-        const fn = operatorList.fnArray[j];
-        // paintImageXObject = 85, paintJpegXObject = 82
-        if (fn === 85 || fn === 82) {
-          const args = operatorList.argsArray[j];
-          if (args && args[0]) {
-            const imageName = args[0];
-            const imageId = `page${i}_${imageName}`;
+      // Wrap page processing in a timeout to prevent hanging on problematic pages
+      await withTimeout(
+        (async () => {
+          const page = await pdf.getPage(i);
+          const operatorList = await page.getOperatorList();
+          
+          let pageImageCount = 0;
+          
+          // Look for image operators (OPS.paintImageXObject, OPS.paintJpegXObject)
+          for (let j = 0; j < operatorList.fnArray.length; j++) {
+            // Limit images per page to prevent memory issues
+            if (pageImageCount >= maxImagesPerPage) break;
             
-            // Skip if already extracted
-            if (images.has(imageId)) continue;
+            const fn = operatorList.fnArray[j];
+            // paintImageXObject = 85, paintJpegXObject = 82
+            if (fn === 85 || fn === 82) {
+              const args = operatorList.argsArray[j];
+              if (args && args[0]) {
+                const imageName = args[0];
+                const imageId = `page${i}_${imageName}`;
+                
+                // Skip if already extracted
+                if (images.has(imageId)) continue;
 
-            try {
-              // Get the image data from the page
-              const objs = await new Promise<unknown>((resolve) => {
-                page.objs.get(imageName, resolve);
-              });
-              
-              if (objs && typeof objs === 'object' && 'bitmap' in objs) {
-                const imgObj = objs as { bitmap?: ImageBitmap; width: number; height: number };
-                if (imgObj.bitmap) {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = imgObj.width;
-                  canvas.height = imgObj.height;
-                  const ctx = canvas.getContext('2d');
-                  if (ctx) {
-                    ctx.drawImage(imgObj.bitmap, 0, 0);
-                    images.set(imageId, {
-                      id: imageId,
-                      pageIndex: i - 1,
-                      dataUrl: canvas.toDataURL('image/png'),
-                      width: imgObj.width,
-                      height: imgObj.height,
-                    });
+                try {
+                  // Get the image data from the page with timeout
+                  const objs = await withTimeout(
+                    new Promise<unknown>((resolve) => {
+                      page.objs.get(imageName, resolve);
+                    }),
+                    imageTimeoutMs,
+                    `Timeout extracting image ${imageName}`
+                  );
+                  
+                  if (objs && typeof objs === 'object' && 'bitmap' in objs) {
+                    const imgObj = objs as { bitmap?: ImageBitmap; width: number; height: number };
+                    if (imgObj.bitmap) {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = imgObj.width;
+                      canvas.height = imgObj.height;
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        ctx.drawImage(imgObj.bitmap, 0, 0);
+                        images.set(imageId, {
+                          id: imageId,
+                          pageIndex: i - 1,
+                          dataUrl: canvas.toDataURL('image/png'),
+                          width: imgObj.width,
+                          height: imgObj.height,
+                        });
+                        pageImageCount++;
+                      }
+                      canvas.remove();
+                    }
+                  } else if (objs && typeof objs === 'object' && 'data' in objs) {
+                    // Raw image data
+                    const imgObj = objs as { data: Uint8ClampedArray; width: number; height: number };
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imgObj.width;
+                    canvas.height = imgObj.height;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx && imgObj.width > 0 && imgObj.height > 0) {
+                      // Create a proper Uint8ClampedArray with ArrayBuffer for ImageData
+                      const dataArray = new Uint8ClampedArray(imgObj.data.length);
+                      dataArray.set(imgObj.data);
+                      const imageData = new ImageData(dataArray, imgObj.width, imgObj.height);
+                      ctx.putImageData(imageData, 0, 0);
+                      images.set(imageId, {
+                        id: imageId,
+                        pageIndex: i - 1,
+                        dataUrl: canvas.toDataURL('image/png'),
+                        width: imgObj.width,
+                        height: imgObj.height,
+                      });
+                      pageImageCount++;
+                    }
+                    canvas.remove();
                   }
-                  canvas.remove();
+                } catch (imgError) {
+                  // Silently skip problematic images
+                  console.debug(`Skipping image ${imageName} from page ${i}:`, imgError);
                 }
-              } else if (objs && typeof objs === 'object' && 'data' in objs) {
-                // Raw image data
-                const imgObj = objs as { data: Uint8ClampedArray; width: number; height: number };
-                const canvas = document.createElement('canvas');
-                canvas.width = imgObj.width;
-                canvas.height = imgObj.height;
-                const ctx = canvas.getContext('2d');
-                if (ctx && imgObj.width > 0 && imgObj.height > 0) {
-                  // Create a proper Uint8ClampedArray with ArrayBuffer for ImageData
-                  const dataArray = new Uint8ClampedArray(imgObj.data.length);
-                  dataArray.set(imgObj.data);
-                  const imageData = new ImageData(dataArray, imgObj.width, imgObj.height);
-                  ctx.putImageData(imageData, 0, 0);
-                  images.set(imageId, {
-                    id: imageId,
-                    pageIndex: i - 1,
-                    dataUrl: canvas.toDataURL('image/png'),
-                    width: imgObj.width,
-                    height: imgObj.height,
-                  });
-                }
-                canvas.remove();
               }
-            } catch (imgError) {
-              console.warn(`Failed to extract image ${imageName} from page ${i}:`, imgError);
             }
           }
-        }
-      }
+        })(),
+        pageTimeoutMs,
+        `Timeout processing page ${i} for images`
+      );
       
       onProgress?.(i - 1, images.size);
     } catch (error) {
-      console.warn(`Failed to process page ${i} for images:`, error);
+      // Log but continue - don't let one page block the whole process
+      console.debug(`Skipping image extraction for page ${i}:`, error);
+      onProgress?.(i - 1, images.size);
     }
   }
 

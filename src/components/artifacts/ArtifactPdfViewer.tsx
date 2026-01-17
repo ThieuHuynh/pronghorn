@@ -195,18 +195,36 @@ export function ArtifactPdfViewer({
     try {
       const result = await processPDFFile(file, (stage, progress) => {
         setLoadingMessage(stage);
-        setLoadingProgress(progress);
+        setLoadingProgress(progress * 0.6); // Scale to 60% for initial processing
       });
 
       setLoadingMessage("Extracting embedded images...");
-      setLoadingProgress(70);
+      setLoadingProgress(65);
 
-      // Extract embedded images
+      // Extract embedded images with timeout - don't let this block the flow
       let embeddedImages = new Map<string, PDFEmbeddedImage>();
+      const imageExtractionTimeout = 15000; // 15 second total timeout for all images
+      
       try {
-        embeddedImages = await extractPDFImages(result.arrayBuffer);
+        const imageExtractionPromise = extractPDFImages(
+          result.arrayBuffer,
+          (pageIndex, imageCount) => {
+            // Update progress during extraction
+            const pageProgress = (pageIndex / result.pdfInfo.numPages) * 15;
+            setLoadingProgress(65 + pageProgress);
+          },
+          { pageTimeoutMs: 3000, imageTimeoutMs: 1500, maxImagesPerPage: 15 }
+        );
+        
+        // Race between extraction and timeout
+        const timeoutPromise = new Promise<Map<string, PDFEmbeddedImage>>((_, reject) => {
+          setTimeout(() => reject(new Error('Image extraction timed out')), imageExtractionTimeout);
+        });
+        
+        embeddedImages = await Promise.race([imageExtractionPromise, timeoutPromise]);
       } catch (error) {
-        console.warn("Failed to extract embedded images:", error);
+        console.warn("Image extraction skipped or timed out:", error);
+        // Continue without embedded images - this is fine
       }
 
       setLoadingProgress(85);
