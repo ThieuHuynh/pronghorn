@@ -202,8 +202,14 @@ function serializeSpecialTypes(obj: unknown): unknown {
   }
   
   // Handle Date objects (TIMESTAMPTZ, TIMESTAMP columns) - convert to ISO string
-  if (obj instanceof Date) {
-    return obj.toISOString();
+  // Use Object.prototype.toString for cross-realm compatibility (instanceof can fail
+  // when Date objects are created in a different JavaScript realm, e.g., by deno-postgres)
+  if (Object.prototype.toString.call(obj) === '[object Date]') {
+    const dateObj = obj as Date;
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toISOString();
+    }
+    return null; // Invalid date
   }
   
   if (Array.isArray(obj)) {
