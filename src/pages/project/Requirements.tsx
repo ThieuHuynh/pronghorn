@@ -3,6 +3,7 @@ import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { RequirementsTree, RequirementType } from "@/components/requirements/RequirementsTree";
+import { RequirementsSummaryCards } from "@/components/requirements/RequirementsSummaryCards";
 import { AIDecomposeDialog } from "@/components/requirements/AIDecomposeDialog";
 import { LinkStandardsDialog } from "@/components/requirements/LinkStandardsDialog";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,12 @@ export default function Requirements() {
                 </TooltipProvider>
               </div>
             </div>
+            
+            {/* Summary Cards */}
+            {!isLoading && requirements.length > 0 && (
+              <RequirementsSummaryCards requirements={requirements} />
+            )}
+            
             {isLoading ? <p className="text-center py-12 text-muted-foreground">Loading...</p> : requirements.length > 0 ? (
               <div className="bg-card border rounded-lg p-4">
                 <RequirementsTree 
