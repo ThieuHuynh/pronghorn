@@ -285,6 +285,7 @@ Return your response using the return_sub_requirements tool with a sub_requireme
 
     let suggestions: any[] = [];
     let llmResponse: Response;
+    let rawLlmResponse: any = null; // Capture raw response for debugging
 
     // Determine API and make request based on model
     if (selectedModel.startsWith("gemini")) {
@@ -334,9 +335,17 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       }
 
       const geminiData = await llmResponse.json();
+      rawLlmResponse = geminiData; // Capture for debugging
+      console.log("Gemini response structure:", JSON.stringify({
+        candidatesCount: geminiData.candidates?.length,
+        hasContent: !!geminiData.candidates?.[0]?.content,
+        partsCount: geminiData.candidates?.[0]?.content?.parts?.length
+      }));
       const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.log("Gemini response text (first 500 chars):", responseText.substring(0, 500));
       const parsed = parseExpandResponse(responseText);
       suggestions = parsed.sub_requirements || parsed || [];
+      console.log("Gemini parsed suggestions count:", suggestions.length);
       
     } else if (selectedModel.startsWith("claude")) {
       const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -367,13 +376,29 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       }
 
       const claudeData = await llmResponse.json();
+      rawLlmResponse = claudeData; // Capture for debugging
+      console.log("Claude response structure:", JSON.stringify({
+        stop_reason: claudeData.stop_reason,
+        contentBlocks: claudeData.content?.length,
+        blockTypes: claudeData.content?.map((b: any) => b.type)
+      }));
+      
       const toolUseBlock = claudeData.content?.find((block: any) => block.type === "tool_use");
+      if (toolUseBlock) {
+        console.log("Claude tool_use block:", JSON.stringify({
+          name: toolUseBlock.name,
+          inputKeys: Object.keys(toolUseBlock.input || {}),
+          inputValue: toolUseBlock.input
+        }));
+      }
+      
       if (toolUseBlock && toolUseBlock.input) {
         suggestions = toolUseBlock.input.sub_requirements || [];
-        console.log("Claude strict tool use response parsed directly");
+        console.log("Claude strict tool use response parsed, sub_requirements count:", suggestions.length);
       } else {
         const textBlock = claudeData.content?.find((block: any) => block.type === "text");
         const text = textBlock?.text || JSON.stringify(claudeData.content);
+        console.log("Claude fallback to text parsing, text (first 500):", text?.substring(0, 500));
         const parsed = parseExpandResponse(text);
         suggestions = parsed.sub_requirements || parsed || [];
       }
@@ -408,9 +433,17 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       }
 
       const grokData = await llmResponse.json();
+      rawLlmResponse = grokData; // Capture for debugging
+      console.log("Grok response structure:", JSON.stringify({
+        choicesCount: grokData.choices?.length,
+        hasMessage: !!grokData.choices?.[0]?.message,
+        finishReason: grokData.choices?.[0]?.finish_reason
+      }));
       const responseText = grokData.choices?.[0]?.message?.content || '';
+      console.log("Grok response text (first 500 chars):", responseText.substring(0, 500));
       const parsed = parseExpandResponse(responseText);
       suggestions = parsed.sub_requirements || parsed || [];
+      console.log("Grok parsed suggestions count:", suggestions.length);
     } else {
       throw new Error(`Unsupported model: ${selectedModel}`);
     }
@@ -475,13 +508,27 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       console.log(`Broadcast sent for ${inserted.length} new requirements`);
     }
 
+    // Build response payload
+    const responsePayload: any = { 
+      success: true, 
+      requirements: inserted,
+      count: inserted?.length || 0,
+      model: selectedModel
+    };
+
+    // Include raw LLM response for debugging if no requirements were generated
+    if (inserted.length === 0 && rawLlmResponse) {
+      console.log("No requirements inserted, including raw LLM response in debug payload");
+      responsePayload.debug = {
+        rawResponse: rawLlmResponse,
+        suggestionsCount: suggestions?.length || 0,
+        suggestionsType: typeof suggestions,
+        suggestionsValue: suggestions
+      };
+    }
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        requirements: inserted,
-        count: inserted?.length || 0,
-        model: selectedModel
-      }),
+      JSON.stringify(responsePayload),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
