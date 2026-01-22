@@ -144,10 +144,9 @@ All colors MUST be HSL.
   }
 }
 
-/* React Flow custom styles for selected nodes */
-.react-flow__node.selected {
-  outline: 3px solid hsl(var(--primary)) !important;
-  outline-offset: 2px;
+/* React Flow custom styles - selection handled by individual node components */
+.react-flow__node.selected > div {
+  /* Node components handle their own selection styling via Tailwind outline classes */
 }
 
 .react-flow__node.selected .react-flow__handle {
