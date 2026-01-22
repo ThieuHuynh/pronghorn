@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Handle, Position, NodeProps, NodeResizer } from "reactflow";
+import { Handle, Position, NodeProps } from "reactflow";
 import { 
   Box, 
   Blocks,
@@ -137,42 +137,32 @@ export const CanvasNode = memo(({ data, selected }: CanvasNodeProps) => {
   }, [nodeType, data.colorClass]);
 
   return (
-    <>
-      {/* Selection outline - dynamically tracks actual node bounds */}
-      <NodeResizer
-        isVisible={selected}
-        minWidth={180}
-        minHeight={50}
-        lineClassName="!border-primary !border-2"
-        handleClassName="!hidden"
-      />
+    <div
+      className={`
+        px-4 py-3 rounded-lg border-2 min-w-[180px]
+        ${colorClass}
+        ${selected ? "outline outline-2 outline-offset-2 outline-primary" : ""}
+        transition-all duration-200
+      `}
+    >
+      <Handle type="target" position={Position.Left} className="w-3 h-3" />
       
-      <div
-        className={`
-          px-4 py-3 rounded-lg border-2 min-w-[180px]
-          ${colorClass}
-          transition-all duration-200
-        `}
-      >
-        <Handle type="target" position={Position.Left} className="w-3 h-3" />
-        
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm">{data.label || "New Node"}</div>
-            {data.subtitle && (
-              <div className="text-xs opacity-70 mt-0.5 break-words whitespace-pre-wrap max-w-[200px]">
-                {data.subtitle.length > 200 
-                  ? data.subtitle.slice(0, 200) + "..." 
-                  : data.subtitle}
-              </div>
-            )}
-          </div>
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm">{data.label || "New Node"}</div>
+          {data.subtitle && (
+            <div className="text-xs opacity-70 mt-0.5 break-words whitespace-pre-wrap max-w-[200px]">
+              {data.subtitle.length > 200 
+                ? data.subtitle.slice(0, 200) + "..." 
+                : data.subtitle}
+            </div>
+          )}
         </div>
-        
-        <Handle type="source" position={Position.Right} className="w-3 h-3" />
       </div>
-    </>
+      
+      <Handle type="source" position={Position.Right} className="w-3 h-3" />
+    </div>
   );
 });
 
