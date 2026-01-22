@@ -15,7 +15,7 @@ interface PullRequest {
 
 // Configuration for two-phase sync
 const SMALL_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB - files below this go in Phase 1
-const ABSOLUTE_MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB - skip files larger than this (40MB file = 130MB memory usage)
+const ABSOLUTE_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - skip files larger than this (streaming should handle 40MB)
 const MAX_BATCH_BYTES = 8 * 1024 * 1024; // 8MB per batch for small files
 const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
 
@@ -83,6 +83,7 @@ function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
 }
 
 // Fetch file using GitHub Raw Content API - NO JSON PARSING!
+// For binary files, uses STREAMING base64 encoding to avoid OOM
 async function fetchFileViaRawApi(
   file: GitHubTreeFile,
   repo: { organization: string; repo: string },
@@ -91,6 +92,8 @@ async function fetchFileViaRawApi(
 ): Promise<{ path: string; content: string; commit_sha: string; is_binary: boolean } | null> {
   // Use raw.githubusercontent.com - returns file content directly, no JSON wrapper
   const rawUrl = `https://raw.githubusercontent.com/${repo.organization}/${repo.repo}/${targetSha}/${encodeURIComponent(file.path).replace(/%2F/g, '/')}`;
+  
+  console.log(`[MEMORY] Fetching: ${file.path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
   
   const response = await fetch(rawUrl, {
     headers: {
@@ -107,10 +110,43 @@ async function fetchFileViaRawApi(
   const isBinary = isBinaryFile(file.path);
 
   if (isBinary) {
-    // For binary files: get raw bytes and encode to base64
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const base64Content = encodeBase64(bytes);
+    // STREAMING BASE64 ENCODING - Prevents OOM on large files
+    // Instead of loading entire file into memory, we stream chunks and encode each immediately
+    console.log(`[MEMORY] Starting STREAMING binary fetch: ${file.path}`);
+    
+    if (!response.body) {
+      throw new Error('Response body is null - cannot stream');
+    }
+    
+    const reader = response.body.getReader();
+    const base64Chunks: string[] = [];
+    let bytesRead = 0;
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        bytesRead += value.length;
+        // Encode this chunk immediately - 'value' (Uint8Array) is released after this
+        base64Chunks.push(encodeBase64(value));
+        
+        // Log progress for large files
+        if (bytesRead % (5 * 1024 * 1024) < 65536) { // Every ~5MB
+          console.log(`[MEMORY] Streamed ${(bytesRead / 1024 / 1024).toFixed(2)} MB of ${file.path}`);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    
+    console.log(`[MEMORY] Stream complete: ${(bytesRead / 1024 / 1024).toFixed(2)} MB, ${base64Chunks.length} chunks`);
+    
+    // Join all base64 chunks into final string
+    const base64Content = base64Chunks.join('');
+    base64Chunks.length = 0; // Release array for GC
+    
+    console.log(`[MEMORY] Base64 ready: ${(base64Content.length / 1024 / 1024).toFixed(2)} MB string for ${file.path}`);
     
     return {
       path: file.path,
@@ -119,8 +155,9 @@ async function fetchFileViaRawApi(
       is_binary: true,
     };
   } else {
-    // For text files: just get the text directly
+    // For text files: just get the text directly (no streaming needed, text is already string)
     const textContent = await response.text();
+    console.log(`[MEMORY] Text file loaded: ${file.path} (${(textContent.length / 1024).toFixed(0)} KB)`);
     
     return {
       path: file.path,
