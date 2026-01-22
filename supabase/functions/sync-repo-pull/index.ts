@@ -14,6 +14,7 @@ interface PullRequest {
 
 // Configuration for size-based batching
 const MAX_BATCH_BYTES = 25 * 1024 * 1024; // 25MB per batch
+const MAX_FILES_PER_BATCH = 15; // Max concurrent fetches per batch
 const LARGE_FILE_THRESHOLD = 25 * 1024 * 1024; // Files >= 25MB processed individually
 
 interface GitHubTreeFile {
@@ -46,8 +47,11 @@ function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
       continue;
     }
 
-    // Would adding this file exceed the limit?
-    if (currentBatchSize + fileSize > MAX_BATCH_BYTES && currentBatch.length > 0) {
+    // Would adding this file exceed EITHER limit?
+    const wouldExceedSize = currentBatchSize + fileSize > MAX_BATCH_BYTES;
+    const wouldExceedCount = currentBatch.length >= MAX_FILES_PER_BATCH;
+
+    if ((wouldExceedSize || wouldExceedCount) && currentBatch.length > 0) {
       batches.push(currentBatch);
       currentBatch = [];
       currentBatchSize = 0;
