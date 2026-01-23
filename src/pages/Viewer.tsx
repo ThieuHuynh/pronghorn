@@ -241,7 +241,7 @@ export default function Viewer() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 container max-w-6xl mx-auto px-4 py-6">
+      <main className="flex-1 container mx-auto px-4 py-6">
         {isLoading ? (
           <Card>
             <CardContent className="p-6">
