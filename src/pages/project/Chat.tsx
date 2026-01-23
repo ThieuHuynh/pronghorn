@@ -998,34 +998,38 @@ export default function Chat() {
                             ) : (
                               <ReactMarkdown 
                                 remarkPlugins={[remarkGfm]}
-                                components={{
-                                  code({ node, className, children, ...props }) {
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    const language = match ? match[1] : '';
-                                    const codeContent = String(children).replace(/\n$/, '');
-                                    
-                                    // Check if this is a code block (has language or is inside pre)
-                                    // Inline code typically doesn't have a language class and is short
-                                    const isInlineCode = !match && !codeContent.includes('\n') && codeContent.length < 100;
-                                    
-                                    if (!isInlineCode && codeContent.length > 0) {
-                                      return (
-                                        <CodeBlockViewer
-                                          code={codeContent}
-                                          language={language}
-                                          onAddArtifact={handleSaveMessageAsArtifact}
-                                        />
-                                      );
+                                components={
+                                  // Only use CodeBlockViewer for completed messages (not streaming)
+                                  // Streaming messages have temp- prefix IDs
+                                  message.id.startsWith('temp-') ? undefined : {
+                                    code({ node, className, children, ...props }) {
+                                      const match = /language-(\w+)/.exec(className || '');
+                                      const language = match ? match[1] : '';
+                                      const codeContent = String(children).replace(/\n$/, '');
+                                      
+                                      // Check if this is a code block (has language or is inside pre)
+                                      // Inline code typically doesn't have a language class and is short
+                                      const isInlineCode = !match && !codeContent.includes('\n') && codeContent.length < 100;
+                                      
+                                      if (!isInlineCode && codeContent.length > 0) {
+                                        return (
+                                          <CodeBlockViewer
+                                            code={codeContent}
+                                            language={language}
+                                            onAddArtifact={handleSaveMessageAsArtifact}
+                                          />
+                                        );
+                                      }
+                                      
+                                      // Inline code stays as normal
+                                      return <code className={className} {...props}>{children}</code>;
+                                    },
+                                    // Remove the pre wrapper since CodeBlockViewer handles its own container
+                                    pre({ children }) {
+                                      return <>{children}</>;
                                     }
-                                    
-                                    // Inline code stays as normal
-                                    return <code className={className} {...props}>{children}</code>;
-                                  },
-                                  // Remove the pre wrapper since CodeBlockViewer handles its own container
-                                  pre({ children }) {
-                                    return <>{children}</>;
                                   }
-                                }}
+                                }
                               >
                                 {message.content}
                               </ReactMarkdown>
