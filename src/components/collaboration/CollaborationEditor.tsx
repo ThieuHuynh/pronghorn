@@ -1,12 +1,17 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Code, Save, Loader2, GitCompare, AlertTriangle } from 'lucide-react';
+import { Eye, Code, Save, Loader2, GitCompare, AlertTriangle, Globe, Maximize2, X, RotateCcw } from 'lucide-react';
 import Editor, { DiffEditor, Monaco } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface CollaborationEditorProps {
   content: string;
@@ -21,6 +26,72 @@ interface CollaborationEditorProps {
   currentVersion: number;
 }
 
+interface HtmlPreviewProps {
+  content: string;
+  className?: string;
+}
+
+function HtmlPreview({ content, className }: HtmlPreviewProps) {
+  const [key, setKey] = useState(0);
+
+  // Force iframe refresh when content changes significantly
+  useEffect(() => {
+    setKey(prev => prev + 1);
+  }, [content]);
+
+  // Wrap content in full HTML structure if needed
+  const wrappedContent = useMemo(() => {
+    const trimmed = content.trim().toLowerCase();
+    
+    // If content already has full HTML structure, use as-is
+    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html')) {
+      return content;
+    }
+    
+    // Otherwise, wrap in basic HTML structure
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    ${content}
+  </body>
+</html>`;
+  }, [content]);
+
+  const handleRefresh = useCallback(() => {
+    setKey(prev => prev + 1);
+  }, []);
+
+  return (
+    <div className={cn("relative w-full h-full flex flex-col", className)}>
+      <div className="absolute top-2 right-2 z-10">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleRefresh}
+          className="h-7 bg-background/80 backdrop-blur"
+        >
+          <RotateCcw className="h-3 w-3 mr-1" />
+          Refresh
+        </Button>
+      </div>
+      <iframe
+        key={key}
+        srcDoc={wrappedContent}
+        sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+        className="w-full flex-1 border-0 bg-white rounded"
+        title="HTML Preview"
+      />
+    </div>
+  );
+}
+
 export function CollaborationEditor({
   content,
   previousContent,
@@ -33,10 +104,32 @@ export function CollaborationEditor({
   readOnly = false,
   currentVersion,
 }: CollaborationEditorProps) {
-  const [viewMode, setViewMode] = useState<'rendered' | 'source' | 'diff'>(isMarkdown ? 'rendered' : 'source');
+  const [viewMode, setViewMode] = useState<'rendered' | 'source' | 'diff' | 'html'>(isMarkdown ? 'rendered' : 'source');
+  const [isHtmlFullscreen, setIsHtmlFullscreen] = useState(false);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect if content looks like HTML
+  const isHtmlContent = useMemo(() => {
+    const trimmed = content.trim().toLowerCase();
+    return (
+      trimmed.startsWith('<!doctype html') ||
+      trimmed.startsWith('<html') ||
+      trimmed.startsWith('<head') ||
+      trimmed.startsWith('<body') ||
+      (trimmed.includes('<script') && trimmed.includes('</script>')) ||
+      (trimmed.includes('<style') && trimmed.includes('</style>')) ||
+      (trimmed.includes('<div') && trimmed.includes('</div>'))
+    );
+  }, [content]);
+
+  // Auto-switch to HTML tab when HTML content is detected
+  useEffect(() => {
+    if (isHtmlContent && viewMode === 'rendered') {
+      setViewMode('html');
+    }
+  }, [isHtmlContent, viewMode]);
 
   // Auto-save on blur or after idle period
   useEffect(() => {
@@ -75,7 +168,7 @@ export function CollaborationEditor({
       {/* Toolbar */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source' | 'diff')}>
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source' | 'diff' | 'html')}>
             <TabsList className="h-8">
               <TabsTrigger value="rendered" className="text-xs h-6 px-2">
                 <Eye className="h-3 w-3 mr-1" />
@@ -93,12 +186,27 @@ export function CollaborationEditor({
                 <GitCompare className="h-3 w-3 mr-1" />
                 Diff
               </TabsTrigger>
+              <TabsTrigger value="html" className="text-xs h-6 px-2">
+                <Globe className="h-3 w-3 mr-1" />
+                HTML
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           {currentVersion > 0 && (
             <Badge variant="outline" className="text-xs">
               v{currentVersion}
             </Badge>
+          )}
+          {viewMode === 'html' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsHtmlFullscreen(true)}
+              className="h-7"
+            >
+              <Maximize2 className="h-3 w-3 mr-1" />
+              Fullscreen
+            </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -133,7 +241,9 @@ export function CollaborationEditor({
 
       {/* Editor Content */}
       <div className="flex-1 min-h-0">
-        {viewMode === 'rendered' ? (
+        {viewMode === 'html' ? (
+          <HtmlPreview content={content} className="h-full p-2" />
+        ) : viewMode === 'rendered' ? (
           <ScrollArea className="h-full">
             <div 
               className="p-4 prose prose-sm dark:prose-invert max-w-none cursor-pointer
@@ -198,6 +308,37 @@ export function CollaborationEditor({
           />
         )}
       </div>
+
+      {/* Fullscreen HTML Preview Modal */}
+      <Dialog open={isHtmlFullscreen} onOpenChange={setIsHtmlFullscreen}>
+        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+            <Badge variant="secondary" className="bg-background/80 backdrop-blur">
+              <Globe className="h-3 w-3 mr-1" />
+              HTML Preview
+            </Badge>
+            {currentVersion > 0 && (
+              <Badge variant="outline" className="bg-background/80 backdrop-blur text-xs">
+                v{currentVersion}
+              </Badge>
+            )}
+          </div>
+          <div className="absolute top-2 right-2 z-10">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsHtmlFullscreen(false)}
+              className="bg-background/80 backdrop-blur"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Close
+            </Button>
+          </div>
+          <div className="w-full h-full pt-12">
+            <HtmlPreview content={content} className="h-full" />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
