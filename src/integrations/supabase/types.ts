@@ -4511,7 +4511,7 @@ export type Database = {
         }
       }
       get_deployment_with_secrets_with_token: {
-        Args: { p_deployment_id: string; p_token?: string }
+        Args: { p_deployment_id: string; p_token: string }
         Returns: {
           branch: string | null
           build_command: string | null
