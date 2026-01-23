@@ -34,8 +34,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { CodeBlockViewer } from "@/components/chat/CodeBlockViewer";
 import {
   Dialog,
   DialogContent,
@@ -995,7 +996,39 @@ export default function Chat() {
                             {message.role === "user" ? (
                               <div className="whitespace-pre-wrap break-words overflow-hidden text-primary-foreground">{message.content}</div>
                             ) : (
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  code({ node, className, children, ...props }) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    const language = match ? match[1] : '';
+                                    const codeContent = String(children).replace(/\n$/, '');
+                                    
+                                    // Check if this is a code block (has language or is inside pre)
+                                    // Inline code typically doesn't have a language class and is short
+                                    const isInlineCode = !match && !codeContent.includes('\n') && codeContent.length < 100;
+                                    
+                                    if (!isInlineCode && codeContent.length > 0) {
+                                      return (
+                                        <CodeBlockViewer
+                                          code={codeContent}
+                                          language={language}
+                                          onAddArtifact={handleSaveMessageAsArtifact}
+                                        />
+                                      );
+                                    }
+                                    
+                                    // Inline code stays as normal
+                                    return <code className={className} {...props}>{children}</code>;
+                                  },
+                                  // Remove the pre wrapper since CodeBlockViewer handles its own container
+                                  pre({ children }) {
+                                    return <>{children}</>;
+                                  }
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
                             )}
                           </div>
                           <TooltipProvider>
