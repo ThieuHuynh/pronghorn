@@ -43,9 +43,10 @@ export function ShareArtifactDialog({
   }, [artifact.id, artifact.is_published]);
 
   const baseUrl = "https://pronghorn.red";
+  const apiBaseUrl = "https://api.pronghorn.red/functions/v1/serve-artifact";
   const viewerUrl = `${baseUrl}/viewer/${artifact.id}`;
-  const rawUrl = `${baseUrl}/viewer/${artifact.id}/raw`;
-  const binaryUrl = `${baseUrl}/viewer/${artifact.id}/binary`;
+  const rawUrl = `${apiBaseUrl}?id=${artifact.id}&mode=raw`;
+  const binaryUrl = `${apiBaseUrl}?id=${artifact.id}&mode=binary`;
 
   // Determine if binary URL should be shown (for images or binary content)
   const isBinaryContent = !!artifact.image_url || 

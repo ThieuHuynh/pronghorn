@@ -173,3 +173,6 @@ verify_jwt = false
 
 [functions.sync-large-file]
 verify_jwt = false
+
+[functions.serve-artifact]
+verify_jwt = false
