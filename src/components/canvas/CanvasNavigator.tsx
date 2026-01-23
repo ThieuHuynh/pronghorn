@@ -247,7 +247,7 @@ export function CanvasNavigator({
       </div>
 
       {/* Canvas Actions Row - visible buttons for management */}
-      <div className="px-2 pb-2 flex items-center gap-1 flex-wrap">
+      <div className="px-2 pb-2 flex items-center justify-center gap-1 flex-wrap">
         {/* Duplicate Button */}
         {onDuplicateCanvas && activeCanvasId && !isLegacyMode && (
           <Button
