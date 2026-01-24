@@ -338,9 +338,11 @@ Start your response with { and end with }.`;
       // Subsequent iterations: use client-provided conversation history
       conversationHistory = clientConversationHistory || [];
       
-      // ALWAYS inject current document state - extract from pending results or use initial
-      const latestContent = pendingOperationResults?.find((r: any) => r.updatedDocumentContent)?.updatedDocumentContent 
-        || initialDocumentContent;
+      // ALWAYS inject current document state - use the LAST edit result (final state after all edits)
+      const editsWithContent = pendingOperationResults?.filter((r: any) => r.updatedDocumentContent) || [];
+      const latestContent = editsWithContent.length > 0 
+        ? editsWithContent[editsWithContent.length - 1].updatedDocumentContent 
+        : initialDocumentContent;
       
       // Build iteration context with document + operation results
       const iterationContext = pendingOperationResults && pendingOperationResults.length > 0
