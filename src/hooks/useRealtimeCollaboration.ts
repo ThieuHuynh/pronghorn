@@ -429,7 +429,26 @@ export function useRealtimeCollaboration(
         { event: "collaboration_message" },
         (payload) => {
           console.log("Received collaboration message broadcast:", payload);
-          loadMessages();
+          // Add the message directly to state for instant display
+          const msg = payload.payload?.message;
+          if (msg) {
+            setMessages(prev => {
+              // Avoid duplicates by checking ID or content+role
+              const isDuplicate = prev.some(m => 
+                m.id === msg.id || (m.content === msg.content && m.role === msg.role)
+              );
+              if (isDuplicate) return prev;
+              
+              // Add and sort by created_at
+              const newMessages = [...prev, msg as CollaborationMessage];
+              return newMessages.sort((a, b) => 
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              );
+            });
+          } else {
+            // Fallback: refetch if no message in payload
+            loadMessages();
+          }
         }
       )
       .on(
