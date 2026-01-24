@@ -129,15 +129,6 @@ export function ArtifactCollaborator({
   // AbortController for cancel
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Optimistic messages for immediate UI feedback
-  const [optimisticMessages, setOptimisticMessages] = useState<Array<{
-    id: string;
-    role: 'user' | 'assistant' | 'tool';
-    content: string;
-    created_at: string;
-    metadata?: Record<string, unknown>;
-  }>>([])
-  
   // View version state
   const [viewingVersion, setViewingVersion] = useState<number | null>(null);
   
@@ -588,16 +579,9 @@ export function ArtifactCollaborator({
   const handleSendMessage = useCallback(async (content: string) => {
     if (!collaborationId || !projectId) return;
     
-    // Add optimistic user message immediately for instant feedback
-    const optimisticId = `optimistic-${Date.now()}`;
-    const optimisticMsg = {
-      id: optimisticId,
-      role: 'user' as const,
-      content,
-      created_at: new Date().toISOString(),
-    };
-    setOptimisticMessages(prev => [...prev, optimisticMsg]);
-    
+    // Persist user message to DB immediately - hook's sendMessage adds to local state for instant UI
+    const persistedUserMsg = await sendMessage('user', content, { source: 'user_input' });
+    console.log('[Collab] Persisted user message:', persistedUserMsg?.id);
     // If there are unsaved changes, save them first so the agent sees the current content
     if (hasUnsavedChanges && localContent !== collaboration?.current_content) {
       const currentContent = collaboration?.current_content || artifact.content;
@@ -746,22 +730,10 @@ export function ArtifactCollaborator({
           throw new Error('No iteration result received');
         }
         
-        // Add reasoning as optimistic message immediately so it appears in timeline
-        if (iterationResult.reasoning) {
-          const reasoningMetadata = { iteration: currentIteration };
-          const reasoningOptimistic = {
-            id: `optimistic-reason-${currentIteration}-${Date.now()}`,
-            role: 'assistant' as const,
-            content: iterationResult.reasoning,
-            created_at: new Date().toISOString(),
-            metadata: reasoningMetadata,
-          };
-          setOptimisticMessages(prev => [...prev, reasoningOptimistic]);
-          
-          // Also persist to database (will merge via realtime deduplication)
-          const persistedMsg = await sendMessage('assistant', iterationResult.reasoning, reasoningMetadata);
-          console.log('[Collab] Persisted reasoning message:', persistedMsg?.id, 'iteration:', currentIteration);
-        }
+        // NOTE: Assistant reasoning is persisted by the backend edge function (lines 586-600)
+        // We do NOT persist it here to avoid duplicates.
+        // The realtime subscription will deliver it to the messages state automatically.
+        console.log('[Collab] Reasoning received, waiting for realtime:', iterationResult.reasoning?.slice(0, 50));
         
         // Clear streaming content so accumulated history is visible
         setStreamingContent('');
@@ -776,7 +748,7 @@ export function ArtifactCollaborator({
           const result = await executeOperationLocally(op);
           pendingOperationResultsRef.current.push(result);
           
-          // Log tool execution as a yellow message in chat
+          // Log tool execution as a message in chat (frontend responsibility)
           const toolMessage = formatToolMessage(op, result);
           const toolMetadata = {
             operation_type: op.type,
@@ -785,17 +757,7 @@ export function ArtifactCollaborator({
             iteration: currentIteration,
           };
           
-          // Add to optimistic messages immediately for instant display
-          const toolOptimistic = {
-            id: `optimistic-tool-${currentIteration}-${op.type}-${Date.now()}`,
-            role: 'tool' as const,
-            content: toolMessage,
-            created_at: new Date().toISOString(),
-            metadata: toolMetadata,
-          };
-          setOptimisticMessages(prev => [...prev, toolOptimistic]);
-          
-          // Also persist to database (will merge via realtime)
+          // Persist tool message to database - hook's sendMessage adds it to local state immediately
           const persistedTool = await sendMessage('tool', toolMessage, toolMetadata);
           console.log('[Collab] Persisted tool message:', persistedTool?.id, 'op:', op.type);
         }
@@ -814,10 +776,9 @@ export function ArtifactCollaborator({
         currentIteration++;
       }
       
-      // Task complete - refresh from DB and clear optimistic (DB now has all messages)
+      // Task complete - refresh from DB to ensure all messages are visible
       await refreshMessages();
       await refreshHistory();
-      setOptimisticMessages([]); // Safe to clear now - all messages are in DB
       setViewingVersion(null);
       setHasUnsavedChanges(false);
       toast.success('AI changes complete');
@@ -834,8 +795,6 @@ export function ArtifactCollaborator({
       setIsStreaming(false);
       setStreamingContent('');
       setStreamProgress(p => ({ ...p, status: 'complete' }));
-      // DON'T clear optimisticMessages here - let the deduplication in useMemo
-      // naturally filter them out as db messages arrive via realtime sync
       isAgentEditingRef.current = false;
       abortControllerRef.current = null;
     }
@@ -904,39 +863,19 @@ export function ArtifactCollaborator({
 
   const currentVersion = viewingVersion || latestVersion;
 
-  // Map messages to the expected format - include optimistic messages
+  // Map messages to the expected format - simple passthrough from DB state
+  // No more optimistic messages - hook's sendMessage adds to local state immediately
   const chatMessages: CollaborationMessage[] = useMemo(() => {
-    const dbMessages = messages.map(m => ({
-      id: m.id,
-      role: m.role as 'user' | 'assistant' | 'tool',
-      content: m.content,
-      created_at: m.created_at,
-      metadata: m.metadata,
-    }));
-    
-    // Create set of db message IDs for fast lookup
-    const dbIds = new Set(dbMessages.map(m => m.id));
-    
-    // Show optimistic messages that don't have a matching db ID
-    // For optimistic messages (which have different ID format like 'optimistic-*'),
-    // check if there's a db message with matching content+role created around the same time
-    const optimisticToShow = optimisticMessages.filter(opt => {
-      // If optimistic ID somehow matches a db ID, skip it
-      if (dbIds.has(opt.id)) return false;
-      
-      // Check if any db message has the same content and role
-      // This indicates the optimistic message was persisted
-      const matchingDb = dbMessages.find(db => 
-        db.role === opt.role && db.content === opt.content
-      );
-      
-      return !matchingDb;
-    });
-    
-    return [...dbMessages, ...optimisticToShow].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-  }, [messages, optimisticMessages]);
+    return messages
+      .map(m => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant' | 'tool',
+        content: m.content,
+        created_at: m.created_at,
+        metadata: m.metadata,
+      }))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [messages]);
   
   // Map blackboard to the expected format
   const blackboardEntries: BlackboardEntry[] = useMemo(() => blackboard.map(b => ({
