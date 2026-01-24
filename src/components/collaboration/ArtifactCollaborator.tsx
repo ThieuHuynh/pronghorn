@@ -132,7 +132,7 @@ export function ArtifactCollaborator({
   // Optimistic messages for immediate UI feedback
   const [optimisticMessages, setOptimisticMessages] = useState<Array<{
     id: string;
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'tool';
     content: string;
     created_at: string;
   }>>([]);
@@ -874,7 +874,7 @@ export function ArtifactCollaborator({
   const chatMessages: CollaborationMessage[] = useMemo(() => {
     const dbMessages = messages.map(m => ({
       id: m.id,
-      role: m.role as 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'tool',
       content: m.content,
       created_at: m.created_at,
       metadata: m.metadata,
