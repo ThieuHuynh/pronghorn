@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { FileSpreadsheet, FileJson, Upload, X, Loader2, ClipboardPaste } from 'lucide-react';
+import { FileSpreadsheet, FileJson, Upload, X, Loader2, ClipboardPaste, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { parseExcelFile, ExcelData } from '@/utils/parseExcel';
 import { parseJsonFile, ParsedJsonData, parseJsonString } from '@/utils/parseJson';
 import { toast } from 'sonner';
+import { ProjectSelector, ProjectSelectionResult } from '@/components/project/ProjectSelector';
 
 interface FileUploaderProps {
   onFileUploaded: (
@@ -17,19 +18,24 @@ interface FileUploaderProps {
   ) => void;
   accept?: string;
   maxSizeMB?: number;
+  projectId?: string;
+  shareToken?: string | null;
 }
 
 export default function FileUploader({
   onFileUploaded,
   accept = '.xlsx,.xls,.csv,.json',
-  maxSizeMB = 20
+  maxSizeMB = 20,
+  projectId,
+  shareToken
 }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pastedText, setPastedText] = useState('');
-  const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'project'>('upload');
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
@@ -200,10 +206,97 @@ export default function FileUploader({
     setPastedText('');
   }, []);
 
+  const handleProjectSelection = useCallback(async (selection: ProjectSelectionResult) => {
+    setProjectSelectorOpen(false);
+    
+    const artifacts = selection.artifacts || [];
+    
+    if (artifacts.length === 0) {
+      toast.error('No artifacts selected');
+      return;
+    }
+    
+    // Take the first artifact with content
+    const artifact = artifacts.find((a: any) => a.content?.trim());
+    if (!artifact) {
+      toast.error('Selected artifact has no content');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const trimmed = artifact.content.trim();
+      const artifactName = artifact.title || artifact.ai_title || 'artifact_data';
+      const cleanName = artifactName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+      
+      // Detect JSON or CSV (same logic as handlePastedText)
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        const rawData = JSON.parse(trimmed);
+        const data = parseJsonString(trimmed, cleanName);
+        if (data.tables.length === 0) {
+          throw new Error('No valid data found in artifact JSON');
+        }
+        onFileUploaded('json', data, rawData, cleanName);
+        setFileName(`${artifactName} (artifact)`);
+        toast.success(`Loaded ${data.tables.length} table(s) from artifact`);
+      } else {
+        // Assume CSV - reuse existing CSV parsing logic
+        const lines = trimmed.split('\n').filter((line: string) => line.trim());
+        if (lines.length < 2) {
+          throw new Error('CSV must have at least a header row and one data row');
+        }
+        
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+
+        const rows = lines.map((line: string) => parseCSVLine(line));
+        const headers = rows[0] || [];
+        const data: ExcelData = {
+          fileName: `${cleanName}.csv`,
+          sheets: [{
+            name: 'Sheet1',
+            headers,
+            rows,
+            headerRowIndex: 0
+          }]
+        };
+        
+        onFileUploaded('csv', data);
+        setFileName(`${artifactName} (artifact)`);
+        toast.success(`Loaded CSV with ${rows.length} rows from artifact`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to parse artifact data';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onFileUploaded]);
+
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'upload' | 'paste')}>
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'upload' | 'paste' | 'project')}>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="upload" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             Upload File
@@ -211,6 +304,14 @@ export default function FileUploader({
           <TabsTrigger value="paste" className="flex items-center gap-2">
             <ClipboardPaste className="h-4 w-4" />
             Paste Text
+          </TabsTrigger>
+          <TabsTrigger 
+            value="project" 
+            className="flex items-center gap-2"
+            disabled={!projectId}
+          >
+            <FolderOpen className="h-4 w-4" />
+            Project Elements
           </TabsTrigger>
         </TabsList>
 
@@ -338,6 +439,45 @@ JSON example:
             </Button>
           </div>
         </TabsContent>
+
+        <TabsContent value="project" className="mt-4">
+          <div className="flex flex-col items-center justify-center gap-4 p-8 border-2 border-dashed rounded-lg border-muted-foreground/30">
+            <FolderOpen className="h-12 w-12 text-muted-foreground" />
+            <div className="text-center">
+              <p className="font-medium">Select from Project</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose an artifact containing JSON or CSV data
+              </p>
+            </div>
+            <Button onClick={() => setProjectSelectorOpen(true)} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Parsing...
+                </>
+              ) : (
+                <>
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Browse Project Elements
+                </>
+              )}
+            </Button>
+            
+            {fileName && (
+              <div className="flex items-center gap-2 text-sm text-green-600 mt-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>Loaded from: {fileName}</span>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={clearFile}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+            
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Supported Formats */}
@@ -351,6 +491,16 @@ JSON example:
           <span>JSON</span>
         </div>
       </div>
+
+      {projectId && (
+        <ProjectSelector
+          projectId={projectId}
+          shareToken={shareToken || null}
+          open={projectSelectorOpen}
+          onClose={() => setProjectSelectorOpen(false)}
+          onConfirm={handleProjectSelection}
+        />
+      )}
     </div>
   );
 }

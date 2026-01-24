@@ -1063,7 +1063,7 @@ export default function DatabaseImportWizard({
       case 'upload':
         return (
           <div className="space-y-6">
-            <FileUploader onFileUploaded={handleFileUploaded} />
+            <FileUploader onFileUploaded={handleFileUploaded} projectId={projectId} shareToken={shareToken} />
             {(excelData || jsonData) && (
               <div className="rounded-lg border border-border bg-muted/50 p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
