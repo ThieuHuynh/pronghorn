@@ -19,7 +19,8 @@ import {
   Paperclip,
   AlertTriangle,
   RefreshCw,
-  Save
+  Save,
+  Square
 } from 'lucide-react';
 import { useRealtimeCollaboration } from '@/hooks/useRealtimeCollaboration';
 import { CollaborationEditor } from './CollaborationEditor';
@@ -40,6 +41,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ProjectSelector, ProjectSelectionResult } from '@/components/project/ProjectSelector';
+
+// Add line numbers to content for agent readability
+function addLineNumbers(content: string): string {
+  const lines = content.split("\n");
+  return lines.map((line, i) => `<<${i + 1}>> ${line}`).join("\n");
+}
 
 interface ArtifactCollaboratorProps {
   projectId: string;
@@ -79,6 +86,22 @@ export function ArtifactCollaborator({
   // Streaming state for AI responses
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  
+  // Client-driven iteration state
+  const [streamProgress, setStreamProgress] = useState<{
+    iteration: number;
+    charsReceived: number;
+    status: 'idle' | 'streaming' | 'processing' | 'complete';
+  }>({ iteration: 0, charsReceived: 0, status: 'idle' });
+  
+  // Conversation history lives in client memory during task
+  const conversationHistoryRef = useRef<Array<{ role: string; content: string }>>([]);
+  
+  // Pending operation results to send back on next iteration
+  const pendingOperationResultsRef = useRef<any[]>([]);
+  
+  // AbortController for cancel
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   // Optimistic messages for immediate UI feedback
   const [optimisticMessages, setOptimisticMessages] = useState<Array<{
@@ -453,7 +476,81 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, shareToken, onMerged]);
 
-  // Handle chat message send with streaming
+  // Execute operations locally (client-side)
+  const executeOperationLocally = useCallback(async (op: any): Promise<any> => {
+    if (op.type === 'read_artifact') {
+      // Return current content with line numbers
+      return {
+        type: 'read_artifact',
+        success: true,
+        content: addLineNumbers(localContent),
+      };
+    }
+    
+    if (op.type === 'edit_lines') {
+      const { start_line, end_line, new_content, narrative } = op.params;
+      
+      // Validate new_content
+      if (new_content === undefined || new_content === null) {
+        return {
+          type: 'edit_lines',
+          success: false,
+          error: 'Missing new_content in edit operation',
+        };
+      }
+      
+      const contentToInsert = typeof new_content === 'string' ? new_content : String(new_content);
+      
+      // Perform the edit locally
+      const lines = localContent.split('\n');
+      const before = lines.slice(0, start_line - 1);
+      const after = lines.slice(end_line);
+      const newLines = contentToInsert.split('\n');
+      const newContent = [...before, ...newLines, ...after].join('\n');
+      
+      // Update local content
+      setLocalContent(newContent);
+      
+      // Save to database
+      await insertEdit(
+        'edit',
+        start_line,
+        end_line,
+        lines.slice(start_line - 1, end_line).join('\n'),
+        contentToInsert,
+        newContent,
+        narrative || 'Agent edit',
+        'agent',
+        'AI Agent'
+      );
+      
+      // Refresh history slider
+      await refreshHistory();
+      
+      toast.success(`Edit applied: ${narrative}`);
+      
+      return {
+        type: 'edit_lines',
+        success: true,
+        lines_affected: `${start_line}-${end_line}`,
+        narrative,
+      };
+    }
+    
+    return { type: op.type, success: false, error: 'Unknown operation' };
+  }, [localContent, insertEdit, refreshHistory]);
+
+  // Handle stop button - simple cancel
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsStreaming(false);
+      setStreamProgress(p => ({ ...p, status: 'complete' }));
+      toast.info('Stopping agent...');
+    }
+  }, []);
+
+  // Handle chat message send with client-driven iteration loop
   const handleSendMessage = useCallback(async (content: string) => {
     if (!collaborationId || !projectId) return;
     
@@ -484,126 +581,180 @@ export function ArtifactCollaborator({
         'User'
       );
       setHasUnsavedChanges(false);
-      // Refresh history to reflect the saved version
       await refreshHistory();
     }
     
-    // DO NOT call sendMessage here - the edge function inserts the user message
-    // Just remove optimistic message after streaming completes
-    
     setIsStreaming(true);
     setStreamingContent('');
-    isAgentEditingRef.current = true; // Block sync during agent streaming
+    setStreamProgress({ iteration: 0, charsReceived: 0, status: 'streaming' });
+    isAgentEditingRef.current = true;
+    
+    // Initialize conversation with user message and document
+    conversationHistoryRef.current = [{
+      role: "user",
+      content: `Document to collaborate on:\n${addLineNumbers(localContent)}\n\nUser request: ${content}`
+    }];
+    pendingOperationResultsRef.current = [];
+    
+    let currentIteration = 1;
+    let status = 'in_progress';
+    const maxIterations = 100;
+    
+    abortControllerRef.current = new AbortController();
+    
+    const orchestratorUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://obkzdksfayygnrzdqoam.supabase.co'}/functions/v1/collaboration-agent-orchestrator`;
     
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL || 'https://obkzdksfayygnrzdqoam.supabase.co'}/functions/v1/collaboration-agent-orchestrator`,
-        {
+      // Client-driven iteration loop
+      while (status === 'in_progress' && currentIteration <= maxIterations) {
+        // Check if cancelled
+        if (abortControllerRef.current?.signal.aborted) {
+          break;
+        }
+        
+        setStreamProgress({ iteration: currentIteration, charsReceived: 0, status: 'streaming' });
+        
+        const requestBody: any = {
+          collaborationId,
+          projectId,
+          shareToken: shareToken || null,
+          iteration: currentIteration,
+          maxIterations,
+          conversationHistory: conversationHistoryRef.current,
+          pendingOperationResults: pendingOperationResultsRef.current,
+        };
+        
+        // Only include full context on first iteration
+        if (currentIteration === 1) {
+          requestBody.userMessage = content;
+          requestBody.currentContent = localContent;
+          requestBody.attachedContext = attachedContext ? {
+            projectMetadata: attachedContext.projectMetadata || null,
+            artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
+            chatSessions: attachedContext.chatSessions.length > 0 ? attachedContext.chatSessions : undefined,
+            requirements: attachedContext.requirements.length > 0 ? attachedContext.requirements : undefined,
+            standards: attachedContext.standards.length > 0 ? attachedContext.standards : undefined,
+            techStacks: attachedContext.techStacks.length > 0 ? attachedContext.techStacks : undefined,
+            canvasNodes: attachedContext.canvasNodes.length > 0 ? attachedContext.canvasNodes : undefined,
+            canvasEdges: attachedContext.canvasEdges.length > 0 ? attachedContext.canvasEdges : undefined,
+            canvasLayers: attachedContext.canvasLayers.length > 0 ? attachedContext.canvasLayers : undefined,
+            files: attachedContext.files?.length ? attachedContext.files : undefined,
+            databases: attachedContext.databases?.length ? attachedContext.databases : undefined,
+          } : undefined;
+        }
+        
+        const response = await fetch(orchestratorUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8'}`,
           },
-          body: JSON.stringify({
-            collaborationId,
-            projectId,
-            userMessage: content,
-            shareToken: shareToken || null,
-            maxIterations: 25, // Increased for complex tasks
-            currentContent: localContent, // Send the current editor content
-            attachedContext: attachedContext ? {
-              projectMetadata: attachedContext.projectMetadata || null,
-              artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
-              chatSessions: attachedContext.chatSessions.length > 0 ? attachedContext.chatSessions : undefined,
-              requirements: attachedContext.requirements.length > 0 ? attachedContext.requirements : undefined,
-              standards: attachedContext.standards.length > 0 ? attachedContext.standards : undefined,
-              techStacks: attachedContext.techStacks.length > 0 ? attachedContext.techStacks : undefined,
-              canvasNodes: attachedContext.canvasNodes.length > 0 ? attachedContext.canvasNodes : undefined,
-              canvasEdges: attachedContext.canvasEdges.length > 0 ? attachedContext.canvasEdges : undefined,
-              canvasLayers: attachedContext.canvasLayers.length > 0 ? attachedContext.canvasLayers : undefined,
-              files: attachedContext.files?.length ? attachedContext.files : undefined,
-              databases: attachedContext.databases?.length ? attachedContext.databases : undefined,
-            } : undefined,
-          }),
+          body: JSON.stringify(requestBody),
+          signal: abortControllerRef.current.signal,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Agent error: ${response.status}`);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Agent error: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let lastMessage = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-
-            try {
-              const event = JSON.parse(data);
+        
+        // Parse SSE stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let iterationResult: any = null;
+        
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const dataStr = line.slice(6).trim();
+              if (!dataStr) continue;
               
-              if (event.type === 'reasoning') {
-                setStreamingContent(event.reasoning);
-              } else if (event.type === 'edit') {
-                // Use content directly from SSE event - no DB fetch needed
-                if (event.content) {
-                  setLocalContent(event.content);
-                  setHasUnsavedChanges(false);
+              try {
+                const data = JSON.parse(dataStr);
+                
+                switch (data.type) {
+                  case 'llm_streaming':
+                    // Update character count for visual feedback
+                    setStreamProgress(p => ({ ...p, charsReceived: data.charsReceived }));
+                    setStreamingContent(prev => (prev || '') + (data.delta || ''));
+                    break;
+                  case 'reasoning':
+                    setStreamingContent(data.reasoning);
+                    break;
+                  case 'iteration_complete':
+                    iterationResult = data;
+                    status = data.status;
+                    break;
+                  case 'error':
+                    throw new Error(data.message);
                 }
-                // Refresh history to update version slider (but not content)
-                await refreshHistory();
-                toast.success(`Edit applied: ${event.narrative}`);
-              } else if (event.type === 'done') {
-                lastMessage = event.message || 'Changes completed.';
-                // Ensure hasUnsavedChanges is cleared when agent completes
-                setHasUnsavedChanges(false);
-              } else if (event.type === 'error') {
-                throw new Error(event.message);
+              } catch (e) {
+                if (e instanceof Error && e.message.startsWith('Agent error')) throw e;
+                console.error('Error parsing SSE event:', e);
               }
-            } catch (e) {
-              console.error('Error parsing SSE event:', e);
             }
           }
         }
+        
+        if (!iterationResult) {
+          throw new Error('No iteration result received');
+        }
+        
+        // Execute operations locally
+        setStreamProgress(p => ({ ...p, status: 'processing' }));
+        pendingOperationResultsRef.current = [];
+        
+        for (const op of iterationResult.operations || []) {
+          const result = await executeOperationLocally(op);
+          pendingOperationResultsRef.current.push(result);
+        }
+        
+        // Handle blackboard entry
+        if (iterationResult.blackboardEntry) {
+          await addBlackboardEntry(
+            iterationResult.blackboardEntry.type || 'progress',
+            iterationResult.blackboardEntry.content
+          );
+        }
+        
+        // Update conversation history for next iteration
+        conversationHistoryRef.current = iterationResult.conversationHistory || [];
+        
+        currentIteration++;
       }
-
-      // Refresh only messages and history after agent completes (not full refresh to avoid flicker)
-      // We already have the current content from the SSE stream
-      await Promise.all([refreshMessages(), refreshHistory()]);
       
-      // Reset viewing version so slider follows latest after agent saves
+      // Task complete
+      await refreshMessages();
+      await refreshHistory();
       setViewingVersion(null);
-      
-      // Ensure merge button is enabled after agent completes
       setHasUnsavedChanges(false);
+      toast.success('AI changes complete');
       
-      if (lastMessage) {
-        setStreamingContent('');
-      }
     } catch (error) {
-      console.error('Error with collaboration agent:', error);
-      toast.error('Failed to get AI response');
-      // Add error message - this is an error case, so we do need to add a message
-      await sendMessage('assistant', 'Sorry, I encountered an error processing your request. Please try again.');
+      if ((error as Error).name === 'AbortError') {
+        toast.info('Task cancelled');
+      } else {
+        console.error('Error with collaboration agent:', error);
+        toast.error('Failed to get AI response');
+        await sendMessage('assistant', 'Sorry, I encountered an error processing your request. Please try again.');
+      }
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
-      setOptimisticMessages([]); // Clear any remaining optimistic messages
-      isAgentEditingRef.current = false; // Re-enable sync after agent is done
+      setStreamProgress(p => ({ ...p, status: 'complete' }));
+      setOptimisticMessages([]);
+      isAgentEditingRef.current = false;
+      abortControllerRef.current = null;
     }
-  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory, attachedContext]);
+  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory, attachedContext, executeOperationLocally, addBlackboardEntry]);
 
   // Use hook's latestVersion for real-time sync - fallback to local calculation for safety
   const latestVersion = latestVersionFromHook || (
@@ -868,6 +1019,8 @@ export function ArtifactCollaborator({
               onClearContext={() => setAttachedContext(null)}
               inputValue={chatInputValue}
               onInputChange={setChatInputValue}
+              streamProgress={streamProgress}
+              onStop={handleStop}
             />
           </TabsContent>
 
@@ -1033,6 +1186,8 @@ export function ArtifactCollaborator({
               onClearContext={() => setAttachedContext(null)}
               inputValue={chatInputValue}
               onInputChange={setChatInputValue}
+              streamProgress={streamProgress}
+              onStop={handleStop}
             />
           </div>
         </ResizablePanel>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip, X, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -23,6 +23,12 @@ export interface BlackboardEntry {
   created_at: string;
 }
 
+export interface StreamProgress {
+  iteration: number;
+  charsReceived: number;
+  status: 'idle' | 'streaming' | 'processing' | 'complete';
+}
+
 interface CollaborationChatProps {
   messages: CollaborationMessage[];
   blackboard: BlackboardEntry[];
@@ -36,6 +42,9 @@ interface CollaborationChatProps {
   onClearContext?: () => void;
   inputValue?: string;
   onInputChange?: (value: string) => void;
+  // New: streaming progress for client-driven iteration
+  streamProgress?: StreamProgress;
+  onStop?: () => void;
 }
 
 export function CollaborationChat({
@@ -51,6 +60,8 @@ export function CollaborationChat({
   onClearContext,
   inputValue,
   onInputChange,
+  streamProgress,
+  onStop,
 }: CollaborationChatProps) {
   // Use controlled state if provided, otherwise use local state as fallback
   const [localInput, setLocalInput] = useState('');
@@ -196,6 +207,22 @@ export function CollaborationChat({
             );
           })}
 
+          {isStreaming && streamProgress && streamProgress.status !== 'idle' && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/50 rounded border">
+              <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />
+              <span className="flex-1">
+                Iteration {streamProgress.iteration} - {streamProgress.charsReceived.toLocaleString()} chars
+                {streamProgress.status === 'processing' && ' (executing operations...)'}
+              </span>
+              {onStop && (
+                <Button variant="ghost" size="sm" onClick={onStop} className="h-6 px-2">
+                  <Square className="h-3 w-3 mr-1" />
+                  Stop
+                </Button>
+              )}
+            </div>
+          )}
+
           {isStreaming && streamingContent && (
             <div className={`px-3 py-2 rounded-md border text-xs ${getBlackboardColor('reasoning')}`}>
               <div className="flex items-center gap-2 mb-1">
@@ -206,7 +233,7 @@ export function CollaborationChat({
             </div>
           )}
 
-          {isStreaming && !streamingContent && (
+          {isStreaming && !streamingContent && !streamProgress && (
             <div className="flex gap-3 justify-start">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <Bot className="h-4 w-4 text-primary" />

@@ -9,11 +9,18 @@ const corsHeaders = {
 interface CollaborationRequest {
   collaborationId: string;
   projectId: string;
-  userMessage: string;
+  userMessage?: string;          // Only on iteration 1
   shareToken: string;
   maxIterations?: number;
-  currentContent?: string; // Editor content passed from client
-  attachedContext?: any; // Project context from ProjectSelector
+  currentContent?: string;       // Only on iteration 1
+  attachedContext?: any;         // Only on iteration 1
+  // Client-driven iteration support
+  iteration?: number;            // Current iteration (1, 2, 3...)
+  conversationHistory?: Array<{  // Passed from client after iteration 1
+    role: string;
+    content: string;
+  }>;
+  pendingOperationResults?: any[]; // Tool results from previous iteration
 }
 
 function parseAgentResponse(rawText: string): any {
@@ -80,11 +87,25 @@ serve(async (req) => {
   });
 
   try {
-    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 25, currentContent: clientContent, attachedContext } = 
-      await req.json() as CollaborationRequest;
+    const { 
+      collaborationId, 
+      projectId, 
+      userMessage, 
+      shareToken, 
+      maxIterations = 100, 
+      currentContent: clientContent, 
+      attachedContext,
+      iteration: requestedIteration,
+      conversationHistory: clientConversationHistory,
+      pendingOperationResults,
+    } = await req.json() as CollaborationRequest;
 
-    console.log(`Starting collaboration agent for collab ${collaborationId}`);
+    const iteration = requestedIteration || 1;
+    const isFirstIteration = iteration === 1;
+    
+    console.log(`Starting collaboration agent iteration ${iteration} for collab ${collaborationId}`);
     console.log(`Attached context received:`, attachedContext ? 'yes' : 'no');
+    console.log(`Pending operation results:`, pendingOperationResults?.length || 0);
 
     // Validate editor-level access (collaboration editing requires editor role)
     const { data: role, error: roleError } = await supabase.rpc(
@@ -115,9 +136,9 @@ serve(async (req) => {
     // Use clientContent from client if provided (captures user's live edits), else use DB content
     const initialDocumentContent = clientContent || collaboration.current_content;
 
-    // Build attached context string for system prompt
+    // Build attached context string for system prompt (only on first iteration)
     let attachedContextStr = "";
-    if (attachedContext) {
+    if (isFirstIteration && attachedContext) {
       const parts: string[] = [];
       
       if (attachedContext.projectMetadata) {
@@ -177,58 +198,60 @@ serve(async (req) => {
     const selectedModel = project?.selected_model || "gemini-2.5-flash";
     const maxTokens = project?.max_tokens || 16000;
     
-    // Determine API endpoint and key based on model
-    let apiEndpoint: string;
+    // Determine API settings based on model
     let apiKey: string;
     let modelName: string;
 
     if (selectedModel.startsWith("claude")) {
-      apiEndpoint = "https://api.anthropic.com/v1/messages";
       apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
       modelName = selectedModel;
     } else if (selectedModel.startsWith("grok")) {
-      apiEndpoint = "https://api.x.ai/v1/chat/completions";
       apiKey = Deno.env.get("XAI_API_KEY")!;
       modelName = selectedModel;
     } else {
       // Default to Gemini
-      apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
       apiKey = Deno.env.get("GEMINI_API_KEY")!;
       modelName = selectedModel;
     }
 
-    // Get recent history for context
-    const { data: recentHistory } = await supabase.rpc(
-      "get_collaboration_history_with_token",
-      { p_collaboration_id: collaborationId, p_token: shareToken }
-    );
-
-    const historyContext = (recentHistory || [])
-      .slice(-10)
-      .map((h: any) => `v${h.version_number} (${h.actor_type}): ${h.narrative || h.operation_type}`)
-      .join("\n");
-
-    // Get blackboard entries
-    const { data: blackboard } = await supabase.rpc(
-      "get_collaboration_blackboard_with_token",
-      { p_collaboration_id: collaborationId, p_token: shareToken }
-    );
-
-    const blackboardContext = (blackboard || [])
-      .slice(-10)
-      .map((b: any) => `[${b.entry_type}] ${b.content}`)
-      .join("\n");
+    // Get recent history for context (only on first iteration)
+    let historyContext = "";
+    let blackboardContext = "";
+    let chatContext = "";
     
-    // Get chat history for context
-    const { data: chatHistory } = await supabase.rpc(
-      "get_collaboration_messages_with_token",
-      { p_collaboration_id: collaborationId, p_token: shareToken }
-    );
+    if (isFirstIteration) {
+      const { data: recentHistory } = await supabase.rpc(
+        "get_collaboration_history_with_token",
+        { p_collaboration_id: collaborationId, p_token: shareToken }
+      );
 
-    const chatContext = (chatHistory || [])
-      .slice(-20)
-      .map((m: any) => `${m.role}: ${m.content.slice(0, 200)}`)
-      .join("\n");
+      historyContext = (recentHistory || [])
+        .slice(-10)
+        .map((h: any) => `v${h.version_number} (${h.actor_type}): ${h.narrative || h.operation_type}`)
+        .join("\n");
+
+      // Get blackboard entries
+      const { data: blackboard } = await supabase.rpc(
+        "get_collaboration_blackboard_with_token",
+        { p_collaboration_id: collaborationId, p_token: shareToken }
+      );
+
+      blackboardContext = (blackboard || [])
+        .slice(-10)
+        .map((b: any) => `[${b.entry_type}] ${b.content}`)
+        .join("\n");
+      
+      // Get chat history for context
+      const { data: chatHistory } = await supabase.rpc(
+        "get_collaboration_messages_with_token",
+        { p_collaboration_id: collaborationId, p_token: shareToken }
+      );
+
+      chatContext = (chatHistory || [])
+        .slice(-20)
+        .map((m: any) => `${m.role}: ${m.content.slice(0, 200)}`)
+        .join("\n");
+    }
 
     // Build system prompt
     const systemPrompt = `You are CollaborationAgent, a collaborative document editing assistant.
@@ -268,7 +291,7 @@ PROGRESS TRACKING:
 - Example: "Completed 3/10 chapters. Remaining: chapters 4-10. Next: writing chapter 4."
 - Continue iterating until your count matches the user's exact request
 
-RECENT EDIT HISTORY:
+${isFirstIteration ? `RECENT EDIT HISTORY:
 ${historyContext || "No edits yet"}
 
 AGENT REASONING HISTORY:
@@ -278,7 +301,7 @@ CONVERSATION HISTORY:
 ${chatContext || "No messages yet"}
 
 ${attachedContextStr ? `ATTACHED PROJECT CONTEXT (use this to inform your edits when relevant):
-${attachedContextStr}` : ''}
+${attachedContextStr}` : ''}` : ''}
 
 RESPONSE FORMAT:
 {
@@ -295,30 +318,38 @@ RESPONSE FORMAT:
 
 Start your response with { and end with }.`;
 
-    // Add user message to messages
-    const { data: insertedMessage } = await supabase.rpc(
-      "insert_collaboration_message_with_token",
-      {
-        p_collaboration_id: collaborationId,
-        p_token: shareToken,
-        p_role: "user",
-        p_content: userMessage,
-        p_metadata: {},
-      }
-    );
-
-    // Iteration loop - allow more iterations for complex tasks
-    const MAX_ITERATIONS = Math.min(maxIterations, 30);
-    let iteration = 0;
+    // Build conversation history
     let conversationHistory: Array<{ role: string; content: string }> = [];
-    let finalStatus = "in_progress";
-    let finalMessage = "";
-    let currentContent = initialDocumentContent;
-
-    conversationHistory.push({ 
-      role: "user", 
-      content: `Document to collaborate on:\n${addLineNumbers(currentContent)}\n\nUser request: ${userMessage}` 
-    });
+    
+    if (isFirstIteration) {
+      // First iteration: add user message to DB and build initial conversation
+      await supabase.rpc(
+        "insert_collaboration_message_with_token",
+        {
+          p_collaboration_id: collaborationId,
+          p_token: shareToken,
+          p_role: "user",
+          p_content: userMessage || "",
+          p_metadata: {},
+        }
+      );
+      
+      conversationHistory.push({ 
+        role: "user", 
+        content: `Document to collaborate on:\n${addLineNumbers(initialDocumentContent)}\n\nUser request: ${userMessage}` 
+      });
+    } else {
+      // Subsequent iterations: use client-provided conversation history
+      conversationHistory = clientConversationHistory || [];
+      
+      // Add pending operation results if any
+      if (pendingOperationResults && pendingOperationResults.length > 0) {
+        conversationHistory.push({
+          role: "user",
+          content: `Operation results:\n${JSON.stringify(pendingOperationResults, null, 2)}`
+        });
+      }
+    }
 
     // Stream encoder for SSE
     const encoder = new TextEncoder();
@@ -329,264 +360,245 @@ Start your response with { and end with }.`;
         };
 
         try {
-          while (iteration < MAX_ITERATIONS && finalStatus !== "completed") {
-            iteration++;
-            console.log(`\n=== Iteration ${iteration} ===`);
-            sendEvent({ type: "iteration", iteration, maxIterations: MAX_ITERATIONS });
+          console.log(`\n=== Iteration ${iteration} ===`);
+          sendEvent({ type: "iteration_start", iteration, maxIterations });
 
-            // Call LLM
-            let llmResponse: Response;
+          // Make LLM call with STREAMING
+          let rawOutputText = "";
+          
+          if (selectedModel.startsWith("gemini")) {
+            // Use streaming endpoint for Gemini
+            const streamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?key=${apiKey}&alt=sse`;
+            
+            const contents = conversationHistory.map((msg) => ({
+              role: msg.role === "assistant" ? "model" : "user",
+              parts: [{ text: msg.content }],
+            }));
 
-            if (selectedModel.startsWith("gemini")) {
-              const contents = conversationHistory.map((msg) => ({
-                role: msg.role === "assistant" ? "model" : "user",
-                parts: [{ text: msg.content }],
-              }));
-
-              llmResponse = await fetch(`${apiEndpoint}?key=${apiKey}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  systemInstruction: { parts: [{ text: systemPrompt }] },
-                  contents,
-                  generationConfig: {
-                    maxOutputTokens: maxTokens,
-                    temperature: 0.7,
-                    responseMimeType: "application/json",
-                  },
-                }),
-              });
-            } else if (selectedModel.startsWith("claude")) {
-              llmResponse = await fetch(apiEndpoint, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "x-api-key": apiKey,
-                  "anthropic-version": "2023-06-01",
-                },
-                body: JSON.stringify({
-                  model: modelName,
-                  max_tokens: maxTokens,
-                  system: systemPrompt,
-                  messages: conversationHistory.map((msg) => ({
-                    role: msg.role,
-                    content: msg.content,
-                  })),
-                }),
-              });
-            } else {
-              // Grok/xAI
-              llmResponse = await fetch(apiEndpoint, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                  model: modelName,
-                  messages: [
-                    { role: "system", content: systemPrompt },
-                    ...conversationHistory,
-                  ],
-                  max_tokens: maxTokens,
+            const llmResponse = await fetch(streamEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                generationConfig: {
+                  maxOutputTokens: maxTokens,
                   temperature: 0.7,
-                }),
-              });
-            }
+                },
+              }),
+            });
 
             if (!llmResponse.ok) {
               const errorText = await llmResponse.text();
-              throw new Error(`LLM API error: ${llmResponse.status} - ${errorText}`);
+              throw new Error(`Gemini API error: ${llmResponse.status} - ${errorText}`);
             }
 
-            const llmData = await llmResponse.json();
+            // Stream tokens
+            const reader = llmResponse.body?.getReader();
+            const decoder = new TextDecoder();
+            let textBuffer = "";
 
-            // Extract response text based on provider
-            let responseText: string;
-            if (selectedModel.startsWith("gemini")) {
-              responseText = llmData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            } else if (selectedModel.startsWith("claude")) {
-              responseText = llmData.content?.[0]?.text || "";
-            } else {
-              responseText = llmData.choices?.[0]?.message?.content || "";
-            }
-
-            const parsed = parseAgentResponse(responseText);
-            console.log("Parsed response:", JSON.stringify(parsed).slice(0, 500));
-
-            sendEvent({ type: "reasoning", reasoning: parsed.reasoning });
-
-            // Process operations
-            const operationResults: any[] = [];
-
-            for (const op of parsed.operations || []) {
-              sendEvent({ type: "operation", operation: op.type });
-
-              if (op.type === "read_artifact") {
-                // Just return current content with line numbers
-                operationResults.push({
-                  type: "read_artifact",
-                  success: true,
-                  content: addLineNumbers(currentContent),
-                });
-              } else if (op.type === "edit_lines") {
-                const { start_line, end_line, new_content, narrative } = op.params;
-
-                // Validate new_content before processing
-                if (new_content === undefined || new_content === null) {
-                  console.error("edit_lines operation missing new_content:", op.params);
-                  operationResults.push({
-                    type: "edit_lines",
-                    success: false,
-                    error: "Missing new_content in edit operation",
-                  });
-                  continue;
-                }
-
-                // Coerce new_content to string if needed
-                const contentToInsert = typeof new_content === 'string' 
-                  ? new_content 
-                  : String(new_content);
-
-                // Perform the edit
-                const lines = currentContent.split("\n");
-                const before = lines.slice(0, start_line - 1);
-                const after = lines.slice(end_line);
-                const newLines = contentToInsert.split("\n");
-                currentContent = [...before, ...newLines, ...after].join("\n");
-
-                // Get latest version
-                const { data: latestVersion } = await supabase.rpc(
-                  "get_collaboration_latest_version_with_token",
-                  { p_collaboration_id: collaborationId, p_token: shareToken }
-                );
-
-                const newVersion = (latestVersion || 0) + 1;
-
-                // Insert history entry
-                await supabase.rpc("insert_collaboration_edit_with_token", {
-                  p_collaboration_id: collaborationId,
-                  p_token: shareToken,
-                  p_operation_type: "edit",
-                  p_start_line: start_line,
-                  p_end_line: end_line,
-                  p_old_content: lines.slice(start_line - 1, end_line).join("\n"),
-                  p_new_content: contentToInsert,
-                  p_new_full_content: currentContent,
-                  p_narrative: narrative || "Agent edit",
-                  p_actor_type: "agent",
-                  p_actor_identifier: "AI Agent",
-                });
-
-                // Update collaboration current content
-                await supabase.rpc("update_artifact_collaboration_with_token", {
-                  p_collaboration_id: collaborationId,
-                  p_token: shareToken,
-                  p_current_content: currentContent,
-                });
-
-                operationResults.push({
-                  type: "edit_lines",
-                  success: true,
-                  version: newVersion,
-                  lines_affected: `${start_line}-${end_line}`,
-                  narrative,
-                });
-
-                sendEvent({ 
-                  type: "edit", 
-                  version: newVersion, 
-                  startLine: start_line, 
-                  endLine: end_line,
-                  narrative,
-                  content: currentContent  // Send actual new content to prevent stale data
-                });
-
-                // Broadcast edit for multi-user real-time sync
-                try {
-                  await supabase.channel(`collaboration-${collaborationId}`).send({
-                    type: 'broadcast',
-                    event: 'collaboration_edit',
-                    payload: { 
-                      edit: { version: newVersion, startLine: start_line, endLine: end_line },
-                      version: newVersion,
-                      actor: 'AI Agent'
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                textBuffer += decoder.decode(value, { stream: true });
+                
+                let newlineIndex: number;
+                while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                  const line = textBuffer.slice(0, newlineIndex);
+                  textBuffer = textBuffer.slice(newlineIndex + 1);
+                  
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === "[DONE]") continue;
+                  
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                    if (text) {
+                      rawOutputText += text;
+                      // Send streaming event with character count
+                      sendEvent({ type: 'llm_streaming', iteration, charsReceived: rawOutputText.length, delta: text });
                     }
-                  });
-                } catch (broadcastError) {
-                  console.warn('Failed to broadcast edit:', broadcastError);
+                  } catch (e) { /* ignore partial chunks */ }
                 }
               }
+              reader.releaseLock();
+            }
+          } else if (selectedModel.startsWith("claude")) {
+            // Use streaming for Claude
+            const llmResponse = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify({
+                model: modelName,
+                max_tokens: maxTokens,
+                stream: true,
+                system: systemPrompt,
+                messages: conversationHistory.map((msg) => ({
+                  role: msg.role,
+                  content: msg.content,
+                })),
+              }),
+            });
+
+            if (!llmResponse.ok) {
+              const errorText = await llmResponse.text();
+              throw new Error(`Claude API error: ${llmResponse.status} - ${errorText}`);
             }
 
-            // Add blackboard entry if provided
-            if (parsed.blackboard_entry) {
-              await supabase.rpc("insert_collaboration_blackboard_with_token", {
-                p_collaboration_id: collaborationId,
-                p_token: shareToken,
-                p_entry_type: parsed.blackboard_entry.type || "progress",
-                p_content: parsed.blackboard_entry.content,
-                p_metadata: {},
-              });
+            // Stream tokens
+            const reader = llmResponse.body?.getReader();
+            const decoder = new TextDecoder();
+            let textBuffer = "";
 
-              // Broadcast blackboard for multi-user real-time sync
-              try {
-                await supabase.channel(`collaboration-${collaborationId}`).send({
-                  type: 'broadcast',
-                  event: 'collaboration_blackboard',
-                  payload: { entry: { type: parsed.blackboard_entry.type || "progress", content: parsed.blackboard_entry.content } }
-                });
-              } catch (broadcastError) {
-                console.warn('Failed to broadcast blackboard:', broadcastError);
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                textBuffer += decoder.decode(value, { stream: true });
+                
+                let newlineIndex: number;
+                while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                  const line = textBuffer.slice(0, newlineIndex);
+                  textBuffer = textBuffer.slice(newlineIndex + 1);
+                  
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === "[DONE]") continue;
+                  
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                      rawOutputText += parsed.delta.text;
+                      sendEvent({ type: 'llm_streaming', iteration, charsReceived: rawOutputText.length, delta: parsed.delta.text });
+                    }
+                  } catch (e) { /* ignore */ }
+                }
               }
+              reader.releaseLock();
             }
-
-            // Update conversation history
-            conversationHistory.push({
-              role: "assistant",
-              content: JSON.stringify(parsed),
+          } else {
+            // Grok/xAI with streaming
+            const llmResponse = await fetch("https://api.x.ai/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                stream: true,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  ...conversationHistory,
+                ],
+                max_tokens: maxTokens,
+                temperature: 0.7,
+              }),
             });
 
-            if (operationResults.length > 0) {
-              conversationHistory.push({
-                role: "user",
-                content: `Operation results:\n${JSON.stringify(operationResults, null, 2)}`,
-              });
+            if (!llmResponse.ok) {
+              const errorText = await llmResponse.text();
+              throw new Error(`Grok API error: ${llmResponse.status} - ${errorText}`);
             }
 
-            // Check status
-            if (parsed.status === "completed") {
-              finalStatus = "completed";
-              finalMessage = parsed.message || "Changes completed successfully.";
+            // Stream tokens
+            const reader = llmResponse.body?.getReader();
+            const decoder = new TextDecoder();
+            let textBuffer = "";
+
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                textBuffer += decoder.decode(value, { stream: true });
+                
+                let newlineIndex: number;
+                while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                  const line = textBuffer.slice(0, newlineIndex);
+                  textBuffer = textBuffer.slice(newlineIndex + 1);
+                  
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === "[DONE]") continue;
+                  
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const text = parsed.choices?.[0]?.delta?.content || "";
+                    if (text) {
+                      rawOutputText += text;
+                      sendEvent({ type: 'llm_streaming', iteration, charsReceived: rawOutputText.length, delta: text });
+                    }
+                  } catch (e) { /* ignore */ }
+                }
+              }
+              reader.releaseLock();
             }
           }
 
-          // Insert assistant message with final response
-          await supabase.rpc("insert_collaboration_message_with_token", {
-            p_collaboration_id: collaborationId,
-            p_token: shareToken,
-            p_role: "assistant",
-            p_content: finalMessage || "I've made the requested changes to the document.",
-            p_metadata: { iterations: iteration },
-          });
+          sendEvent({ type: 'llm_complete', iteration, totalChars: rawOutputText.length });
 
-          // Broadcast assistant message for multi-user real-time sync
-          try {
-            await supabase.channel(`collaboration-${collaborationId}`).send({
-              type: 'broadcast',
-              event: 'collaboration_message',
-              payload: { message: { role: 'assistant', content: finalMessage || "I've made the requested changes to the document." } }
-            });
-          } catch (broadcastError) {
-            console.warn('Failed to broadcast message:', broadcastError);
-          }
+          // Parse the agent's response
+          const parsed = parseAgentResponse(rawOutputText);
+          console.log("Parsed response:", JSON.stringify(parsed).slice(0, 500));
 
+          sendEvent({ type: "reasoning", reasoning: parsed.reasoning });
+
+          // Return operations to client for execution - don't execute them here
+          // The client will:
+          // 1. Execute read_artifact locally (return current content)
+          // 2. Execute edit_lines locally (update content, save to DB)
+          // 3. Pass results back on next iteration
+          
+          // Update conversation history with assistant response
+          const updatedConversationHistory = [
+            ...conversationHistory,
+            { role: "assistant", content: JSON.stringify(parsed) }
+          ];
+
+          // Send iteration complete with operations for client to execute
           sendEvent({ 
-            type: "done", 
-            status: finalStatus, 
-            message: finalMessage,
-            iterations: iteration 
+            type: "iteration_complete", 
+            iteration,
+            status: parsed.status || "in_progress",
+            operations: parsed.operations || [],
+            blackboardEntry: parsed.blackboard_entry || null,
+            message: parsed.message || null,
+            conversationHistory: updatedConversationHistory,
           });
+
+          // If this is the final iteration (completed), insert assistant message to DB
+          if (parsed.status === "completed") {
+            const finalMessage = parsed.message || "I've made the requested changes to the document.";
+            
+            await supabase.rpc("insert_collaboration_message_with_token", {
+              p_collaboration_id: collaborationId,
+              p_token: shareToken,
+              p_role: "assistant",
+              p_content: finalMessage,
+              p_metadata: { iterations: iteration },
+            });
+
+            // Broadcast assistant message for multi-user real-time sync
+            try {
+              await supabase.channel(`collaboration-${collaborationId}`).send({
+                type: 'broadcast',
+                event: 'collaboration_message',
+                payload: { message: { role: 'assistant', content: finalMessage } }
+              });
+            } catch (broadcastError) {
+              console.warn('Failed to broadcast message:', broadcastError);
+            }
+          }
 
           controller.close();
         } catch (error) {
