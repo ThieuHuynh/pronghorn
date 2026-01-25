@@ -918,7 +918,7 @@ async function updateServiceConfigRenderService(
   const updatePayload: any = {
     name: serviceName,
     branch: deployment.branch || 'main',
-    autoDeploy: 'no',
+    autoDeploy: 'yes',
   };
 
   if (isStaticSite) {
