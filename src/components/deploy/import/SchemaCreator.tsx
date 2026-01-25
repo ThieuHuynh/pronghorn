@@ -70,6 +70,9 @@ export default function SchemaCreator({
   const [addAutoId, setAddAutoId] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns || []);
   
+  // Local state for table name to allow editing without losing focus
+  const [localTableName, setLocalTableName] = useState(tableName);
+  
   // Track the headers we've initialized with to prevent re-running inference
   const initializedHeadersRef = useRef<string | null>(null);
   const prevTableDefRef = useRef<string>('');
@@ -228,7 +231,7 @@ export default function SchemaCreator({
     ));
   };
 
-  const sanitizedTableName = sanitizeTableName(tableName);
+  const sanitizedTableName = sanitizeTableName(localTableName);
   const hasValidName = sanitizedTableName.length > 0;
 
   // Count renamed columns
@@ -241,12 +244,22 @@ export default function SchemaCreator({
         <Label>Table Name</Label>
         <div className="flex items-center gap-2">
           <Input
-            value={tableName}
-            onChange={(e) => onTableNameChange(e.target.value)}
+            value={localTableName}
+            onChange={(e) => setLocalTableName(e.target.value)}
+            onBlur={() => {
+              if (localTableName !== tableName) {
+                onTableNameChange(localTableName);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
             placeholder="Enter table name"
             className={cn(!hasValidName && "border-destructive")}
           />
-          {tableName !== sanitizedTableName && (
+          {localTableName !== sanitizedTableName && (
             <Badge variant="secondary" className="whitespace-nowrap">
               → {sanitizedTableName}
             </Badge>
