@@ -280,9 +280,17 @@ export default function DatabaseImportWizard({
 
   // Get selected data rows for import
   const selectedDataRows = useMemo(() => {
+    // For multi-table JSON, use per-table selection
+    if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+      const tableSelection = selectedRowsByTable.get(selectedJsonTable);
+      if (!tableSelection || tableSelection.size === 0) return dataRows;
+      return dataRows.filter((_, idx) => tableSelection.has(idx));
+    }
+    
+    // For Excel/CSV, use global selectedRows
     if (selectedRows.size === 0) return dataRows;
     return dataRows.filter((_, idx) => selectedRows.has(idx));
-  }, [dataRows, selectedRows]);
+  }, [dataRows, selectedRows, fileType, jsonData, selectedJsonTable, selectedRowsByTable]);
 
   // Memoize sample data for SchemaCreator to prevent re-inference on every render
   const memoizedSampleData = useMemo(() => 
