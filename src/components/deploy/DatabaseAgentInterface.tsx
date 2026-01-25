@@ -45,6 +45,13 @@ interface SchemaInfo {
   functions: string[];
 }
 
+interface SqlExecutionResult {
+  columns: string[];
+  rows: any[];
+  rowCount: number;
+  executionTime?: number;
+}
+
 interface DatabaseAgentInterfaceProps {
   projectId: string;
   databaseId?: string;
@@ -54,6 +61,7 @@ interface DatabaseAgentInterfaceProps {
   onSchemaRefresh: () => void;
   onMigrationRefresh?: () => void;
   onCollapse?: () => void;
+  onSqlExecuted?: (sql: string, results: SqlExecutionResult) => void;
 }
 
 export function DatabaseAgentInterface({
@@ -64,7 +72,8 @@ export function DatabaseAgentInterface({
   schemas,
   onSchemaRefresh,
   onMigrationRefresh,
-  onCollapse
+  onCollapse,
+  onSqlExecuted
 }: DatabaseAgentInterfaceProps) {
   const { messages: loadedMessages, loading: messagesLoading, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken, "database");
   
@@ -461,6 +470,16 @@ export function DatabaseAgentInterface({
                       setStreamProgress(p => ({ ...p, currentOperation: null }));
                       // DON'T refresh schema during stream - defer to after iteration completes
                       // to prevent connection drops
+                      
+                      // Surface execute_sql results to parent for display in query results viewer
+                      if (data.operation === 'execute_sql' && data.success && onSqlExecuted) {
+                        onSqlExecuted(data.sql || '', {
+                          columns: data.columns || [],
+                          rows: data.rows || [],
+                          rowCount: data.rowCount || 0,
+                          executionTime: data.executionTime
+                        });
+                      }
                       break;
                     case 'iteration_complete':
                       status = data.status;
