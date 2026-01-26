@@ -795,6 +795,14 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   // Memoized callback handlers for agent panel to prevent remounting
   const handleSchemaRefresh = useCallback(() => loadSchema(true), [loadSchema]);
 
+  // Handle agent-generated SQL injection into editor
+  const handleWriteSql = useCallback((sql: string, description?: string) => {
+    setCurrentQuery(sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.success(description ? `Loaded: ${description}` : 'SQL loaded into editor for review');
+  }, [isMobile]);
+
   // Agent panel props (memoized to prevent remounting)
   const agentPanelProps = useMemo(() => ({
     projectId: database?.project_id || externalConnection?.project_id || '',
@@ -804,7 +812,8 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     schemas,
     onSchemaRefresh: handleSchemaRefresh,
     onMigrationRefresh: loadMigrations,
-  }), [database?.project_id, externalConnection?.project_id, databaseId, connectionId, shareToken, schemas, handleSchemaRefresh, loadMigrations]);
+    onWriteSql: handleWriteSql,
+  }), [database?.project_id, externalConnection?.project_id, databaseId, connectionId, shareToken, schemas, handleSchemaRefresh, loadMigrations, handleWriteSql]);
 
   if (isMobile) {
     return (

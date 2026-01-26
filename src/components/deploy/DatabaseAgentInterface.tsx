@@ -54,6 +54,7 @@ interface DatabaseAgentInterfaceProps {
   onSchemaRefresh: () => void;
   onMigrationRefresh?: () => void;
   onCollapse?: () => void;
+  onWriteSql?: (sql: string, description?: string) => void;
 }
 
 export function DatabaseAgentInterface({
@@ -64,7 +65,8 @@ export function DatabaseAgentInterface({
   schemas,
   onSchemaRefresh,
   onMigrationRefresh,
-  onCollapse
+  onCollapse,
+  onWriteSql
 }: DatabaseAgentInterfaceProps) {
   const { messages: loadedMessages, loading: messagesLoading, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken, "database");
   
@@ -461,6 +463,12 @@ export function DatabaseAgentInterface({
                       setStreamProgress(p => ({ ...p, currentOperation: null }));
                       // DON'T refresh schema during stream - defer to after iteration completes
                       // to prevent connection drops
+                      break;
+                    case 'sql_generated':
+                      // Agent generated SQL for user review - inject into editor
+                      if (onWriteSql && data.sql) {
+                        onWriteSql(data.sql, data.description);
+                      }
                       break;
                     case 'iteration_complete':
                       status = data.status;

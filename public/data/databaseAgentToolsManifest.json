@@ -19,7 +19,7 @@
       }
     },
     "execute_sql": {
-      "description": "Execute SQL queries on the database. Supports ALL PostgreSQL statements: SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, GRANT, etc. Multiple statements can be separated by semicolons and executed sequentially. DDL changes (CREATE, ALTER, DROP) are AUTOMATICALLY captured as migrations - no manual tracking needed.",
+      "description": "Execute SQL queries on the database immediately. Supports ALL PostgreSQL statements: SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, GRANT, etc. Multiple statements can be separated by semicolons and executed sequentially. DDL changes (CREATE, ALTER, DROP) are AUTOMATICALLY captured as migrations - no manual tracking needed.",
       "category": "execute",
       "enabled": true,
       "params": {
@@ -27,6 +27,23 @@
           "type": "string",
           "required": true,
           "description": "SQL query or queries to execute. Separate multiple statements with semicolons."
+        }
+      }
+    },
+    "write_sql": {
+      "description": "Generate SQL and return it to the user's SQL editor for manual review and execution. Use this when the user asks for a query without wanting immediate execution, or when they want to review/save the SQL before running it. The SQL will be automatically pasted into the query editor. DO NOT execute the SQL - just generate and return it.",
+      "category": "generate",
+      "enabled": true,
+      "params": {
+        "sql": {
+          "type": "string",
+          "required": true,
+          "description": "The complete SQL query or queries to return to the user's editor"
+        },
+        "description": {
+          "type": "string",
+          "required": false,
+          "description": "Brief explanation of what the SQL does (shown as a toast message)"
         }
       }
     },

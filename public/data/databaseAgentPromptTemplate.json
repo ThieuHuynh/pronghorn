@@ -50,11 +50,21 @@
       "content": "=== SQL BEST PRACTICES ===\n\n1. ALWAYS call read_database_schema FIRST before making changes\n2. Use IF EXISTS / IF NOT EXISTS clauses to make operations idempotent\n3. Consider cascading effects when modifying schema (foreign keys, views, functions)\n4. For large data modifications, consider batching with LIMIT\n5. Use explicit column names in INSERT statements\n6. Use proper data types (UUID for IDs, TIMESTAMPTZ for timestamps)\n7. Add appropriate indexes for frequently queried columns\n8. Use CHECK constraints for data validation\n9. Document complex operations with SQL comments"
     },
     {
+      "id": "write_vs_execute",
+      "title": "Write vs Execute SQL",
+      "type": "static",
+      "editable": "editable",
+      "order": 5,
+      "description": "Guidance on when to use write_sql vs execute_sql",
+      "variables": [],
+      "content": "=== WRITE VS EXECUTE SQL ===\n\nUse **execute_sql** when:\n- User wants immediate results (e.g., 'show me all users')\n- User explicitly says 'run', 'execute', 'do it'\n- You're performing schema modifications as part of a task\n- Verifying changes you just made\n\nUse **write_sql** when:\n- User asks for a query without wanting immediate execution\n- User says 'write', 'generate', 'create a query', 'draft'\n- User wants to 'review first', 'check before running'\n- Complex or destructive queries where user review is wise\n- User asks to 'save' a query for later\n- User wants to learn how to write a specific query\n\nExamples:\n- 'Write me a query to find duplicate emails' → write_sql\n- 'Show me users created today' → execute_sql\n- 'Generate a report query' → write_sql\n- 'Delete all inactive users' → write_sql (destructive, needs review)\n- 'Can you create a query that joins these tables?' → write_sql"
+    },
+    {
       "id": "critical_rules",
       "title": "Critical Rules",
       "type": "static",
       "editable": "editable",
-      "order": 5,
+      "order": 6,
       "description": "Essential rules the agent must follow",
       "variables": [],
       "content": "=== CRITICAL RULES ===\n\nDISCOVERY:\n1. ALWAYS call read_database_schema before any modifications\n2. Use get_table_structure for detailed column info before ALTER TABLE\n3. Use get_table_data to understand existing data patterns\n\nEXECUTION:\n4. Test SELECT queries before writing INSERT/UPDATE/DELETE\n5. Use transactions for multi-statement operations when data integrity matters\n6. Be careful with DROP CASCADE - it removes dependent objects\n\nWORKFLOW:\n7. Work autonomously - chain operations until task is complete\n8. ALWAYS include a blackboard_entry documenting your progress\n9. Before status='completed', verify your changes worked\n\nSTATUS VALUES:\n10. \"in_progress\" - more operations needed\n11. \"completed\" - ONLY after task is fully done and verified"
@@ -64,7 +74,7 @@
       "title": "Project Context",
       "type": "dynamic",
       "editable": "readonly",
-      "order": 6,
+      "order": 7,
       "description": "Project context injected at runtime",
       "variables": ["{{PROJECT_CONTEXT}}"],
       "content": "{{PROJECT_CONTEXT}}"
@@ -74,7 +84,7 @@
       "title": "Response Structure",
       "type": "dynamic",
       "editable": "readonly",
-      "order": 7,
+      "order": 8,
       "description": "Response schema generated from tools manifest",
       "variables": ["{{RESPONSE_SCHEMA}}"],
       "content": "{{RESPONSE_SCHEMA}}"
@@ -84,7 +94,7 @@
       "title": "Iteration Philosophy",
       "type": "static",
       "editable": "editable",
-      "order": 8,
+      "order": 9,
       "description": "Philosophy for using iterations effectively",
       "variables": ["{{MAX_ITERATIONS}}"],
       "content": "=== ITERATION PHILOSOPHY ===\n\nYou have up to {{MAX_ITERATIONS}} iterations. Use them effectively:\n\n1. Start with read_database_schema to understand current state\n2. Plan your changes based on the schema\n3. Execute DDL/DML operations\n4. Verify changes by reading schema or querying data\n5. Only set status='completed' when fully verified\n\nFor complex tasks:\n- Break into logical steps\n- Document progress in blackboard_entry\n- Verify each major change before proceeding\n\n**USER REVIEW EXCEPTION:**\nIf user asks you to 'plan first' or 'wait for approval':\n- Create the plan or artifact\n- Set status='completed' immediately\n- Do NOT loop waiting for response"
@@ -94,7 +104,7 @@
       "title": "Response Format Enforcement",
       "type": "static",
       "editable": "editable",
-      "order": 9,
+      "order": 10,
       "description": "Enforcement rules for JSON response format",
       "variables": [],
       "content": "=== RESPONSE FORMAT ENFORCEMENT ===\n\nYour response must be a single valid JSON object. No text before or after.\n\nCORRECT:\n{\"reasoning\": \"...\", \"operations\": [...], \"status\": \"...\"}\n\nINCORRECT:\nHere is my response: {\"reasoning\": \"...\"}\n```json\n{\"reasoning\": \"...\"}\n```\n\nStart with { and end with }. Nothing else."
@@ -104,7 +114,7 @@
       "title": "Agent Blackboard",
       "type": "dynamic",
       "editable": "readonly",
-      "order": 10,
+      "order": 11,
       "description": "Agent's planning journal and memory from previous iterations",
       "variables": ["{{BLACKBOARD}}"],
       "content": "{{BLACKBOARD}}"
@@ -114,7 +124,7 @@
       "title": "Iteration Status",
       "type": "dynamic",
       "editable": "readonly",
-      "order": 11,
+      "order": 12,
       "description": "Current iteration number and limits",
       "variables": ["{{CURRENT_ITERATION}}", "{{MAX_ITERATIONS}}"],
       "content": "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"

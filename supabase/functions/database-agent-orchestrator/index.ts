@@ -511,6 +511,7 @@ type SSEEventType =
   | 'llm_complete'
   | 'operation_start'
   | 'operation_complete'
+  | 'sql_generated'
   | 'iteration_complete'
   | 'error';
 
@@ -677,7 +678,8 @@ serve(async (req) => {
     description: "Database operation tools",
     database_operations: {
       read_database_schema: { description: "Retrieve complete schema structure. Use FIRST before any modifications.", category: "discovery", enabled: true, params: { schemas: { type: "array", required: false, description: "Filter to specific schema names" } } },
-      execute_sql: { description: "Execute SQL queries. DDL statements auto-captured as migrations.", category: "execute", enabled: true, params: { sql: { type: "string", required: true, description: "SQL to execute" } } },
+      execute_sql: { description: "Execute SQL queries immediately. DDL statements auto-captured as migrations.", category: "execute", enabled: true, params: { sql: { type: "string", required: true, description: "SQL to execute" } } },
+      write_sql: { description: "Generate SQL and return it to the user's SQL editor for review. Use when user wants to see/save the query before executing.", category: "generate", enabled: true, params: { sql: { type: "string", required: true, description: "SQL to return to editor" }, description: { type: "string", required: false, description: "Brief explanation" } } },
       get_table_data: { description: "Retrieve sample data from a table.", category: "read", enabled: true, params: { schema: { type: "string", required: true, description: "Schema name" }, table: { type: "string", required: true, description: "Table name" }, limit: { type: "integer", required: false, description: "Row limit (default: 100)" }, offset: { type: "integer", required: false, description: "Offset (default: 0)" } } },
       get_table_structure: { description: "Get detailed column info for a table.", category: "read", enabled: true, params: { schema: { type: "string", required: true, description: "Schema name" }, table: { type: "string", required: true, description: "Table name" } } },
       get_definition: { description: "Get CREATE statement for a database object.", category: "read", enabled: true, params: { object_type: { type: "string", required: true, description: "Type: table, view, function, trigger, sequence, type, index" }, schema: { type: "string", required: true, description: "Schema name" }, name: { type: "string", required: true, description: "Object name" } } },
@@ -1353,6 +1355,27 @@ ${blackboardContent}`;
                   throw new Error(data.error);
                 }
                 result = data;
+                break;
+              }
+
+              case "write_sql": {
+                // Don't execute - just package the SQL to send to frontend
+                const sqlContent = op.params.sql;
+                const description = op.params.description || "Generated SQL";
+                
+                result = {
+                  success: true,
+                  sql: sqlContent,
+                  description: description,
+                  message: `SQL query generated for user review: ${description}`
+                };
+                
+                // Send a special SSE event to inject SQL into editor
+                sendSSE('sql_generated', { 
+                  sql: sqlContent, 
+                  description: description,
+                  iteration: iteration
+                });
                 break;
               }
 
