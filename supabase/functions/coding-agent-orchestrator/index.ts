@@ -1294,17 +1294,25 @@ serve(async (req) => {
             continue;
           }
           if (op.type === 'edit_lines') {
-            const fileId = op.params.file_id;
-            if (!editsByFile.has(fileId)) editsByFile.set(fileId, []);
-            editsByFile.get(fileId)!.push(op);
+            // Use file_id if provided, otherwise use path as grouping key
+            const groupKey = op.params.file_id || op.params.path || 'unknown';
+            if (!editsByFile.has(groupKey)) editsByFile.set(groupKey, []);
+            editsByFile.get(groupKey)!.push(op);
           } else {
             nonEditOps.push(op);
           }
         }
 
         const sortedOperations: any[] = [...nonEditOps];
-        for (const [fileId, edits] of editsByFile) {
+        for (const [groupKey, edits] of editsByFile) {
+          if (edits.length > 1) {
+            console.log(`[EDIT SORT] Grouping ${edits.length} edits for: ${groupKey}`);
+            console.log(`[EDIT SORT] Lines before sort: ${edits.map((e: any) => e.params.start_line).join(', ')}`);
+          }
           edits.sort((a, b) => b.params.start_line - a.params.start_line);
+          if (edits.length > 1) {
+            console.log(`[EDIT SORT] Lines after sort: ${edits.map((e: any) => e.params.start_line).join(', ')}`);
+          }
           let lastStartLine = Infinity;
           for (const edit of edits) {
             if (edit.params.end_line >= lastStartLine) {
@@ -1612,6 +1620,11 @@ serve(async (req) => {
                     total_lines: newLines.length,
                   };
                   result.data[0].total_lines = newLines.length;
+                  result.data[0].path = fileData.path;
+                  
+                  // CRITICAL: Attach fresh content with line numbers so agent doesn't use stale data
+                  const numberedContent = newLines.map((l: string, i: number) => `<<${i + 1}>>${l}`).join('\n');
+                  result.data[0].fresh_content = numberedContent;
                 }
                 filesChanged = true;
                 break;
@@ -2017,6 +2030,13 @@ serve(async (req) => {
                     `file now ${v.total_lines} lines`;
                 } else {
                   summary.summary = `Edited file, now ${r.data?.[0]?.total_lines || 'unknown'} lines`;
+                }
+                // CRITICAL: Auto-attach fresh file content so agent doesn't use stale data
+                if (r.data?.[0]?.fresh_content) {
+                  summary.path = r.data[0].path;
+                  summary.fresh_content = r.data[0].fresh_content;
+                  summary.total_lines = r.data[0].total_lines;
+                  summary.content_note = "FRESH FILE CONTENT (replaces any previous read_file for this path)";
                 }
                 break;
               case "create_file":
