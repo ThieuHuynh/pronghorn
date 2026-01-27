@@ -1,157 +1,117 @@
 
 
-## Plan: Auto-Inject Fresh File Content After Edits + Fix Grouping Bug
+## Plan: Fix Contradictory Prompt Rules Causing Slow Agent
 
-### Problem Summary
+### Problem Identified
 
-The agent keeps corrupting files because:
+The agent is slow because of **contradictory instructions** in the prompt template:
 
-| Issue | Root Cause |
-|-------|------------|
-| **Stale file content in history** | `read_file` results with full file content are persisted to DB and loaded on every iteration. After `edit_lines`, the agent still sees the OLD content from a previous `read_file`. |
-| **Agent skips re-reading** | Agent assumes the file content from history is current, so it uses stale line numbers. |
-| **Grouping bug** | Edits using `path` instead of `file_id` all group under `undefined`, causing incorrect sort/overlap detection. |
+| Section | Order | Rule | Conflict |
+|---------|-------|------|----------|
+| `critical_rules` | 4 | "MANDATORY: Call read_file BEFORE edit_lines" | **Causes read before EVERY edit** |
+| `operation_batching` | 8 | "AFTER EDITING, DO NOT RE-READ" | Ignored - lower priority |
+| `edit_safety` | 8.5 | "You do NOT need to read_file again after editing" | Ignored - lower priority |
+
+The agent follows the **higher-priority** `critical_rules` (order 4), which mandates reading before every edit, causing:
+- One edit per iteration
+- Redundant file reads
+- Extremely slow performance
 
 ### Solution
 
-**After every `edit_lines`, automatically include the fresh file content in the operation result** so it overwrites any stale content in the agent's context.
+Update `critical_rules` to clarify that `read_file` is only needed for **first access**, not every edit. The `fresh_content` from edits provides updated line numbers.
 
 ---
 
-### Implementation Details
+### Implementation
 
-#### Fix 1: Auto-Inject Fresh Content After edit_lines
+**File: `public/data/codingAgentPromptTemplate.json`**
 
-**File: `supabase/functions/coding-agent-orchestrator/index.ts`**
+Update the `critical_rules` content (line 50) to replace the conflicting rule 5:
 
-In the `edit_lines` success block (around line 1586-1615), the `newContent` already exists. We just need to attach it to the result AND include it in the operation summary.
-
-**Current edit_lines summary (lines 2011-2020):**
-```typescript
-case "edit_lines":
-  if (r.data?.[0]?.verification) {
-    const v = r.data[0].verification;
-    summary.verification = v;
-    summary.summary = `Edited lines ${v.start_line}-${v.end_line}, ...`;
-  }
-  break;
+**Current (causing slowness):**
+```
+EDITING:
+4. ALWAYS use edit_lines for targeted changes - preserves git blame, cleaner diffs
+5. MANDATORY: Call read_file BEFORE edit_lines to see current content and line numbers
+6. Prefer "path" over "file_id" for operations - system resolves paths automatically
+7. After edit_lines, check the verification object to confirm your edit worked
 ```
 
-**Updated - also include fresh file content with line numbers:**
-```typescript
-case "edit_lines":
-  if (r.data?.[0]?.verification) {
-    const v = r.data[0].verification;
-    summary.verification = v;
-    summary.summary = `Edited lines ${v.start_line}-${v.end_line}, ` +
-      `replaced ${v.lines_replaced} with ${v.lines_inserted} lines, ` +
-      `file now ${v.total_lines} lines`;
-  }
-  // CRITICAL: Auto-attach fresh file content so agent doesn't use stale data
-  if (r.data?.[0]?.fresh_content) {
-    summary.path = r.data[0].path;
-    summary.fresh_content = r.data[0].fresh_content;
-    summary.total_lines = r.data[0].total_lines;
-    summary.content_note = "FRESH FILE CONTENT (replaces any previous read_file for this path)";
-  }
-  break;
+**Updated (efficient):**
+```
+EDITING:
+4. ALWAYS use edit_lines for targeted changes - preserves git blame, cleaner diffs
+5. Call read_file BEFORE editing a file for the FIRST TIME this session
+6. AFTER edit_lines, use the 'fresh_content' from the result - DO NOT re-read the same file
+7. Prefer "path" over "file_id" for operations - system resolves paths automatically
+8. After edit_lines, check the verification object to confirm your edit worked
 ```
 
-**In edit_lines success block (around line 1614), add fresh_content to result:**
-```typescript
-result.data[0].verification = { ... };
-result.data[0].total_lines = newLines.length;
-result.data[0].path = fileData.path;
+Also update the WORKFLOW section to renumber and add batching emphasis:
 
-// Attach fresh content with line numbers for next iteration
-const numberedContent = newLines.map((l: string, i: number) => `<<${i + 1}>>${l}`).join('\n');
-result.data[0].fresh_content = numberedContent;
+**Updated WORKFLOW:**
 ```
+WORKFLOW:
+9. Work autonomously - chain operations, DO NOT stop after a single operation
+10. BATCH AGGRESSIVELY: Include 5-20 operations per response - single-operation responses are wasteful
+11. ALWAYS include a blackboard_entry in EVERY response (required)
+12. Before status='completed', call get_staged_changes to verify your changes
 
----
-
-#### Fix 2: Use Path for Grouping When file_id is Missing
-
-**File: `supabase/functions/coding-agent-orchestrator/index.ts`** (Lines 1296-1302)
-
-**Current (broken):**
-```typescript
-if (op.type === 'edit_lines') {
-  const fileId = op.params.file_id;
-  if (!editsByFile.has(fileId)) editsByFile.set(fileId, []);
-  editsByFile.get(fileId)!.push(op);
-}
-```
-
-**Fixed:**
-```typescript
-if (op.type === 'edit_lines') {
-  // Use file_id if provided, otherwise use path as grouping key
-  const groupKey = op.params.file_id || op.params.path || 'unknown';
-  if (!editsByFile.has(groupKey)) editsByFile.set(groupKey, []);
-  editsByFile.get(groupKey)!.push(op);
-}
-```
-
----
-
-#### Fix 3: Add Same-File Grouping Logging
-
-Add debug logging to verify edits are being grouped and sorted correctly:
-
-```typescript
-for (const [groupKey, edits] of editsByFile) {
-  if (edits.length > 1) {
-    console.log(`[EDIT SORT] Grouping ${edits.length} edits for: ${groupKey}`);
-    console.log(`[EDIT SORT] Lines before sort: ${edits.map(e => e.params.start_line).join(', ')}`);
-  }
-  edits.sort((a, b) => b.params.start_line - a.params.start_line);
-  if (edits.length > 1) {
-    console.log(`[EDIT SORT] Lines after sort: ${edits.map(e => e.params.start_line).join(', ')}`);
-  }
-  // ... rest of overlap check
-}
+STATUS VALUES:
+13. "in_progress" - need more operations
+14. "completed" - ONLY after exhaustive validation
 ```
 
 ---
 
 ### Technical Details
 
-#### Why This Fixes Stale Content
+The full updated `content` value for `critical_rules` section:
 
-Before fix:
 ```
-Iteration 1: Agent reads file.js → content stored in history with lines 1-200
-Iteration 2: Agent edits lines 50-60 → file now has 210 lines
-Iteration 3: Agent still sees old content (200 lines) from Iteration 1's read_file
-           → Uses stale line numbers → CORRUPTION
-```
+=== CRITICAL RULES ===
 
-After fix:
-```
-Iteration 1: Agent reads file.js → content stored in history with lines 1-200
-Iteration 2: Agent edits lines 50-60 → edit_lines result includes FRESH content (210 lines)
-Iteration 3: Agent sees fresh content from Iteration 2's edit_lines result
-           → Uses correct line numbers → NO CORRUPTION
-```
+Here are your standard operating procedures:
 
-The fresh content in the `edit_lines` result effectively **supersedes** any previous `read_file` content for that path.
+DISCOVERY:
+1. If user attached files, use read_file directly with provided file_ids.
+2. If no files attached, start with list_files or wildcard_search to get current file IDs
+3. Use wildcard_search when you have concepts/keywords to find
+
+EDITING:
+4. ALWAYS use edit_lines for targeted changes - preserves git blame, cleaner diffs
+5. Call read_file BEFORE editing a file for the FIRST TIME this session
+6. AFTER edit_lines, use the 'fresh_content' from the result - DO NOT re-read the same file
+7. Prefer "path" over "file_id" for operations - system resolves paths automatically
+8. After edit_lines, check the verification object to confirm your edit worked
+
+WORKFLOW:
+9. Work autonomously - chain operations, DO NOT stop after a single operation
+10. BATCH AGGRESSIVELY: Include 5-20 operations per response - single-operation responses are wasteful
+11. ALWAYS include a blackboard_entry in EVERY response (required)
+12. Before status='completed', call get_staged_changes to verify your changes
+
+STATUS VALUES:
+13. "in_progress" - need more operations
+14. "completed" - ONLY after exhaustive validation
+```
 
 ---
 
 ### Files to Modify
 
-| File | Changes |
-|------|---------|
-| `supabase/functions/coding-agent-orchestrator/index.ts` | 1. Add `fresh_content` with line numbers to edit_lines result (line ~1614). 2. Include fresh_content in operation summary (line ~2011). 3. Fix grouping key to use path when file_id missing (line ~1297). 4. Add logging for multi-edit sorting. |
+| File | Change |
+|------|--------|
+| `public/data/codingAgentPromptTemplate.json` | Update `critical_rules` content to fix contradictory read_file instruction and add batching emphasis |
 
 ---
 
-### Expected Outcomes
+### Expected Outcome
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| Agent edits file | Only sees old read_file content | Sees fresh content with correct line numbers |
-| Multiple edits same iteration | Wrong grouping, may corrupt | Correct per-file grouping and bottom-to-top sorting |
-| Agent lazy (skips read_file) | Uses stale content → corruption | Fresh content auto-provided → no corruption |
+| Before | After |
+|--------|-------|
+| Agent reads file before EVERY edit | Agent reads once per file, uses fresh_content thereafter |
+| 1 edit per iteration | 5-20 operations per iteration |
+| read → edit → read → edit loop | read A,B,C → edit A,A,A,B,B,C pattern |
 
