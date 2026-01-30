@@ -1,135 +1,127 @@
 
-
-## Plan: Fix Install Command Field Persistence
+## Plan: Stop Automatic Refreshing That Resets Deployment Configuration Dialog
 
 ### Problem Summary
 
-The "Install Command" field in the Deployment Configuration dialog:
-1. Always shows "npm install" when editing an existing deployment, even if the user saved a blank value
-2. **Root cause**: The `install_command` column does NOT exist in the database
+The Cloud Deployments view is auto-refreshing every few seconds, causing the Deployment Configuration dialog to lose user input. The refreshing occurs through multiple mechanisms:
 
-The code attempts to read a non-existent field:
-```typescript
-installCommand: (deployment as any).install_command || "npm install"
-```
+| Source | Trigger | Result |
+|--------|---------|--------|
+| `DeploymentCard.tsx` lines 82-98 | 10-second interval during "building"/"deploying" status | Calls `onUpdate()` → parent refreshes |
+| `useRealtimeDeployments.ts` lines 145-157 | Supabase realtime `postgres_changes` subscription | Calls `loadDeployments()` on ANY database change |
+| Realtime broadcast | Any client triggering `broadcastRefresh()` | Calls `loadDeployments()` |
 
-Since `deployment.install_command` is always `undefined`, this always evaluates to `"npm install"`.
+### Root Cause
+
+When the `render-service` edge function is called for status sync, it updates the `project_deployments` table. This triggers the Supabase realtime subscription, which reloads all deployments. Even though `mergeDeployments()` tries to preserve object references, the cascading updates cause React to re-render components, potentially resetting dialog state.
 
 ---
 
-### Solution: Add `install_command` Column
+### Solution
 
-To properly persist the Install Command, we need to:
-
-1. **Add the database column** via migration
-2. **Update the RPC functions** to accept and return `install_command`
-3. **Fix the frontend** to use `??` instead of `||` for null-safe handling
+Remove automatic refreshing completely. Refreshes should ONLY occur:
+1. **Initial page load** - when the Deploy page mounts
+2. **User clicks Refresh button** - the button at the top of the page
+3. **User clicks "Sync status from Render" button** - the small refresh icon on each card
 
 ---
 
 ### Implementation
 
-#### 1. New Migration File
+#### 1. Remove Auto-Refresh Interval from DeploymentCard
 
-**File: `supabase/migrations/[timestamp]_add_install_command_column.sql`**
+**File: `src/components/deploy/DeploymentCard.tsx`**
 
-```sql
--- Add install_command column to project_deployments
-ALTER TABLE public.project_deployments 
-ADD COLUMN IF NOT EXISTS install_command text;
+Remove the entire auto-refresh mechanism (lines 51-98):
 
--- Update insert_deployment_with_token to accept install_command
-DROP FUNCTION IF EXISTS public.insert_deployment_with_token(uuid, uuid, text, deployment_environment, deployment_platform, text, text, text, text, text, text, uuid, jsonb, boolean, text, text, integer);
+| Lines | Change |
+|-------|--------|
+| 51 | Remove `autoRefreshRef` |
+| 55-56 | Remove `isTransitionalStatus` constant |
+| 58-80 | Keep `syncStatus` but only for manual button use |
+| 82-98 | **DELETE** the entire `useEffect` that sets up the interval |
 
-CREATE OR REPLACE FUNCTION public.insert_deployment_with_token(
-  p_project_id uuid,
-  p_token uuid DEFAULT NULL,
-  p_name text DEFAULT NULL,
-  p_environment deployment_environment DEFAULT 'dev',
-  p_platform deployment_platform DEFAULT 'pronghorn_cloud',
-  p_project_type text DEFAULT 'node',
-  p_run_folder text DEFAULT '/',
-  p_build_folder text DEFAULT '/',
-  p_run_command text DEFAULT 'npm start',
-  p_build_command text DEFAULT 'npm install',
-  p_branch text DEFAULT 'main',
-  p_repo_id uuid DEFAULT NULL,
-  p_env_vars jsonb DEFAULT '{}',
-  p_disk_enabled boolean DEFAULT false,
-  p_disk_name text DEFAULT NULL,
-  p_disk_mount_path text DEFAULT '/data',
-  p_disk_size_gb integer DEFAULT 1,
-  p_install_command text DEFAULT NULL  -- NEW PARAMETER
-)
-RETURNS project_deployments
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-DECLARE
-  result public.project_deployments;
-BEGIN
-  PERFORM public.require_role(p_project_id, p_token, 'editor');
+The `syncStatus` function will still exist for the manual "Sync status from Render" button (line 129: `handleSyncStatus`), but no automatic calling.
 
-  INSERT INTO public.project_deployments (
-    project_id, name, environment, platform, project_type,
-    run_folder, build_folder, run_command, build_command, branch, 
-    repo_id, env_vars, disk_enabled, disk_name, disk_mount_path, disk_size_gb,
-    install_command, created_by
-  )
-  VALUES (
-    p_project_id, p_name, p_environment, p_platform, p_project_type,
-    p_run_folder, p_build_folder, p_run_command, p_build_command, p_branch,
-    p_repo_id, p_env_vars, p_disk_enabled, p_disk_name, p_disk_mount_path, p_disk_size_gb,
-    p_install_command, auth.uid()
-  )
-  RETURNING * INTO result;
+#### 2. Remove Realtime Subscription from useRealtimeDeployments
 
-  RETURN result;
-END;
-$function$;
+**File: `src/hooks/useRealtimeDeployments.ts`**
 
--- Update update_deployment_with_token similarly
--- (include p_install_command parameter and update statement)
-```
+Remove the Supabase realtime channel completely. The hook will:
+- Load deployments on initial mount only
+- Provide `refresh` function for manual refresh
+- NOT listen to database changes automatically
 
-#### 2. Update Frontend
+| Lines | Change |
+|-------|--------|
+| 15-16 | Remove `channelRef` and `deploymentsRef` (keep `deploymentsRef` if still needed for `refreshFromRender`) |
+| 140-168 | Replace the `useEffect` that sets up the channel - only keep `loadDeployments()` on initial mount |
 
-**File: `src/components/deploy/DeploymentDialog.tsx`**
+---
 
-**Line 153** - Change `||` to `??`:
+### Technical Details
+
+#### DeploymentCard.tsx Changes
+
 ```typescript
-// Before
-installCommand: (deployment as any).install_command || "npm install",
+// REMOVE these lines entirely:
+const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
-// After  
-installCommand: deployment.install_command ?? "npm install",
+// Check if status is transitional (should auto-refresh)
+const isTransitionalStatus = deployment.status === "building" || deployment.status === "deploying";
+
+// Setup auto-refresh when status is transitional
+useEffect(() => {
+  if (isTransitionalStatus && deployment.render_service_id) {
+    autoRefreshRef.current = setInterval(syncStatus, 10000);
+  } else {
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+      autoRefreshRef.current = null;
+    }
+  }
+
+  return () => {
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+    }
+  };
+}, [isTransitionalStatus, deployment.render_service_id, syncStatus]);
 ```
 
-Once the column exists, remove the `(deployment as any)` cast.
+Keep `syncStatus` for the manual button but remove the auto-invocation.
 
-**Lines 346-365** - Add `p_install_command` to RPC call:
+#### useRealtimeDeployments.ts Changes
+
 ```typescript
-const { data: newDeployment, error } = await supabase.rpc("insert_deployment_with_token", {
-  // ... existing params
-  p_install_command: form.installCommand || null,  // Use null for empty
-});
+// BEFORE: Complex realtime subscription
+useEffect(() => {
+  loadDeployments();
+
+  if (!projectId || !enabled) return;
+
+  const channel = supabase
+    .channel(`deployments-${projectId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "project_deployments", filter: `project_id=eq.${projectId}` },
+      () => loadDeployments()
+    )
+    .on("broadcast", { event: "deployment_refresh" }, () => loadDeployments())
+    .subscribe();
+
+  channelRef.current = channel;
+
+  return () => { ... };
+}, [...]);
+
+// AFTER: Simple initial load only
+useEffect(() => {
+  loadDeployments();
+}, [loadDeployments]);
 ```
 
-**Lines 406-422** - Add to update RPC call similarly.
-
-#### 3. Update Edge Function
-
-**File: `supabase/functions/generate-local-package/index.ts`**
-
-**Line 205** - Change `||` to `??`:
-```typescript
-// Before
-const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command || 'npm install');
-
-// After
-const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command ?? 'npm install');
-```
+Remove `channelRef` since broadcast is no longer needed. Keep `deploymentsRef` as it's used by `refreshFromRender`.
 
 ---
 
@@ -137,18 +129,23 @@ const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_
 
 | File | Changes |
 |------|---------|
-| New migration file | Add `install_command` column, update RPC functions |
-| `src/components/deploy/DeploymentDialog.tsx` | Use `??` on line 153, add `p_install_command` to RPC calls |
-| `supabase/functions/generate-local-package/index.ts` | Use `??` on line 205 |
-| `src/integrations/supabase/types.ts` | Will auto-update after migration |
+| `src/components/deploy/DeploymentCard.tsx` | Remove auto-refresh interval, keep manual sync button |
+| `src/hooks/useRealtimeDeployments.ts` | Remove realtime subscription, keep only initial load |
 
 ---
 
-### Expected Outcome
+### User Experience After Fix
 
 | Scenario | Before | After |
 |----------|--------|-------|
-| Edit deployment with blank install command | Shows "npm install" | Shows empty (as saved) |
-| Save deployment with blank install command | Not persisted | Saved as `null` in DB |
-| Local package generation | Always uses "npm install" fallback | Uses saved value or fallback |
+| Open Deployment Config, wait 10 seconds | Dialog resets/closes | Dialog stays open |
+| Deployment in "building" status | Auto-refreshes every 10s | User clicks Refresh manually |
+| Another user triggers deploy | Auto-refreshes via realtime | No change until manual refresh |
+| User clicks Refresh button | Refreshes | Refreshes (unchanged) |
+| User clicks sync icon on card | Syncs that card | Syncs that card (unchanged) |
 
+---
+
+### Note on Broadcast
+
+The `broadcastRefresh` function becomes a no-op since there's no channel to broadcast on. This is intentional - we're removing ALL automatic refreshing to preserve user workflow stability.
