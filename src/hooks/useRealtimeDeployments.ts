@@ -12,7 +12,6 @@ export const useRealtimeDeployments = (
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const deploymentsRef = useRef<Deployment[]>([]);
 
   // Merge new deployments with existing ones to avoid UI disruption
@@ -126,46 +125,15 @@ export const useRealtimeDeployments = (
     }
   }, [projectId, shareToken, enabled, mergeDeployments]);
 
-  // Broadcast refresh to other clients
+  // Broadcast refresh - no-op since realtime is disabled
   const broadcastRefresh = useCallback(() => {
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: "broadcast",
-        event: "deployment_refresh",
-        payload: { projectId },
-      });
-    }
-  }, [projectId]);
+    // Intentionally empty - realtime subscription removed to prevent dialog resets
+  }, []);
 
+  // Load deployments only on initial mount
   useEffect(() => {
     loadDeployments();
-
-    if (!projectId || !enabled) return;
-
-    const channel = supabase
-      .channel(`deployments-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "project_deployments",
-          filter: `project_id=eq.${projectId}`,
-        },
-        () => loadDeployments()
-      )
-      .on("broadcast", { event: "deployment_refresh" }, () => loadDeployments())
-      .subscribe((status) => {
-        console.log("Deployments channel status:", status);
-      });
-
-    channelRef.current = channel;
-
-    return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
-    };
-  }, [projectId, enabled, shareToken, loadDeployments]);
+  }, [loadDeployments]);
 
   return {
     deployments,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,54 +48,8 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
   const status = statusConfig[deployment.status] || statusConfig.pending;
-
-  // Check if status is transitional (should auto-refresh)
-  const isTransitionalStatus = deployment.status === "building" || deployment.status === "deploying";
-
-  // Auto-refresh for transitional statuses
-  const syncStatus = useCallback(async () => {
-    if (!deployment.render_service_id) return;
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('render-service', {
-        body: {
-          action: 'status',
-          deploymentId: deployment.id,
-          shareToken: shareToken || null,
-        },
-      });
-
-      if (!error && data?.success) {
-        // If status changed, trigger parent update
-        if (data.data?.status !== deployment.status) {
-          onUpdate();
-        }
-      }
-    } catch (error) {
-      console.error('Error syncing status:', error);
-    }
-  }, [deployment.id, deployment.render_service_id, deployment.status, shareToken, onUpdate]);
-
-  // Setup auto-refresh when status is transitional
-  useEffect(() => {
-    if (isTransitionalStatus && deployment.render_service_id) {
-      autoRefreshRef.current = setInterval(syncStatus, 10000);
-    } else {
-      if (autoRefreshRef.current) {
-        clearInterval(autoRefreshRef.current);
-        autoRefreshRef.current = null;
-      }
-    }
-
-    return () => {
-      if (autoRefreshRef.current) {
-        clearInterval(autoRefreshRef.current);
-      }
-    };
-  }, [isTransitionalStatus, deployment.render_service_id, syncStatus]);
 
   const invokeRenderService = async (action: string) => {
     setIsActionLoading(action);
