@@ -202,7 +202,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   // Determine commands based on project type
   const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
   const buildCommand = isVite ? 'npm run build' : (deployment.build_command || '');
-  const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command || 'npm install');
+  const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command ?? 'npm install');
   const runFolder = isVite ? '/' : (deployment.run_folder || '/');
   const buildFolder = isVite ? 'dist' : (deployment.build_folder || 'dist');
 

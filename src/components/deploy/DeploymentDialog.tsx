@@ -150,7 +150,7 @@ const DeploymentDialog = ({
         buildFolder: deployment.build_folder,
         buildCommand: deployment.build_command || "",
         runCommand: deployment.run_command,
-        installCommand: (deployment as any).install_command || "npm install",
+        installCommand: deployment.install_command ?? "npm install",
         branch: deployment.branch || "main",
         diskEnabled: (deployment as any).disk_enabled || false,
         diskName: (deployment as any).disk_name || "",
@@ -362,6 +362,7 @@ const DeploymentDialog = ({
           p_disk_name: form.diskEnabled ? form.diskName : null,
           p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
           p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
+          p_install_command: form.installCommand || null,
         });
 
         if (error) throw error;
@@ -419,6 +420,7 @@ const DeploymentDialog = ({
           p_disk_name: form.diskEnabled ? form.diskName : null,
           p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
           p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
+          p_install_command: form.installCommand || null,
         });
 
         if (error) throw error;
