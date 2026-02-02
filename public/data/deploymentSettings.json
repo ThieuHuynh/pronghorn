@@ -7,7 +7,7 @@
       "runtime": null,
       "buildCommand": "",
       "runCommand": null,
-      "installCommand": "npm install",
+      "installCommand": "",
       "buildFolder": "/",
       "runFolder": "/",
       "publishPath": ".",
